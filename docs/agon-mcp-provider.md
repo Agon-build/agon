@@ -1,40 +1,111 @@
 # Publish a service through MCP
 
-The provider flow belongs in a coding agent, not a web form. AGON validates
-the service record and reconciles the public receipt. The coding agent's
-publisher wallet owns the onchain actions and pays native gas.
+Tell your coding agent what you are starting with. It should ask for missing
+service details, inspect what it can, and handle protocol terms in the
+background. AGON validates the service record and reconciles the public
+receipt. The publisher wallet owns the onchain actions and pays Arc Testnet
+USDC gas.
+
+## Requests to copy
+
+### New agent, no wallet or identity
+
+```text
+Help me list my agent on AGON. I am starting from scratch. Inspect its working
+service and ask only for details you cannot find. Tell me which setup steps
+AGON MCP can perform today and stop at anything it cannot. If a dedicated
+publisher wallet can be created, show me its address and the exact network
+and currency to fund. Never ask for my private key. Check the deposit onchain
+before any transaction. Show the listing terms and costs before publication.
+Report identity registration, publication, and verification separately.
+```
+
+### Agent already has an ERC-8004 identity
+
+```text
+Help me list my existing agent on AGON. Check its ERC-8004 identity and
+current owner on the selected network. Use the wallet that owns it. Ask only
+for service details you cannot inspect. Show me the price, endpoint, logo,
+and terms before publication. Do not create another identity or transfer
+ownership without asking. Confirm the listing receipt and show its current
+verification status.
+```
+
+### Wallet exists, but the agent has no identity
+
+```text
+Help me list my agent on AGON using my existing wallet. Check its Arc Testnet
+USDC gas balance and whether it already owns an ERC-8004 identity. If it
+does not, explain the registration step and tell me whether AGON MCP can
+perform it today. Do not create a second wallet or ask for my private key.
+Prepare the service details and stop at any unavailable step. Report
+registration, publication, and verification separately.
+```
+
+### Agent is on another marketplace
+
+```text
+Find my agent on its current marketplace and show me what AGON can verify
+from that source. Check whether it has an ERC-8004 identity and who owns it.
+Reuse real service details, endpoint, and logo where available; ask me for
+anything missing. Do not claim the other marketplace's approval is AGON
+verification. Tell me whether AGON can import it today, then prepare an AGON
+listing only if ownership and the service terms check out.
+```
+
+### Service is already listed
+
+```text
+Check my AGON listing and tell me what needs attention. Keep the same agent
+identity and service key. If the service changed, prepare a new version and
+show the differences and cost before publication. After publication, check
+the receipt, endpoint, and lifecycle verification status. If verification
+failed, explain the actual reason and next fix.
+```
+
+These requests do not bypass authorization. The agent must show the exact
+action before using a wallet. A deposit is funding, not permission to move
+funds or publish arbitrary content.
 
 ## Wallet and ERC-8004 ownership
 
 For a new service, a funded publisher wallet can register a new ERC-8004
 identity and then publish the listing. The current AGON MCP cannot perform the
-registration. If no identity exists, this is a blocking step rather than a
-reason to substitute AGON's platform wallet.
+registration. If no identity exists, this is a blocking step. The intended
+new-user path creates a dedicated Circle Developer-Controlled publisher wallet
+for that AGON account and agent, gives its address to the user to fund with
+Arc Testnet USDC, confirms the deposit, registers the identity, and publishes
+the service. This is a target flow, not a live MCP capability.
 
 For an existing identity, native gas alone is not sufficient. The publisher
 wallet must be the ERC-8004 owner or have an explicit onchain management
 permission that the deployed registry accepts. A transfer or delegation is a
 separate onchain action and must be confirmed before publication.
 
-AGON must never substitute its platform Circle Developer-Controlled wallet for
-the provider's agent wallet. That platform wallet is a custody integration,
-not a self-owned agent wallet.
+A shared AGON platform wallet must never stand in for the provider's agent
+wallet. A dedicated Circle Developer-Controlled wallet would be controlled
+through AGON's Circle integration, so it is a custodial choice rather than
+the same thing as a user-controlled wallet. The account-to-wallet binding,
+spend authority, recovery, and ownership transfer need explicit design and
+tests before it can be offered.
 
 ## Current availability
 
-The current MCP implementation can build and host a version-specific canonical service file, check a
-draft, prepare a provider-owned publication transaction, and reconcile its
-receipt. It does not provision a self-owned publisher wallet or submit that
-wallet's transaction. Until the publisher-wallet rail is implemented and
-deployed, callers must receive this limitation as an explicit refusal. They
-must not be directed to a browser wallet as a substitute for the agent-wallet
-flow.
+The current MCP implementation can build and host a version-specific
+canonical service file, check a draft, prepare a provider-owned publication
+transaction, and reconcile its receipt. It does not provision a dedicated
+publisher wallet, register an identity, or broadcast from that wallet.
+Until that rail is implemented and deployed, callers must receive this
+limitation as an explicit refusal. An existing user-controlled wallet can
+still sign a prepared transaction, but the agent must not describe that as
+the new Circle wallet flow.
 
-The intended single-session path is: provision or connect a self-owned agent
-wallet, show the gas address, check ERC-8004 ownership, prepare registration
-if missing, wait for its confirmed receipt and agent ID, then compile and
-publish the AGON service. Registration and publication are separate onchain
-actions. Neither may be described as complete from prepared calldata alone.
+The intended single-session path is: provision a dedicated Circle wallet or
+connect an existing owner wallet, show the funding address, check ERC-8004
+ownership, register an identity if missing, wait for its confirmed receipt
+and agent ID, then compile and publish the AGON service. Registration and
+publication are separate onchain actions. Neither may be described as
+complete from prepared calldata alone.
 
 Connect a coding agent to `https://api.agon.surf/agon/mcp`. The native tool
 sequence is:

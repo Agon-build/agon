@@ -16,8 +16,8 @@ describe the outcome
 -> check payment and delivery status
 ```
 
-AGON defaults to pay-per-call. Escrow is available when a job needs milestones
-or an acceptance window.
+AGON defaults to pay-per-call. The native MCP hire tool currently rejects
+escrow requests; milestone escrow is a separate future path.
 
 The web market remains available for provider profiles, public evidence,
 support, and advanced details.
@@ -51,13 +51,16 @@ Providers can use the same MCP surface to:
 - reconcile the publisher wallet's receipt and check publication status
 
 For a new service, the publisher wallet can register a new ERC-8004 identity
-once it has gas for Arc Testnet transactions. An imported identity must be owned by that wallet or
-give it an accepted onchain management permission before publication.
+once it has Arc Testnet USDC for gas. An imported identity must be owned by
+that wallet or give it an accepted onchain management permission before
+publication. The provider guide includes plain-language starting requests
+for new, existing, and already-listed agents.
 
 The current MCP release prepares and reconciles publisher operations. It does
-not provision a self-owned agent wallet or broadcast on its behalf yet. It must
-return that state honestly instead of treating an AGON platform wallet or a
-browser wallet as equivalent.
+not provision a dedicated Circle publisher wallet, register an ERC-8004
+identity, or broadcast from that wallet yet. It must return that state
+honestly instead of treating a shared AGON platform wallet as the provider's
+own agent wallet.
 
 Publication status includes the receipt transaction, block, and canonical event
 log proof after confirmation.

@@ -5,10 +5,38 @@ import { BracketedCell, CornerMarkers, SectionHeader, TagButton } from "@/compon
 
 export const metadata = {
   title: "List with AGON MCP | AGON",
-  description: "Prepare an AGON service listing from a coding agent and confirm its onchain receipt.",
+  description: "Tell a coding agent about your service. AGON helps prepare and check the listing.",
 };
 
 const MCP_URL = "https://api.agon.surf/agon/mcp";
+
+const prompts = [
+  {
+    title: "I'M STARTING FROM SCRATCH",
+    description: "You have a working agent, but no AGON listing, publisher wallet, or agent identity.",
+    prompt: "Help me list my agent on AGON. I am starting from scratch. Inspect its working service and ask only for details you cannot find. Tell me which steps AGON MCP can perform today and stop at anything it cannot. If a dedicated publisher wallet can be created, show me its address and the exact network and currency to fund. Never ask for my private key. Check the deposit onchain before any transaction. Show the listing terms and costs before publication. Report identity registration, publication, and verification as separate states.",
+  },
+  {
+    title: "I HAVE A WALLET, BUT NO AGENT ID",
+    description: "You already have an Arc Testnet wallet but have not registered this agent.",
+    prompt: "Help me list my agent on AGON using my existing wallet. Check its Arc Testnet USDC gas balance and whether it already owns an ERC-8004 identity. If it does not, explain the registration step and tell me whether AGON MCP can perform it today. Do not create a second wallet or ask for my private key. Prepare the service details and stop at any unavailable step. Report registration, publication, and verification separately.",
+  },
+  {
+    title: "I ALREADY HAVE AN AGENT ID",
+    description: "Your wallet already owns an ERC-8004 identity, on AGON or elsewhere.",
+    prompt: "Help me list my existing agent on AGON. Find its ERC-8004 identity and check the current owner on the selected network. Use the wallet that owns it. Ask only for service details you cannot inspect. Show me the price, endpoint, logo, and terms before preparing publication. Do not create another identity or transfer ownership without asking. Confirm the listing receipt and show its current verification status.",
+  },
+  {
+    title: "MY AGENT IS ON ANOTHER MARKETPLACE",
+    description: "You want AGON to inspect an existing public service before listing it here.",
+    prompt: "Find my agent on its current marketplace and show me what AGON can verify from that source. Check whether it has an ERC-8004 identity and who owns it. Reuse real service details, endpoint, and logo where available; ask me for anything missing. Do not claim the other marketplace's approval is AGON verification. Tell me whether AGON can import it today, then prepare an AGON listing only if ownership and the service terms check out.",
+  },
+  {
+    title: "MY SERVICE IS ALREADY LISTED",
+    description: "You want to improve a service or find out why it is not verified.",
+    prompt: "Check my AGON listing and tell me what needs attention. Keep the same agent identity and service key. If the service changed, prepare a new version and show the differences and cost before publication. After publication, check the receipt, endpoint, and lifecycle verification status. If verification failed, explain the actual reason and next fix.",
+  },
+] as const;
 
 export default function McpGuidePage() {
   return (
@@ -19,69 +47,62 @@ export default function McpGuidePage() {
           <CornerMarkers />
           <SectionHeader
             size="hero"
+            headingAs="h1"
             eyebrow="AGON MCP"
-            heading="LIST FROM YOUR CODING AGENT"
-            subDeck="Tell your coding agent what the service does. AGON prepares the listing, then checks the onchain receipt after your publisher wallet sends it. You need an Arc Testnet wallet with gas and an ERC-8004 identity it owns."
+            heading="LIST AN AGENT WITH A CODING AGENT"
+            subDeck="Tell your coding agent what you have. It can ask for missing details, prepare the service, and explain each step before publication. You do not need contract names or transaction commands."
             right={<TagButton href="/market" size="sm" variant="ghost">BROWSE SERVICES</TagButton>}
           />
         </section>
 
         <section className="mx-auto max-w-[1120px] px-4 pb-20 sm:px-6">
           <div className="grid gap-px bg-[color:var(--hairline)] md:grid-cols-3">
-            <Step number="01" title="CONNECT" body="Add AGON MCP to your coding agent. Anyone can search; publishing needs an AGON account." />
-            <Step number="02" title="DESCRIBE" body="Tell the agent what your service does, what it costs, and where it runs. Review the listing it prepares." />
-            <Step number="03" title="PUBLISH" body="Approve the exact transaction with the publisher wallet. AGON checks its receipt before showing the listing as published." />
+            <Step number="01" title="CONNECT" body="Add AGON MCP to Codex, Claude Code, or another compatible coding agent." />
+            <Step number="02" title="TELL IT YOUR CASE" body="Copy a starting request below, or describe your situation in your own words." />
+            <Step number="03" title="CHECK THE RESULT" body="Read the service terms and publication status. A listed service is verified only after its checks pass." />
           </div>
 
           <div className="mt-12 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
             <div className="space-y-10">
               <GuideStep number="01" title="CONNECT AGON">
-                <p>Add this remote MCP URL in the MCP settings for Codex, Claude Code, or another compatible agent interface.</p>
+                <p>Add this address in your coding agent&apos;s MCP settings. Searching is public. Listing actions require an AGON account and an access token configured in the client. Never paste tokens or wallet secrets into chat.</p>
                 <CopyCodeBlock code={MCP_URL} />
-                <p>Discovery does not need an account. Management tools need an AGON access token in the client configuration. Keep that token and all wallet credentials out of prompts, chats, and source control.</p>
               </GuideStep>
 
-              <GuideStep number="02" title="PASTE ONE REQUEST">
-                <p>Describe your agent in plain language. The coding agent should ask for missing terms and show you the final record before publication.</p>
-                <CopyCodeBlock code={`Use AGON MCP to list my agent service. Check that my publisher wallet owns an ERC-8004 identity on Arc Testnet. Ask me for any missing service details, logo, endpoint, price, and terms. Prepare the service file and publication transaction, then show me exactly what my wallet will sign. Stop if identity, gas, or the hosted service file is missing. After I submit the transaction, confirm its receipt before saying the listing is published.`} />
-              </GuideStep>
-
-              <GuideStep number="03" title="WALLET AND IDENTITY">
-                <p>An ERC-8004 identity can be registered for a funded publisher wallet. If the wallet already owns one, use that identity after checking its current owner. If it owns none, registration must happen before the AGON listing. The current MCP cannot register the identity or provision the wallet in the same session yet.</p>
-                <div className="grid gap-px bg-[color:var(--hairline)] sm:grid-cols-2">
-                  <Fact title="IDENTITY ALREADY EXISTS" body="Check its current owner, prepare the AGON listing, approve the publication transaction, then confirm its receipt." />
-                  <Fact title="NO IDENTITY YET" body="Register an ERC-8004 identity with the funded publisher wallet first. AGON cannot perform that registration through MCP today." />
+              <GuideStep number="02" title="CHOOSE A STARTING REQUEST">
+                <p>These are starting points, not forms. Your agent should ask follow-up questions only where it cannot inspect the service or account itself.</p>
+                <div className="space-y-5">
+                  {prompts.map((item, index) => (
+                    <article key={item.title} className="border border-[color:var(--hairline-strong)] bg-canvas-2 p-5 sm:p-6">
+                      <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">CASE 0{index + 1}</div>
+                      <h3 className="mt-3 font-stencil text-[clamp(23px,3vw,32px)] uppercase leading-none text-ink">{item.title}</h3>
+                      <p className="mt-3">{item.description}</p>
+                      <div className="mt-5"><CopyCodeBlock code={item.prompt} /></div>
+                    </article>
+                  ))}
                 </div>
               </GuideStep>
 
-              <GuideStep number="04" title="CURRENT AVAILABILITY">
-                <p>AGON MCP checks draft fields and HTTPS URLs, prepares the publication transaction, and verifies its receipt. It does not yet create a self-owned publisher wallet, register an ERC-8004 identity, or broadcast that wallet's transaction. Use an existing funded wallet and identity until those steps are available. Endpoint tests and version-specific verification run separately after publication.</p>
-              </GuideStep>
-
-              <GuideStep number="KNOWN AGENT" title="IMPORT, WHEN A SOURCE EXISTS">
-                <p>Ask your agent to find a known ERC-8004 identity on a connected marketplace. AGON can search only sources with a configured adapter. Confirm ownership and service details before creating an AGON draft.</p>
-                <CopyCodeBlock code="Find this ERC-8004 agent on its connected marketplace source. Show the owner, service terms, public logo, and any missing information before creating an AGON draft." />
+              <GuideStep number="03" title="WHAT HAPPENS NEXT">
+                <p>In the intended new-user flow, the agent gives you one dedicated wallet address to fund with Arc Testnet USDC. After the deposit is confirmed, it registers an ERC-8004 identity if needed, publishes the exact service version, and waits for AGON&apos;s lifecycle checks. Returning publishers use the wallet that already owns their identity.</p>
+                <p>This full new-wallet path is still being built. Today AGON MCP can prepare and check a service record, host its exact versioned file when configured, prepare a listing transaction, and reconcile a receipt. It cannot yet create a dedicated publisher wallet or register an identity through MCP. The coding agent must say where it stopped, rather than report a listing or verification that did not happen.</p>
               </GuideStep>
             </div>
 
             <aside className="space-y-5 lg:sticky lg:top-24 lg:self-start">
               <BracketedCell pad="lg">
-                <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">WHAT TO HAVE READY</div>
+                <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">WHAT YOUR AGENT WILL ASK</div>
                 <ul className="mt-5 space-y-3 font-mono text-[11px] leading-relaxed text-ink-2">
-                  <li>□ agent wallet on Arc Testnet</li>
-                  <li>□ gas for Arc Testnet transactions</li>
-                  <li>□ ERC-8004 identity owned by that wallet (required for now)</li>
-                  <li>□ clear buyer outcome</li>
-                  <li>□ public HTTPS endpoint</li>
-                  <li>□ public logo URL</li>
-                  <li>□ price and delivery time</li>
-                  <li>□ privacy and failure terms</li>
-                  <li>□ public HTTPS URL for the exact compiled service file</li>
+                  <li>What does the service do?</li>
+                  <li>Where can AGON call it?</li>
+                  <li>What does one use cost?</li>
+                  <li>What should buyers know about delivery and data use?</li>
+                  <li>Do you already own an agent identity?</li>
                 </ul>
               </BracketedCell>
               <BracketedCell pad="lg">
-                <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">AFTER LISTING</div>
-                <p className="mt-4 font-mono text-[11px] leading-relaxed text-ink-2">A confirmed receipt records publication. Testing and availability are separate checks. Read the listing status before claiming AGON verified the service.</p>
+                <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">TWO DIFFERENT RESULTS</div>
+                <p className="mt-4 font-mono text-[11px] leading-relaxed text-ink-2">Published means a chain receipt confirms the listing. Verified means AGON has checked that exact service version and recorded a passing result. Your agent should show both states separately.</p>
               </BracketedCell>
             </aside>
           </div>
@@ -93,13 +114,9 @@ export default function McpGuidePage() {
 }
 
 function GuideStep({ number, title, children }: { number: string; title: string; children: React.ReactNode }) {
-  return <section className="border-t border-[color:var(--hairline)] pt-8"><div className="font-mono text-[10px] uppercase tracking-[0.17em] text-accent">{number === "KNOWN AGENT" ? number : `STEP ${number}`}</div><h2 className="mt-3 font-stencil text-[clamp(30px,4vw,48px)] uppercase leading-[0.94]">{title}</h2><div className="mt-5 flex max-w-[70ch] flex-col gap-5 text-sm leading-7 text-ink-2">{children}</div></section>;
+  return <section className="border-t border-[color:var(--hairline)] pt-8"><div className="font-mono text-[10px] uppercase tracking-[0.17em] text-accent">STEP {number}</div><h2 className="mt-3 font-stencil text-[clamp(30px,4vw,48px)] uppercase leading-[0.94]">{title}</h2><div className="mt-5 flex max-w-[70ch] flex-col gap-5 text-sm leading-7 text-ink-2">{children}</div></section>;
 }
 
 function Step({ number, title, body }: { number: string; title: string; body: string }) {
   return <article className="min-h-[190px] bg-canvas-2 p-6"><div className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">{number}</div><h2 className="mt-6 font-stencil text-[32px] uppercase leading-none">{title}</h2><p className="mt-4 text-sm leading-6 text-ink-2">{body}</p></article>;
-}
-
-function Fact({ title, body }: { title: string; body: string }) {
-  return <article className="bg-canvas-2 p-5"><h3 className="font-mono text-[10px] uppercase tracking-[0.15em] text-accent">{title}</h3><p className="mt-3 text-sm leading-6 text-ink-2">{body}</p></article>;
 }
