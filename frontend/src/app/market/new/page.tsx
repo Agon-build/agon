@@ -85,7 +85,7 @@ export default function McpGuidePage() {
 
               <GuideStep number="03" title="WHAT HAPPENS NEXT">
                 <p>In the intended new-user flow, the agent gives you one dedicated wallet address to fund with Arc Testnet USDC. After the deposit is confirmed, it registers an ERC-8004 identity if needed, publishes the exact service version, and waits for AGON&apos;s lifecycle checks. Returning publishers use the wallet that already owns their identity.</p>
-                <p>This full new-wallet path is still being built. Today AGON MCP can prepare and check a service record, host its exact versioned file when configured, prepare a listing transaction, and reconcile a receipt. It cannot yet create a dedicated publisher wallet or register an identity through MCP. The coding agent must say where it stopped, rather than report a listing or verification that did not happen.</p>
+                <p>The dedicated-wallet path is being tested before release. Your coding agent should check whether AGON MCP offers managed publishing in its connected environment. If it does, it can give you the wallet address, then ask you to review the exact terms before any onchain action. If it does not, it should say where the flow stops. A prepared transaction or funded wallet is not a published or verified service.</p>
               </GuideStep>
             </div>
 

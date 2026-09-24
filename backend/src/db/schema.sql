@@ -1454,6 +1454,20 @@ create table if not exists agon_mcp_provider_drafts (
 );
 create index if not exists agon_mcp_provider_drafts_actor_idx
   on agon_mcp_provider_drafts(actor_address, updated_at desc);
+
+-- The authenticated account owns this Circle-custodied publisher workflow.
+-- Circle's idempotency keys derive from public_id and survive process restarts.
+create table if not exists agon_mcp_managed_publishers (
+  actor_address text not null check (actor_address ~ '^0x[0-9a-f]{40}$'),
+  draft_id text not null,
+  public_id uuid not null unique,
+  version bigint not null default 0 check (version >= 0),
+  state jsonb not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (actor_address, draft_id),
+  foreign key (draft_id, actor_address) references agon_mcp_provider_drafts(draft_id, actor_address)
+);
 -- Each public service file is stored under its agent, version, and content hash.
 -- A later edit creates a new URL; the bytes at an existing URL never change.
 create table if not exists agon_hosted_manifests (

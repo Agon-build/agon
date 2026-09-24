@@ -6,6 +6,7 @@ import { PlaygroundRunConflictError, type PlaygroundRateLimiter, type Playground
 import { inspectManifest, ManifestInspectionError } from "../manifest-inspector.ts";
 import { createMcpAccessAdapter } from "../mcp/adapter.ts";
 import { createAgonNativeMcpHandler } from "../mcp/native-server.ts";
+import type { ManagedPublisher } from "../mcp/managed-publisher.ts";
 import type { ProviderDraftStore } from "../mcp/provider-draft-store.ts";
 import type { McpHireStore } from "../mcp/hire-store.ts";
 import { HostedManifestError, type HostedManifestStore } from "../hosted-manifest-store.ts";
@@ -386,6 +387,7 @@ export type CreateAgonRoutesOptions = {
   providerDraftStore?: ProviderDraftStore;
   hostedManifestStore?: HostedManifestStore;
   hireStore?: McpHireStore;
+  managedPublisher?: ManagedPublisher;
 };
 
 const positiveDecimal = z.string().regex(/^[1-9]\d*$/, "must be a positive decimal string");
@@ -720,7 +722,7 @@ function queryFromRequest(context: Context, overrides: Partial<ListingQuery> = {
 export function createAgonRoutes(options: CreateAgonRoutesOptions) {
   const app = new Hono<{ Variables: AgonRouteVariables }>();
   const mcp = createMcpAccessAdapter(options.service, { providerDraftStore: options.providerDraftStore, hostedManifestStore: options.hostedManifestStore, hireStore: options.hireStore });
-  const nativeMcp = createAgonNativeMcpHandler(mcp);
+  const nativeMcp = createAgonNativeMcpHandler(mcp, options.managedPublisher);
   const marketAggregator = createMarketAggregator(options.marketSources ?? [
     {
       id: "arc",
@@ -733,6 +735,16 @@ export function createAgonRoutes(options: CreateAgonRoutesOptions) {
     },
   ]);
   const requirePrincipal = options.requirePrincipal ?? (async (_context, next) => { await next(); });
+
+  app.get("/identities/:publicId", async (context) => {
+    if (!options.managedPublisher) return context.notFound();
+    try {
+      const identity = await options.managedPublisher.publicIdentity(context.req.param("publicId") ?? "");
+      return identity ? context.json(identity, 200, { "cache-control": "public, max-age=300" }) : context.notFound();
+    } catch {
+      return context.json({ error: { code: "identity_unavailable", message: "Identity record could not be read." } }, 503);
+    }
+  });
 
   app.get("/manifests/:agentId/:serviceKey/:version/:file", async (context) => {
     if (!options.hostedManifestStore) return context.json({ error: { code: "manifest_host_unavailable", message: "AGON service-file hosting is unavailable." } }, 503);

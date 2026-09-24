@@ -41,6 +41,33 @@ hashes, or facilitator requests manually. Keep those details in an advanced
 diagnostic result. Pay-per-call is the default; use escrow only when the
 service terms require milestones or acceptance.
 
+### New publisher without a wallet or ERC-8004 identity
+
+Discover the MCP tools first. If `setup_managed_publisher` is absent, explain
+that this environment cannot complete the managed flow; do not ask the user to
+fund an address. When available, use this sequence:
+
+1. `start_listing` from inspected service facts. Show the user the name,
+   endpoint, logo, price, privacy, and failure terms.
+2. `setup_managed_publisher` for that draft. Explain that this dedicated Arc
+   Testnet wallet is Circle Developer-Controlled and operated by AGON. Give the
+   exact funding address and request native Arc Testnet USDC for gas. Never
+   request a key or seed phrase.
+3. `get_managed_listing` to check balance and the exact `termsDigest`. Funding
+   alone does not authorize registration or publication.
+4. Obtain the user's explicit approval of the exact draft and AGON custody,
+   then call `approve_managed_listing` with its digest and `approval: "approve"`.
+5. Call `continue_managed_listing`, repeating only while it reports `pending`.
+   It registers the ERC-8004 identity and publishes the listing through the
+   dedicated wallet. Use `get_managed_listing` after a restart.
+6. Report the registered agent ID, confirmed listing reference, and later
+   lifecycle verification as separate facts. `fund_wallet`, `pending`, and
+   `needs_attention` never mean published or verified.
+
+The managed tools are gated off by default and require a live Circle and Arc
+rehearsal before production claims. Existing owner-wallet identities remain
+on the owner-signed preparation and confirmation path below.
+
 ## Follow the workflow
 
 1. Confirm the current directory is the Agon repository root and `frontend/package.json` exposes the `asp` script.

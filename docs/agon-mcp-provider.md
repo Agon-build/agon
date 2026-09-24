@@ -69,13 +69,15 @@ funds or publish arbitrary content.
 
 ## Wallet and ERC-8004 ownership
 
-For a new service, a funded publisher wallet can register a new ERC-8004
-identity and then publish the listing. The current AGON MCP cannot perform the
-registration. If no identity exists, this is a blocking step. The intended
-new-user path creates a dedicated Circle Developer-Controlled publisher wallet
-for that AGON account and agent, gives its address to the user to fund with
-Arc Testnet USDC, confirms the deposit, registers the identity, and publishes
-the service. This is a target flow, not a live MCP capability.
+For a new service, a funded publisher wallet can register an ERC-8004 identity
+and publish the listing. AGON now has a gated managed-publisher MCP path in the
+local backend: it creates one dedicated Circle Developer-Controlled wallet per
+account and draft, gives the address to fund with Arc Testnet native USDC,
+checks the balance, registers the identity, checks the receipt and owner, and
+publishes the service through that wallet. This path is off by default and has
+not completed a funded Circle-to-Arc rehearsal. Do not describe it as live
+until the deployed MCP advertises its managed-publisher tools and a real
+registration and listing receipt have been reconciled.
 
 For an existing identity, native gas alone is not sufficient. The publisher
 wallet must be the ERC-8004 owner or have an explicit onchain management
@@ -91,21 +93,34 @@ tests before it can be offered.
 
 ## Current availability
 
-The current MCP implementation can build and host a version-specific
-canonical service file, check a draft, prepare a provider-owned publication
-transaction, and reconcile its receipt. It does not provision a dedicated
-publisher wallet, register an identity, or broadcast from that wallet.
-Until that rail is implemented and deployed, callers must receive this
-limitation as an explicit refusal. An existing user-controlled wallet can
-still sign a prepared transaction, but the agent must not describe that as
-the new Circle wallet flow.
+The deployed MCP still supports the established provider-owned route: create
+and check a draft, host a version-specific service file, prepare an exact
+publication transaction, and reconcile its receipt. The managed route is
+available only after `AGON_MCP_MANAGED_PUBLISHING_ENABLED=true` is set on a
+release with the new code, Circle is configured, AGON writes are enabled, and
+the active Arc deployment and public HTTPS manifest host are ready. Until
+those conditions and the live rehearsal pass, the coding agent should state
+the capability limit instead of asking anyone to fund a wallet.
 
-The intended single-session path is: provision a dedicated Circle wallet or
-connect an existing owner wallet, show the funding address, check ERC-8004
-ownership, register an identity if missing, wait for its confirmed receipt
-and agent ID, then compile and publish the AGON service. Registration and
-publication are separate onchain actions. Neither may be described as
-complete from prepared calldata alone.
+When enabled, the new-agent tool sequence is:
+
+```text
+start_listing -> setup_managed_publisher -> show funding address and custody
+-> user funds Arc Testnet native USDC -> get_managed_listing
+-> show exact draft and termsDigest -> approve_managed_listing
+-> continue_managed_listing (repeat while pending) -> get_managed_listing
+```
+
+`setup_managed_publisher` creates no onchain action. Funding is not approval.
+`approve_managed_listing` requires the exact returned digest and the user's
+explicit approval of the listing and AGON's Circle custody. The approval
+covers the identity registration and publication for that one immutable draft.
+`continue_managed_listing` submits only the pinned registration and listing
+calls, with a per-action Circle gas ceiling of 0.5 native USDC. It may return
+`fund_wallet`, `pending`, `needs_attention`, or `published`; callers must not
+translate `pending` into success. Registration and publication are separate
+onchain actions, each checked against the chain receipt. After publication,
+AGON's lifecycle certification is a separate status.
 
 Connect a coding agent to `https://api.agon.surf/agon/mcp`. The native tool
 sequence is:
@@ -116,7 +131,7 @@ start_listing -> check_listing -> compile_listing
 -> confirm_listing -> get_listing_publication
 ```
 
-For a new version, use `prepare_listing_version` after compilation. To pause a
+For a new version using an existing owner wallet, use `prepare_listing_version` after compilation. To pause a
 service, use `pause_listing`, then `confirm_pause` after broadcasting the
 transaction. Each preparation returns the exact chain, contract address,
 calldata, and arguments for the publisher wallet to review and sign.

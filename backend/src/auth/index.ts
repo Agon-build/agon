@@ -29,6 +29,9 @@ import { evaluateAgonEscrowProductionReadiness } from "../agon/execution/escrow-
 import { AGON_ESCROW_TRANSACTION_APPROVAL_PHRASES } from "../agon/execution/escrow-transaction-approval.js";
 import { PostgresAgonMarketService } from "../agon/http/service.js";
 import { createPostgresProviderDraftStore } from "../agon/mcp/provider-draft-store.ts";
+import { createMcpAccessAdapter } from "../agon/mcp/adapter.ts";
+import { createManagedPublisher } from "../agon/mcp/managed-publisher.ts";
+import { createPostgresManagedPublisherStore } from "../agon/mcp/managed-publisher-store.ts";
 import { createPostgresMcpHireStore } from "../agon/mcp/hire-store.ts";
 import { createPostgresHostedManifestStore } from "../agon/hosted-manifest-store.ts";
 import { inspectAgonProtocolReadiness } from "../agon/protocol-readiness.ts";
@@ -104,6 +107,8 @@ import {
 } from "../coordinator/training.js";
 import {
   circleDevConfigured,
+  createPublisherWallet,
+  executePublisherCall,
   createUserWallet,
   seedTestnetUsdc,
   executeContractCall,
@@ -686,6 +691,54 @@ const agonService = new PostgresAgonMarketService(agonRepository, {
       })
     : undefined,
 });
+const agonManagedPublisher = config.agon.managedPublisherEnabled
+  && config.agon.writesEnabled && config.chainId === 5042002
+  && circleDevConfigured() && config.agon.publicApiUrl
+  && agonActiveDeployment && agonHostedManifestStore
+  ? createManagedPublisher({
+      store: createPostgresManagedPublisherStore(pool),
+      draftStore: agonProviderDraftStore,
+      access: createMcpAccessAdapter(agonService, { providerDraftStore: agonProviderDraftStore, hostedManifestStore: agonHostedManifestStore }),
+      circle: { createWallet: createPublisherWallet, execute: executePublisherCall, transaction: getTxState },
+      chain: {
+        balance: (address) => publicClient.getBalance({ address }),
+        hasCode: async (address) => {
+          const code = await publicClient.getBytecode({ address });
+          return Boolean(code && code !== "0x");
+        },
+        async gasQuote(from, to, data) {
+          const [gas, price] = await Promise.all([
+            publicClient.estimateGas({ account: from, to, data }),
+            publicClient.getGasPrice(),
+          ]);
+          return { gasLimit: gas, gasPriceWei: price };
+        },
+        async receipt(hash) {
+          try { return await publicClient.getTransactionReceipt({ hash }); }
+          catch (error) {
+            if (error instanceof Error && error.name === "TransactionReceiptNotFoundError") return null;
+            throw error;
+          }
+        },
+        transaction: (hash) => publicClient.getTransaction({ hash }),
+        ownerOf: (agentId) => publicClient.readContract({
+          address: agonActiveDeployment.external.IdentityRegistry.address,
+          abi: parseAbi(["function ownerOf(uint256 tokenId) view returns (address)"]),
+          functionName: "ownerOf", args: [agentId],
+        }),
+        agentURI: (agentId) => publicClient.readContract({
+          address: agonActiveDeployment.external.IdentityRegistry.address,
+          abi: parseAbi(["function tokenURI(uint256 tokenId) view returns (string)"]),
+          functionName: "tokenURI", args: [agentId],
+        }),
+      },
+      identityRegistry: agonActiveDeployment.external.IdentityRegistry.address,
+      serviceRegistry: agonActiveDeployment.contracts.AgonServiceRegistry,
+      publicApiUrl: config.agon.publicApiUrl,
+      publicationReady: async () => (await agonReadiness.get(true)).ready,
+    })
+  : undefined;
+
 app.route("/agon", createAgonRoutes({
   service: agonService,
   verifyMcpToken: verifyTokenClaims,
@@ -704,6 +757,7 @@ app.route("/agon", createAgonRoutes({
   providerDraftStore: agonProviderDraftStore,
   hostedManifestStore: agonHostedManifestStore,
   hireStore: agonMcpHireStore,
+  managedPublisher: agonManagedPublisher,
 }));
 
 if (config.agon.certification.workerEnabled) {

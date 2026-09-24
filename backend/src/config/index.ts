@@ -65,6 +65,7 @@ const envSchema = z.object({
   AGON_PUBLIC_API_URL: z.string().url().optional(),
   AGON_INDEXER_START_BLOCK: z.coerce.bigint().nonnegative().optional(),
   AGON_WRITES_ENABLED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
+  AGON_MCP_MANAGED_PUBLISHING_ENABLED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   AGON_READINESS_CACHE_MS: z.coerce.number().int().min(1_000).max(300_000).default(30_000),
   AGON_JOB_ESCROW_READS_ENABLED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   // Circle x402 settlement is a separately gated rail. Keep it disabled until
@@ -715,6 +716,7 @@ export const config = {
   agon: {
     publicApiUrl: env.AGON_PUBLIC_API_URL,
     writesEnabled: env.AGON_WRITES_ENABLED,
+    managedPublisherEnabled: env.AGON_MCP_MANAGED_PUBLISHING_ENABLED,
     jobEscrowReadsEnabled: env.AGON_JOB_ESCROW_READS_ENABLED,
     deployment: agonDeployment.deployment,
     deploymentError: agonDeployment.error,

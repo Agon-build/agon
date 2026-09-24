@@ -125,6 +125,49 @@ export async function createWalletOnChain(
   return { walletId: wallet.id, address: wallet.address.toLowerCase() as `0x${string}` };
 }
 
+/** A separate EOA for one AGON provider draft. Circle's key stays in AGON custody. */
+export async function createPublisherWallet(refId: string, idempotencyKey: string): Promise<{
+  walletId: string;
+  address: `0x${string}`;
+}> {
+  const walletSetId = config.circle.walletSetId;
+  if (!walletSetId) throw new Error("CIRCLE_WALLET_SET_ID is not set");
+  const response = await getClient().createWallets({
+    blockchains: ["ARC-TESTNET"],
+    accountType: "EOA",
+    count: 1,
+    walletSetId,
+    metadata: [{ refId }],
+    idempotencyKey,
+  });
+  const wallet = response.data?.wallets?.[0];
+  if (!wallet?.id || !wallet.address || !/^0x[0-9a-fA-F]{40}$/.test(wallet.address)) {
+    throw new Error("Circle did not return a valid publisher wallet");
+  }
+  return { walletId: wallet.id, address: wallet.address.toLowerCase() as `0x${string}` };
+}
+
+/** Submit only the caller's pinned calldata. Reusing the key recovers uncertain Circle responses. */
+export async function executePublisherCall(input: {
+  walletId: string;
+  contractAddress: `0x${string}`;
+  callData: `0x${string}`;
+  idempotencyKey: string;
+  refId: string;
+  fee: { gasLimit: string; gasPrice: string };
+}): Promise<{ id: string; state: string }> {
+  const response = await getClient().createContractExecutionTransaction({
+    walletId: input.walletId,
+    contractAddress: input.contractAddress,
+    callData: input.callData,
+    idempotencyKey: input.idempotencyKey,
+    refId: input.refId,
+    fee: { type: "gas", config: input.fee },
+  });
+  if (!response.data?.id) throw new Error("Circle did not return a publisher transaction ID");
+  return { id: response.data.id, state: response.data.state };
+}
+
 /// USDC balance (human units) for a dev-controlled wallet, summed across any
 /// USDC token entries. Drives the top-up deposit poll: once this clears the
 /// requested amount we fire the bridge to Arc.

@@ -2,6 +2,7 @@ import { McpServer, createMcpHandler, fromJsonSchema, type AuthInfo } from "@mod
 
 import { canUseAgonScope } from "../../auth/scope-policy.ts";
 import { createMcpAccessAdapter } from "./adapter.ts";
+import type { ManagedPublisher } from "./managed-publisher.ts";
 
 type AccessAdapter = ReturnType<typeof createMcpAccessAdapter>;
 
@@ -95,7 +96,7 @@ function requireActor(authInfo: AuthInfo | undefined, scope: string): string | R
  * an account. Every provider or buyer mutation receives the authenticated AGON
  * wallet address from the validated bearer token at the HTTP edge.
  */
-export function createAgonNativeMcpHandler(access: AccessAdapter) {
+export function createAgonNativeMcpHandler(access: AccessAdapter, publisher?: ManagedPublisher) {
   return createMcpHandler((context) => {
     const server = new McpServer({ name: "AGON", version: "1.0.0" });
 
@@ -247,6 +248,51 @@ export function createAgonNativeMcpHandler(access: AccessAdapter) {
         ? adapterResult(await access.getListingPublication(authenticatedActor, draftId))
         : authenticatedActor;
     });
+
+    if (publisher) {
+      const draftSchema = fromJsonSchema<{ draftId: string }>({
+        type: "object", properties: { draftId: { type: "string", minLength: 1, maxLength: 256 } },
+        required: ["draftId"], additionalProperties: false,
+      });
+      const managed = async (scope: string, task: (owner: string) => Promise<unknown>) => {
+        const owner = requireActor(context.authInfo, scope);
+        if (typeof owner !== "string") return owner;
+        try { return result(await task(owner)); }
+        catch (error) {
+          const message = error instanceof Error ? error.message : "";
+          const safe = /^(?:No managed publisher|Create a listing draft|draft changed|Publisher |The exact draft digest|Provision the publisher|Gas quote|Pinned gas quote|Circle transaction does not match|Identity receipt|Registered identity|Prepared publication|Publication target|Publication receipt|Hosted manifest|Managed draft digest|Publisher state changed)/.test(message);
+          return failure("managed_publisher_failed", safe ? message : "Managed publisher action failed. Check its status before retrying.");
+        }
+      };
+      server.registerTool("setup_managed_publisher", {
+        title: "Get a publisher wallet to fund",
+        description: "Provision one Circle-custodied Arc Testnet wallet for an existing listing draft. This does not sign or publish. Fund its address with native USDC for gas.",
+        inputSchema: draftSchema,
+      }, async ({ draftId }) => managed("listing:prepare", (owner) => publisher.setup(owner, draftId)));
+      server.registerTool("get_managed_listing", {
+        title: "Get managed listing status",
+        description: "Read the publisher wallet, funding, identity, and listing progress after a restart.",
+        inputSchema: draftSchema,
+      }, async ({ draftId }) => managed("agon:read", (owner) => publisher.status(owner, draftId)));
+      server.registerTool("approve_managed_listing", {
+        title: "Approve managed identity and publication",
+        description: "After the user reviews the exact listing digest and AGON custody, approve this draft's identity registration and publication. Funding alone is not approval.",
+        inputSchema: fromJsonSchema<{ draftId: string; termsDigest: string; approval: "approve" }>({
+          type: "object",
+          properties: {
+            draftId: { type: "string", minLength: 1, maxLength: 256 },
+            termsDigest: { type: "string", pattern: "^0x[0-9a-fA-F]{64}$" },
+            approval: { type: "string", const: "approve" },
+          },
+          required: ["draftId", "termsDigest", "approval"], additionalProperties: false,
+        }),
+      }, async ({ draftId, termsDigest, approval }) => managed("listing:write", (owner) => publisher.approve(owner, draftId, termsDigest, approval)));
+      server.registerTool("continue_managed_listing", {
+        title: "Continue managed listing",
+        description: "After explicit approval, advance ERC-8004 registration, hosted identity file, publication, and receipt reconciliation. Retry this tool while pending; idempotency prevents duplicate writes.",
+        inputSchema: draftSchema,
+      }, async ({ draftId }) => managed("listing:write", (owner) => publisher.advance(owner, draftId)));
+    }
 
     return server;
   }, { responseMode: "json" });
