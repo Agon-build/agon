@@ -1,7 +1,7 @@
 import { parseAbi } from "viem";
 
 export const AGON_PROFILE_REGISTRY = "0xE0c7A2545C2f4eE6d2bD797B6f2742c73E640574" as const;
-export const AGON_SERVICE_REGISTRY = "0x2144C156B0a4581da2D046C2E41AC41C6C3938CB" as const;
+export const AGON_SERVICE_REGISTRY = "0xf017290A267A3CEb693544882464a188D9e4a516" as const;
 
 export const agonProfileRegistryAbi = parseAbi([
   "function bindProfile(uint256 id, string uri)",

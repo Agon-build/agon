@@ -1,7 +1,7 @@
 import { canonicalManifestHash } from "./canonical.ts";
 import type { AgonCapabilities, AgonHealth, AgonListing } from "./types.ts";
 
-const SERVICE_REGISTRY = "0x2144C156B0a4581da2D046C2E41AC41C6C3938CB";
+const SERVICE_REGISTRY = "0xf017290A267A3CEb693544882464a188D9e4a516";
 const PROVIDER = "0x0aeEF0Dd6b0754262d1a91e435565749Cdc365Ad";
 
 const verifiedManifest = {

@@ -10,6 +10,7 @@ import { Footer } from "@/components/redesign/Footer";
 import { TagButton } from "@/components/redesign/TagButton";
 import { AGON_CATEGORIES, listingSearchMatch } from "@/lib/agon/catalog";
 import { AGON_PREVIEW_MODE, inspectManifest, listListings } from "@/lib/agon/client";
+import { marketEmptyState } from "@/lib/agon/market-empty";
 import type { AgonListing } from "@/lib/agon/types";
 import { useAgonNetwork } from "@/hooks/useAgonNetwork";
 
@@ -110,6 +111,7 @@ function ArcMarketPage() {
   }
 
   const hasFilters = Boolean(query || selectedCategory || view !== "all");
+  const emptyState = marketEmptyState({ loadedCount: items?.length ?? 0, hasFilters });
   const resetFilters = () => {
     setQuery("");
     setSelectedCategory("");
@@ -203,11 +205,11 @@ function ArcMarketPage() {
             <MarketSearchLoading query={query} />
           ) : filteredItems.length === 0 && !error ? (
             <BracketedCell className="py-14">
-              <div className="font-stencil text-[30px] uppercase text-ink">NO SERVICES FOUND</div>
-              <p className="mt-3 max-w-[58ch] font-mono text-[12px] leading-relaxed text-ink-2">No listed service matches these terms yet. Try a different outcome or browse the current catalog.</p>
+              <div className="font-stencil text-[30px] uppercase text-ink">{emptyState.title}</div>
+              <p className="mt-3 max-w-[58ch] font-mono text-[12px] leading-relaxed text-ink-2">{emptyState.message}</p>
               <div className="mt-6 flex flex-wrap gap-3">
-                <TagButton variant="ghost" onClick={resetFilters}>CLEAR FILTERS</TagButton>
-                <TagButton href="/market/new" variant="ghost">OPEN MCP GUIDE</TagButton>
+                {emptyState.offerClearFilters ? <TagButton variant="ghost" onClick={resetFilters}>CLEAR FILTERS</TagButton> : null}
+                <TagButton href={emptyState.primaryHref} variant="ghost">{emptyState.primaryLabel}</TagButton>
               </div>
             </BracketedCell>
           ) : (

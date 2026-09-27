@@ -10,6 +10,9 @@ on:
       - "backend/**"
       - "bnb-market/**"
       - "frontend/**"
+      - "contracts/src/**"
+      - "contracts/test/**"
+      - "contracts/script/**"
       - "contracts/deployments/**"
       - "deploy/**"
       - ".github/workflows/deploy.yml"
@@ -22,6 +25,18 @@ concurrency:
   group: agon-production-${{ github.ref }}
   cancel-in-progress: false
 jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+      - uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
+        with:
+          version: v1.7.1
+      - name: Test Solidity contracts
+        working-directory: contracts
+        run: forge test
   verify:
     runs-on: ubuntu-latest
     env:
@@ -100,7 +115,7 @@ jobs:
           retention-days: 7
   deploy:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    needs: verify
+    needs: [contracts, verify]
     runs-on: ubuntu-latest
     steps:
       - name: Check deployment configuration

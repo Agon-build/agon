@@ -12,6 +12,7 @@ import { arenaEvaluationIdFromReceipt, arenaPrimaryAction } from "@/lib/agon/are
 import { categoryBySlug, presentListing } from "@/lib/agon/catalog";
 import { evaluatePlaygroundTask, getAgonArenaEvidenceTransaction, getPlaygroundCategories, listListings, markAgonArenaEvaluationSubmitted, markAgonArenaEvidenceSubmitted, prepareAgonArenaEvaluation, reconcileAgonArenaEvaluation, runPlaygroundTask } from "@/lib/agon/client";
 import type { AgonArenaEvaluationView, AgonListing, AgonPlaygroundCategory, AgonPlaygroundRun } from "@/lib/agon/types";
+import { liveProviderMessage as describeLiveProviders } from "@/lib/agon/playground-copy";
 
 const DEFAULT_INPUT = JSON.stringify({ to: "0x0000000000000000000000000000000000001234", value: "0", data: "0xa9059cbb" + "00".repeat(64) }, null, 2);
 const EVIDENCE_INPUT = JSON.stringify({
@@ -107,13 +108,12 @@ function ArcPlayground() {
   const eligibleListings = category === "analysis" && categoryId
     ? listings.filter((listing) => listing.category === categoryId && providerScopes.includes(`${listing.id}@${listing.version}`.toLowerCase()))
     : [];
-  const liveProviderMessage = category !== "analysis"
-    ? "Live listed services are currently available for Analysis. This selection runs AGON's public sample."
-    : providerScopes.length === 0
-      ? "No listed service is connected to the live Playground yet."
-      : eligibleListings.length === 0
-        ? "No live service is available in this category yet."
-        : null;
+  const liveProviderMessage = describeLiveProviders({
+    category,
+    analysisCategoryId: categoryBySlug("analysis")?.id ?? null,
+    providerScopes,
+    listings,
+  });
 
   function chooseCategory(next: AgonPlaygroundCategory["slug"]) {
     setCategory(next);
@@ -177,6 +177,9 @@ function ArcPlayground() {
         expiresAt,
         idempotencyKey: `verify-${keccak256(stringToHex(`${selectedListing.id}:${selectedListing.version}:${run.runId}`)).slice(2)}`,
       });
+      if (intent.arenaContract.toLowerCase() !== AGON_CONTRACTS.Arena.toLowerCase()) {
+        throw new Error("AGON prepared this request for a different Arena contract. Refresh the page and try again.");
+      }
       const hash = await writeContractAsync({
         address: AGON_CONTRACTS.Arena,
         abi: agonArenaAbi,

@@ -136,12 +136,14 @@ export const CONTRACTS = {
 
 /// Current Agon protocol contracts. Keep these separate from the archived
 /// ArcRun contracts above so a legacy surface can never silently write into a
-/// new Agon contract or vice versa.
+/// new Agon contract or vice versa. ServiceRegistry and Arena are the linked
+/// V2 pair the backend treats as active; `deployment-alignment.test.ts` fails
+/// if these drift from contracts/deployments/agon-arc-testnet.json.
 export const AGON_CONTRACTS = {
   ProfileRegistry: "0xE0c7A2545C2f4eE6d2bD797B6f2742c73E640574",
-  ServiceRegistry: "0x2144C156B0a4581da2D046C2E41AC41C6C3938CB",
+  ServiceRegistry: "0xf017290A267A3CEb693544882464a188D9e4a516",
   JobEscrow: "0x6373E576AcFC9DE6cB182dA201d8e857D2A918aD",
-  Arena: "0x2c6196dB6491A3D3837f53Ce72B84778bc5E9d8F",
+  Arena: "0x05B81dF2F1615BBDEbd837991BAB199F65eCCB83",
   SyndicateRegistry: "0xD77312288E4019bD3Fc7a6C0234B9c84D09C1Ab4",
   PrizeVault: "0xd3a538fD48FA81CF102E5b5381B47e46eC176D3b",
 } as const;

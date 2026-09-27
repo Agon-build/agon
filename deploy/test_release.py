@@ -7,7 +7,10 @@ class ReleaseBoundaryTests(unittest.TestCase):
         workflow = (ROOT / '.github/workflows/deploy.yml').read_text()
         for path in ['bnb-market/**', 'frontend/**', 'backend/**']:
             self.assertIn(path, workflow)
-        self.assertIn('needs: verify', workflow)
+        # Deploy must wait for the application checks and the Solidity tests.
+        self.assertIn('needs: [contracts, verify]', workflow)
+        self.assertIn('run: forge test', workflow)
+        self.assertIn('foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09', workflow)
         self.assertIn('test:auth', workflow)
         self.assertIn('test:lp-storage', workflow)
         self.assertIn('test:agon', workflow)
