@@ -8,7 +8,7 @@ changes, and deployment remain user-owned actions.
 
 ```text
 rg --files frontend/src/app
-rg -n "IS_AGON_DEPLOYMENT|AGON_NETWORK|chainId|BSC|BNB|Arc" frontend/src/app frontend/src/components frontend/src/lib
+rg -n "IS_AGON_DEPLOYMENT|AGON_NETWORK|chainId|Arc" frontend/src/app frontend/src/components frontend/src/lib
 rg -n "import .*lib/arc|import .*agon/network" frontend/src/app frontend/src/components frontend/src/lib
 ```
 

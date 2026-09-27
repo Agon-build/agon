@@ -1,45 +1,47 @@
 # AGON market sources
 
-AGON is a discovery centre for agent services. It starts with the native Arc
-market and can add other agent marketplaces over time.
+AGON aggregates agent services. Every service in its catalog comes from a
+source, and AGON shows that source, the network, and the price on each result
+so buyers can compare the same kind of service across marketplaces.
 
-## How sources connect
+## Sources
 
-Each source is a typed adapter. An adapter may use a marketplace's read-only
-API, a documented discovery protocol, or a signed feed. AGON keeps the source
-name and source reference on every result so users can see where a service came
-from.
+| Source | Status | What it adds |
+| --- | --- | --- |
+| AGON registry on Arc Testnet | Live | Services listed through AGON MCP, with version-scoped tests and verification |
+| Circle Agent Marketplace | Next | Paid x402 services from Circle's public catalog, many payable on Arc mainnet |
+| Arc ERC-8004 agents | Planned | Agents registered on Arc that publish a reachable, typed service endpoint |
 
-The adapter boundary handles:
+Today, `search_services` and the web market return AGON registry services only.
+The REST search response already lists its sources, so an agent can see which
+ones answered.
 
-- search and category filtering
-- source health and freshness
-- verification and capability fields
-- price and latency normalization
-- duplicate detection and ranking
+## How a source connects
 
-AGON does not scrape marketplace pages or copy provider secrets. If a source is
-temporarily unavailable, AGON reports that source as unavailable while keeping
-healthy source results visible.
+Each source is a typed adapter. An adapter reads a documented, public API or a
+signed feed; AGON never scrapes marketplace pages or copies provider secrets.
+The adapter:
 
-## Arc first, more markets next
+- validates every record and drops the ones that do not parse;
+- keeps the source name and source reference on every result;
+- records when each record was last seen and marks old ones stale;
+- normalizes price to USDC and network to a chain identifier;
+- reports the source as unavailable when it cannot be reached, while other
+  sources keep answering.
 
-Arc is the first fully integrated source because AGON's terms, wallet policy,
-x402 payment, delivery evidence, and reconciliation flow are defined there.
-Circle and other chains can be added as source adapters after their discovery
-and execution contracts are verified. A source can be discoverable before it is
-hireable; AGON shows that distinction clearly.
+## Discoverable is not the same as tested
 
-## MCP makes aggregation useful
+A service from another marketplace is discoverable in AGON before AGON has
+tested it. The result says so. AGON's own tests and Arena results are separate
+evidence and are never copied from another marketplace's badges.
 
-An agent can ask:
+## Paying an external service
 
-> Find a CRM enrichment service, compare eligible prices, and show me the best
-> one-call option.
-
-The `agon.search_services` MCP operation returns plain service terms and source
-identity. Hiring still goes through the same terms digest, wallet policy, and
-payment boundary used by the web market.
+When routed hiring ships, the buyer's own wallet (or their Circle agent
+wallet) pays the provider directly. AGON checks the live payment request
+against the catalog price and recipient before the buyer approves, and records
+payment and delivery as separate facts. Services on Arc mainnet cost real USDC,
+and AGON labels them clearly.
 
 See [AGON MCP overview](./agon-mcp-overview.md) for the buyer and provider
 flows.

@@ -13,15 +13,15 @@ where to begin. The first action is discovery, not wallet connection.
 
 ## Fixed visual rules
 
-- Keep the AGON mark and wordmark. Do not substitute an ARC or BNB product logo.
+- Keep the AGON mark and wordmark. Do not substitute an Arc, Circle, or other partner logo.
 - Keep the existing AGON intro animation exactly: dark navy field, pink and
   cyan atmospheric color, centered AGON mark, restrained service previews,
   skip control, enter control, reduced-motion path, and no raw first-paint
   flash.
 - Use the existing AGON warm light canvas and traditional dark mode token flip.
 - Use AGON pink for the primary interaction signal and failure red only for
-  failure. Use BNB yellow as a small network identity signal, never as a second
-  competing brand accent.
+  failure. Source and network badges are small, neutral context labels, never a
+  second competing brand accent.
 - Use stencil display type for large AGON statements and mono type for
   identifiers, state labels, prices, chain ids, addresses, hashes, and receipts.
 - Prefer flat surfaces, hairlines, editorial grids, clear grouping, and firm
@@ -32,16 +32,15 @@ where to begin. The first action is discovery, not wallet connection.
 
 ## Landing hierarchy
 
-The BNB-led landing page should communicate in this order:
+The landing page should communicate in this order:
 
-1. AGON identity and the current BNB context.
-2. The plain-language outcome: find, compare, test, and hire agent services.
-3. One clear discovery action such as `EXPLORE AGENTS`.
-4. A secondary provider action such as `LIST YOUR AGENT`.
-5. Four equal category entrances or another evidence-backed outcome taxonomy.
-6. A visible but compact network control at the top right: BNB plus `Mainnet |
-   Testnet`.
-7. Partner and ecosystem context only after the product action is clear.
+1. AGON identity and the plain-language outcome: find, compare, and hire agent
+   services, and pay only for what you use.
+2. One input: "What do you need done?", with example requests.
+3. A secondary provider action such as `LIST YOUR AGENT`.
+4. Category entrances drawn from the evidence-backed taxonomy.
+5. A compact network label at the top right (Arc Testnet today).
+6. Source and partner context only after the product action is clear.
 
 Do not lead with ERC-8004, ERC-8183, x402, authority, or sponsor names. Those
 are inspection details and should appear when they help a decision.
@@ -71,15 +70,14 @@ generic `Agent #...` loading card.
 Unverified, unavailable, stale, mismatched, fixture, and live are different
 states. Never collapse them into one green trust badge.
 
-## Network control behavior
+## Source and network labels
 
-The top-right BNB control is a product context selector, not a decorative pill.
-BNB Testnet is the default while the product is being built. Opening the
-control exposes `Mainnet` and `Testnet`.
-The Testnet view exposes `BNB Testnet` and `Arc Testnet`. Switching updates the
-route or query state, the page title/context strip, data source, explorer, and
-write guards together. If a context is not configured, show it as unavailable
-with the reason and keep discovery usable where possible.
+Every result shows its source (AGON, Circle, Arc agent) and network (Arc
+Testnet or Arc mainnet). A mainnet price is real money and must say so before
+any hire action. When a network context changes, the data source, explorer,
+and write guards change together, and stale prepared payments are cleared. If a
+source or network is unavailable, show that with the reason and keep the other
+results usable.
 
 ## Accessibility and mobile
 

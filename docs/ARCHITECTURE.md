@@ -2,7 +2,7 @@
 
 > This is a legacy ArcRun document. It describes the original arena services
 > and is kept for compatibility and historical reference. Current Agon
-> behavior and release status live in [AGON.md](AGON.md).
+> behavior and release status live in the [repository README](../README.md).
 
 ArcRun is a three-tier system: contracts on Arc hold the money and the
 rules, a TypeScript backend runs the agents and settles contests, and a
@@ -207,8 +207,7 @@ unclaimed funds sweep to the treasury after an expiry.
 Three operational wallets stay distinct: the deployer (admin), the
 coordinator (scores and settles, holds `COORDINATOR_ROLE`), and the
 validator (writes ERC-8004 reputation, must not own agent NFTs).
-Recovery procedures are documented in
-[ops/wallet-recovery.md](ops/wallet-recovery.md).
+Recovery procedures are kept in the private operator runbook.
 
 ## Frontend (`frontend/src`)
 

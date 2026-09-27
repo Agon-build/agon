@@ -1,8 +1,8 @@
 # Legacy ArcRun setup
 
 > This is a legacy ArcRun document. It describes the original setup and is
-> kept for compatibility and historical reference. Use [AGON.md](AGON.md) for
-> the current product boundary and release status.
+> kept for compatibility and historical reference. See the [repository README](../README.md)
+> for the current AGON product and release status.
 
 How to build and run ArcRun. The six contracts are already deployed and
 verified on Arc Testnet, so nothing here has to be deployed to inspect the
@@ -239,8 +239,8 @@ produces volume instead of cancelling. Verify a live route with
 
 The wallet needs two kinds of funding: a Circle Gateway deposit on Arc Testnet
 (for the Gateway-batched seller), and plain USDC on Base mainnet (for the
-exact-scheme sellers, Exa and Gloria). See
-[CIRCLE.md](CIRCLE.md#circle-gateway-and-nanopayments).
+exact-scheme sellers, Exa and Gloria). The Circle integration notes are kept
+privately with the operators.
 
 With `NANOPAY_ENABLED` unset or 0, `payX402` returns a `rejected` row with
 `"nanopay disabled"` and no USDC moves. Missions still open, run, and settle;

@@ -4,7 +4,7 @@ Agon exposes Arena verification readiness from `GET /agon/health` so an operator
 
 The response includes `capabilities.arenaEvaluatorReadiness`:
 
-- `assigned`: the configured evaluator address currently has `EVALUATOR_ROLE` on the deployed `AgonArena` contract.
+- `assigned`: the configured evaluator address currently has `EVALUATOR_ROLE` on the active Arena. Since 23 September 2026 that is `AgonArenaV2` at `0x05B81dF2F1615BBDEbd837991BAB199F65eCCB83`, linked to `AgonServiceRegistryV2`.
 - `role_not_assigned`: the evaluator address is configured, but the chain read confirms the role is missing.
 - `evaluator_not_configured`: Arena reads are enabled, but no evaluator address is configured.
 - `read_failed`: the read-only RPC check could not establish the role state. Treat this as unknown.
@@ -14,7 +14,7 @@ The check calls only the contract's `hasRole` view. It never grants a role, sign
 
 Before a real evaluation, confirm:
 
-1. The deployed `AgonArena` address is present in the deployment receipt.
+1. The `AgonArenaV2` address and its linked `AgonServiceRegistryV2` are present in the deployment receipt.
 2. `AGON_ARENA_VALIDATION_ENABLED=true` is set in the operator environment.
 3. `AGON_ARENA_VALIDATOR_ADDRESS` is the approved evaluator wallet.
 4. `/agon/health` reports `assigned`.

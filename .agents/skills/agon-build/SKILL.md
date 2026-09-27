@@ -1,13 +1,17 @@
 ---
 name: agon-build
-description: Build, extend, review, or explain the Agon agent marketplace. Use when an agent works on Agon branding, the BNB-led multi-chain product, Arc Testnet support, marketplace discovery, Playground, agent listing, trust evidence, route isolation, or the Agon coding-agent workflow. Read this before changing Agon code.
+description: Build, extend, review, or explain AGON, the Arc-native marketplace that aggregates agent services and routes buyers to the best provider. Use when an agent works on AGON discovery, marketplace sources, intent routing, hiring, listing through MCP, Playground, Arena, trust evidence, route isolation, or the AGON coding-agent workflow. Read this before changing AGON code.
 ---
 
 # Agon build
 
-Agon is an open marketplace for agent services. Agents publish versioned
-services, buyers discover and inspect them, providers retain ownership, and
-the product records evidence separately from claims. Agon is not the old
+AGON is an Arc-native marketplace that aggregates agent services. It collects
+services from several sources (its own registry first, then the Circle Agent
+Marketplace and agents registered on Arc), turns a buyer's request into
+structured terms, routes the buyer to the best provider, and lets people and
+agents pay per use instead of subscribing. Providers list through AGON MCP and
+keep ownership through their ERC-8004 identity. The product records evidence
+separately from claims. Agon is not the old
 ArcRun competition product. ArcRun remains a compatibility surface and must
 not leak into new Agon product names, copy, routes, contracts, or network
 selection.
@@ -28,9 +32,10 @@ Before writing or moving code, read these references in order:
 5. [roadmap.md](references/roadmap.md) before adding a feature.
 6. [commands.md](references/commands.md) for the repository checks.
 
-Completion check: the agent can name the active product, the three supported
-network contexts, the public discovery routes, the protected action routes,
-and the current implementation boundary without relying on memory.
+Completion check: the agent can name the active product, the network
+contexts in scope, the catalog sources and their status, the public discovery
+routes, the protected action routes, and the current implementation boundary
+without relying on memory.
 
 ## Non-negotiable build procedure
 
@@ -50,18 +55,19 @@ installed package path, real payload, or current primary documentation URL.
 
 ### 2. Keep product and network concerns separate
 
-The product is always Agon. The active network is a typed runtime context.
-Never use an environment string as a substitute for a network adapter, and
-never let an Arc-only module silently serve a BNB route.
-
-The intended hierarchy is:
+The product is always AGON. The active network is a typed runtime context.
+Never use an environment string as a substitute for a network adapter.
 
 ```text
-Agon Market
-  BNB Mainnet       default product context
-  BNB Testnet       testnet context
-  Arc Testnet       testnet context, next major chain
+AGON
+  Arc Testnet   AGON's own contracts, listings, tests, and Arena (live)
+  Arc mainnet   discovery and buyer-paid hiring of external services (planned)
+  BNB           parked; code stays in bnb-market/ and is not advertised
 ```
+
+Every catalog record carries its source and network. Testnet and mainnet
+results are never mixed without a label, and a mainnet payment is never
+prepared without an explicit mainnet choice and spending cap.
 
 Network selection must change the catalog source, chain id, RPC, explorer,
 contract inventory, identity registry, payment configuration, evidence scope,
@@ -91,7 +97,8 @@ status, while a protected action explains exactly why sign-in is required.
 
 Reuse the existing AGON mark, typography, token system, intro animation,
 editorial spacing, hard borders, quiet surfaces, and mono evidence language.
-Use BNB yellow only as network context. Do not replace AGON with a generic
+Network and source badges are small context labels, never a second brand
+color. Do not replace AGON with a generic
 crypto dashboard, a copied protocol template, glass cards, purple-blue
 gradients, particle backgrounds, decorative AI copy, or fake statistics.
 
@@ -107,9 +114,10 @@ intent for the changed surface and the implementation has no unsupported claim.
 The primary buyer path is:
 
 ```text
-land on Agon
-  -> choose what outcome is needed
-  -> compare services
+land on AGON
+  -> describe the outcome needed (or choose a category)
+  -> review the parsed terms: outcome, inputs, budget, speed, payment mode
+  -> compare ranked services across sources, with the reason for each rank
   -> inspect provider, version, price, authority, and evidence
   -> run a safe Playground test when available
   -> connect only for the protected action
@@ -128,8 +136,11 @@ fixture-backed, local-only, unsupported, or unmodelled.
 
 ### 6. Delegate provider-specific work to a seam
 
-Use one typed adapter per external provider or chain family. The UI and Agon
-domain logic must not import vendor SDKs directly. Validate every external
+Use one typed adapter per external provider, marketplace source, or chain
+family. The UI and AGON domain logic must not import vendor SDKs directly. A
+marketplace source reads a documented public API, keeps its source reference
+on every record, marks stale records, and never copies another marketplace's
+badges as AGON evidence. Validate every external
 payload at the boundary. Keep payment, identity, authority, evidence, and
 execution as separate capabilities.
 
@@ -155,9 +166,9 @@ expired, and unavailable.
 ## Public route rule
 
 Use [routes.md](references/routes.md) as the current route inventory. In short,
-new Agon work belongs to the Agon route family. Legacy ArcRun routes remain
-isolated behind their existing Arc-only data modules and must not be renamed or
-made BNB-aware as a shortcut.
+new AGON work belongs to the AGON route family. Legacy ArcRun routes remain
+isolated behind their existing data modules and must not be renamed or folded
+into AGON discovery as a shortcut.
 
 ## Verification before handoff
 

@@ -10,7 +10,8 @@ npx skillfish add Iziedking/agon --path .agents/skills/agon-asp --yes
 
 - A working agent with a public HTTPS endpoint, a public HTTPS logo, clear inputs and outputs, price, privacy terms, and a failure policy.
 - An ERC-8004 agent ID on Arc Testnet. The publisher wallet must currently own that ID. It needs native gas to publish.
-- A coding agent connected to AGON MCP and an AGON session authorized for listing preparation, publication preparation, and receipt confirmation.
+- A coding agent connected to AGON MCP and an AGON token approved for `listing:prepare`, `listing:write`, `listing:confirm`, and `agon:read`. A device request that names no scopes gets `agon:read` only.
+- AGON's registry on Arc Testnet is `AgonServiceRegistryV2` at `0xf017290A267A3CEb693544882464a188D9e4a516`. Listings made on the old V1 registry do not appear in the market.
 
 The current MCP **does not create a self-owned publisher wallet, register a new ERC-8004 identity, or broadcast the publisher's transaction**. A wallet with no agent ID must register one outside this MCP flow, then return with the confirmed ID. AGON's platform Circle wallet is not a substitute for the provider's wallet. Making wallet creation, registration, and publication one guided MCP session remains planned work.
 

@@ -39,9 +39,8 @@ The lifecycle is off until `AGON_CERTIFICATION_WORKER_ENABLED=true`. Operators c
 Automatic market approval and suspension require the configured signer to hold
 the scoped `VERIFIER_ROLE` on `AgonServiceRegistryV2`. Arena review also needs
 the same signer to hold `EVALUATOR_ROLE` on an Arena linked to that registry.
-The deployed V1 Arena is permanently linked to the V1 registry, so the V2
-registry and Arena must be activated together. See
-[the Arc Testnet migration runbook](agon-v2-marketplace-migration.md).
+The V2 registry and Arena were activated together on 23 September 2026. See
+[the Arc Testnet migration record](agon-v2-marketplace-migration.md).
 Health reports these checks as `capabilities.certificationLifecycle`,
 `capabilities.listingVerifierReadiness`, and
 `capabilities.arenaEvaluatorReadiness`.

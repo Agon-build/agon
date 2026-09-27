@@ -1,85 +1,62 @@
-# Agon network matrix
+# AGON network matrix
 
-This is the public network contract. Chain ids are the user-approved product
-direction and the current repository source where stated. Verify RPC URLs,
-explorer URLs, token contracts, registry deployments, and payment behavior from
-current primary documentation and deployed receipts before enabling writes.
+This is the public network contract. Facts below were read from the repository
+deployment receipt, Arc documentation, and live RPC calls on 2026-09-24.
+Re-verify before enabling any write.
 
-## Product contexts
+## Contexts
 
-| Context | Chain id | Role | Status in current source |
+| Context | Chain id | Role | Status |
 | --- | ---: | --- | --- |
-| BNB Mainnet | 56 | Default Agon Market context | Planned adapter; do not imply live Agon contracts |
-| BNB Testnet | 97 | Safe BNB development and demo context | Planned adapter; do not imply live Agon contracts |
-| Arc Testnet | 5042002 | Next major Agon chain and current deployed foundation | Current Arc-oriented implementation |
+| Arc Testnet | 5042002 | AGON's registry, listings, tests, Arena, and AGON-listed hires | Live |
+| Arc mainnet | 5042 | Discovery and buyer-paid hiring of external services, such as Circle marketplace services payable on Arc | Planned; no AGON contracts |
+| BNB Smart Chain | 56 / 97 | Parked. Code lives in `bnb-market/` and is not part of the product | Out of scope |
 
-The UI may show `Mainnet | Testnet`, but the state must resolve to one of the
-three typed contexts. Testnet selection must offer `BNB Testnet` and `Arc
-Testnet`. There is no implied Arc Mainnet context in this product contract.
+A context with no AGON contracts cannot expose an AGON write action. Mainnet
+payments need an explicit mainnet choice, a spending cap, and a clear label.
 
-## Arc Testnet facts from the repository
+## Arc Testnet (from `contracts/deployments/agon-arc-testnet.json`)
 
-`frontend/src/lib/arc.ts` currently provides the Arc Testnet client and these
-public addresses:
+| Contract | Address | Role |
+| --- | --- | --- |
+| AgonProfileRegistry | `0xE0c7A2545C2f4eE6d2bD797B6f2742c73E640574` | Active |
+| AgonServiceRegistryV2 | `0xf017290A267A3CEb693544882464a188D9e4a516` | Active listing registry |
+| AgonArenaV2 | `0x05B81dF2F1615BBDEbd837991BAB199F65eCCB83` | Active Arena, linked to RegistryV2 |
+| AgonServiceRegistry (V1) | `0x2144C156B0a4581da2D046C2E41AC41C6C3938CB` | Historical only |
+| AgonArena (V1) | `0x2c6196dB6491A3D3837f53Ce72B84778bc5E9d8F` | Historical only |
+| ERC-8004 IdentityRegistry | `0x8004A818BFB912233c491871b3d84c89A494BD9e` | External identity |
+| ERC-8004 ReputationRegistry | `0x8004B663056A597Dffe9eCcC1965A193B7388713` | External reputation |
+| ERC-8004 ValidationRegistry | `0x8004Cb1BF31DAf7788923b405b754f57acEB4272` | External validation |
+| ERC-8183 AgenticCommerce | `0x0747EEf0706327138c69792bF28Cd525089e4583` | Standard escrow jobs (proxy); candidate escrow rail |
+| USDC | `0x3600000000000000000000000000000000000000` | 6-decimal ERC-20 view of native USDC |
 
-- ERC-8004 IdentityRegistry:
-  `0x8004A818BFB912233c491871b3d84c89A494BD9e`
-- Native USDC:
-  `0x3600000000000000000000000000000000000000`
-- Agon ProfileRegistry:
-  `0xE0c7A2545C2f4eE6d2bD797B6f2742c73E640574`
-- Agon ServiceRegistry:
-  `0x2144C156B0a4581da2D046C2E41AC41C6C3938CB`
-- Current Agon JobEscrow, Arena, SyndicateRegistry, and PrizeVault addresses
-  are also present in `frontend/src/lib/arc.ts`; use the canonical deployment
-  receipt before treating any one as active for a new flow.
+Explorer: `https://testnet.arcscan.app`. The public RPC can rate-limit bursts;
+the frontend uses an optional `NEXT_PUBLIC_ARC_RPC_HTTP` fallback and batching.
 
-The existing public explorer is `https://testnet.arcscan.app`. The current
-source uses an optional `NEXT_PUBLIC_ARC_RPC_HTTP` fallback chain and viem
-batching because the public Arc RPC can rate-limit bursts.
+The frontend constants in `frontend/src/lib/arc.ts` must match the active pair
+in the receipt. `frontend/src/lib/agon/deployment-alignment.test.ts` fails when
+they drift.
 
-## BNB facts that still require implementation verification
+## Arc mainnet
 
-The BNB context must not reuse Arc constants. Before coding BNB reads or
-writes, verify and record:
+| Item | Value |
+| --- | --- |
+| RPC | `https://rpc.mainnet.arc.io` (public; partner RPCs also available) |
+| Explorer | `https://explorer.arc.io` |
+| ERC-8004 IdentityRegistry | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` |
+| ERC-8004 ReputationRegistry | `0x8004BAa17C55a88189AE136b182e5fdA19dE9b63` |
+| Circle Gateway wallet | `0x77777777dcc4d5a8b6e418fd04d8997ef11000ee` |
+| USDC | `0x3600000000000000000000000000000000000000` |
 
-- the exact RPC and explorer for BNB Mainnet and BNB Testnet;
-- native BNB gas behavior and token decimals for every payment asset;
-- the ERC-8004 registry deployment used by the target network;
-- Agon contract deployments, bytecode, ABI, and role configuration on each
-  BNB context;
-- wallet connector and chain-switch behavior;
-- x402 or other payment facilitator network support;
-- 8004scan discovery limits and provenance behavior;
-- finality and read-after-write timing;
-- exact transaction and receipt link formats.
+AGON has no contracts on Arc mainnet. Some Arc documentation pages still
+describe mainnet as private; the RPC answered without credentials on
+2026-09-24.
 
-Do not infer any of these from Arc or from a generic EVM assumption.
+## Rules
 
-## Required adapter shape
-
-The implementation should converge on a typed descriptor similar to:
-
-```ts
-type AgonNetworkContext = {
-  key: "bnb-mainnet" | "bnb-testnet" | "arc-testnet";
-  family: "bnb" | "arc";
-  environment: "mainnet" | "testnet";
-  chainId: number;
-  nativeGasSymbol: string;
-  rpcUrls: readonly string[];
-  explorerUrl: string;
-  identityRegistry: `0x${string}` | null;
-  profileRegistry: `0x${string}` | null;
-  serviceRegistry: `0x${string}` | null;
-  capabilities: {
-    discovery: "live" | "fixture" | "unavailable";
-    listingWrites: "live" | "prepared" | "unavailable";
-    payments: "live" | "sandbox" | "unavailable";
-    playground: "live" | "fixture" | "unavailable";
-  };
-};
-```
-
-The exact type may change, but the separation must remain. A context with null
-contracts cannot expose a write CTA.
+- Chain id, RPC, explorer, contracts, payment asset, and write guards come from
+  one typed context object, never from scattered constants.
+- Never reuse a testnet address on mainnet or the reverse. Registry addresses
+  differ between the two.
+- Verify token decimals with `decimals()` before any amount math. Arc's native
+  gas balance uses 18 decimals; the USDC ERC-20 view uses 6.

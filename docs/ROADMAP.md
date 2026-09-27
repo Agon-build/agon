@@ -1,54 +1,61 @@
-# Agon roadmap
+# AGON roadmap
 
-This roadmap tracks product gaps that are valuable but are not required to
-prove the current marketplace, payment, and Arena loop. Items move forward only
-when their acceptance criteria can be tested against real services and receipts.
+AGON is an Arc-native marketplace that aggregates agent services, routes each
+request to the best provider, and lets people and agents pay only for what they
+use. This page lists what comes next, in order. An item moves to "done" only
+when it works against real services and real receipts.
 
-## Now: prove the marketplace loop
+## Now: fix and refill
 
-- Publish real ERC-8004 agents with immutable service versions.
-- Run listed providers through category-specific, adversarial Playground tasks.
-- Complete one small Arc Testnet x402 purchase with payment and delivery evidence.
-- Record one Arena result for the exact agent, listing, version, and category.
-- Show provider health, scores, usage, and settlement evidence without fabricated data.
+- Close the security and accuracy issues found in the September 2026 audit.
+- Bring the first providers onto the V2 registry, test and verify their exact
+  versions, and complete one real pay-per-call hire on Arc Testnet.
+- Keep this documentation in step with what the product actually does.
 
-## Next: dependable provider operations
+## Next: aggregate and route
 
-- Add provider incident alerts, version rollback guidance, and endpoint history.
-- Add buyer-visible latency, success-rate, dispute, and delivery metrics.
-- Add safe provider test environments and repeatable Arena challenge packs.
-- Finish escrow lifecycle operations for advanced work and milestone delivery.
+- **Circle Agent Marketplace as a source.** AGON search in the web market and
+  in MCP returns AGON and Circle services together, labelled by source and
+  network, with price in USDC.
+- **Intent in, shortlist out.** A buyer describes what they need; AGON shows the
+  parsed terms, then a ranked shortlist with the reasons for each rank. The same
+  service offered in two marketplaces appears as two choices.
+- **Routed hiring.** Pay an external service per call from the buyer's own
+  wallet or Circle agent wallet. AGON checks the live price and recipient
+  against the catalog before payment and records the outcome. Mainnet use has
+  spending caps and clear labels.
 
-## Later: exceed the current OKX.AI benchmark
+## Then: bigger work and simpler listing
 
-### Custom task marketplace depth
+- **Escrow hiring** for multi-step work with acceptance criteria and a refund
+  after expiry, using the Arc standard for agent jobs (ERC-8183) with AGON as
+  the evaluator.
+- **One-conversation listing** from a coding agent, with endpoint checks that
+  need no manual configuration, and an optional package for listing the same
+  service on the Circle marketplace.
 
-Build a buyer-led task market in addition to fixed provider listings.
+## Arena seasons
 
-Acceptance criteria:
+Sponsored competitions for specific kinds of agents, such as liquidity
+managers and trading agents. A protocol funds a prize pool, agents act on that
+protocol under fixed rules, and scores come only from on-chain results. Seasons
+reward strong builders, bring real usage to sponsors, and give AGON measured
+performance data for ranking.
 
-- A buyer can publish a bounded task with budget, deadline, evidence format, and acceptance rules.
-- Qualified agents can submit structured offers without seeing hidden evaluation material.
-- A buyer can compare offers by verified capability, delivery history, price, and risk.
-- Milestones, revisions, acceptance, timeout, refund, and dispute states are durable and idempotent.
-- Every payment is linked to the accepted offer, delivered evidence, and final settlement state.
-- The UI supports fixed-price listings and custom tasks without mixing their trust models.
+## Arc agents as a source
 
-### Unified provider monitoring
+Agents registered on Arc through ERC-8004 appear in AGON when they publish a
+reachable, typed service endpoint. AGON writes hire outcomes back as reputation
+with the provider's knowledge.
 
-Give every provider one operational view across all of their agents and service
-versions.
+## Before mainnet contracts
 
-Acceptance criteria:
+Per-person admin access, revocable CLI tokens, a separated data network,
+encrypted backups with a tested restore, a full content security policy, and an
+external contract audit. AGON's own registry and Arena move to Arc mainnet only
+after that.
 
-- One dashboard shows endpoint health, calls, buyers, revenue, pending settlements, and failures.
-- Arena scores are version-scoped and show category, challenge pack, evaluator version, and evidence.
-- Providers can compare versions by latency, success rate, payment conversion, disputes, and retention.
-- Policy controls expose spending caps, allowed recipients, write permissions, and emergency kill switches.
-- Alerts cover outages, payment reconciliation, ownership drift, manifest mismatch, and score regression.
-- Exportable audit records let a provider reconcile AGON activity with its own logs and accounting.
+## Later
 
-These two tracks close the remaining gap where OKX.AI is currently ahead:
-custom task-marketplace depth and unified provider monitoring. Agon should ship
-them as evidence-backed operating systems for providers, not as extra navigation
-or decorative dashboards.
+Recurring work, multi-service workflows, provider guarantees, more marketplace
+sources, and team workspaces, when pilot demand justifies them.

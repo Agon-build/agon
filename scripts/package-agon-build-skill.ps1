@@ -22,7 +22,20 @@ New-Item -ItemType Directory -Path (Split-Path -Parent $output) -Force | Out-Nul
 if (Test-Path -LiteralPath $output) {
   Remove-Item -LiteralPath $output -Force
 }
-Compress-Archive -LiteralPath $stageSkill -DestinationPath $output -CompressionLevel Optimal
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+# Compress-Archive in Windows PowerShell writes backslash entry names, which
+# macOS and Linux unzip as flat files. Write forward-slash names explicitly.
+$zip = [System.IO.Compression.ZipFile]::Open($output, [System.IO.Compression.ZipArchiveMode]::Create)
+try {
+  $stageRoot = (Resolve-Path -LiteralPath $stage).Path
+  Get-ChildItem -LiteralPath $stageRoot -Recurse -File | Sort-Object FullName | ForEach-Object {
+    $entry = $_.FullName.Substring($stageRoot.Length).TrimStart([char]92, [char]47).Replace([string][char]92, [string][char]47)
+    [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, $_.FullName, $entry, [System.IO.Compression.CompressionLevel]::Optimal) | Out-Null
+  }
+} finally {
+  $zip.Dispose()
+}
 Remove-Item -LiteralPath $stage -Recurse -Force
 
 if (-not (Test-Path -LiteralPath $output)) {

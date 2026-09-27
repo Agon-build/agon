@@ -36,7 +36,10 @@ The AGON skill teaches an agent to use these task-level operations:
 The native server is at `https://api.agon.surf/agon/mcp`. Public
 `search_services` and `get_service` need no account. `preview_hire` and
 `get_hire_status` require an authenticated session; `authorize_hire` also
-requires `wallet:execute` for an AGON CLI token. The server may return an
+requires `wallet:execute` for an AGON CLI token. A CLI device request that
+names no scopes now receives `agon:read` only, so request each scope the task
+needs. CLI tokens cannot call browser-only routes such as wallet transfers,
+bridging, or device approval. The server may return an
 execution-unavailable state after approval when its payment adapter is not
 enabled. Treat that state as pending work, not as payment or delivery.
 

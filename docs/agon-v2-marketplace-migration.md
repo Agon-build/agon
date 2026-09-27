@@ -1,9 +1,24 @@
 # Arc Testnet marketplace verification migration
 
-Status: the linked V2 contracts were deployed on Arc Testnet on 23 September
-2026 and independently source-verified with exact creation and runtime matches
-on Sourcify. The local canonical receipt now records the pair; it has not been
-pushed or activated in production. Production still uses V1.
+Status: **active in production.** The linked V2 contracts were deployed on Arc
+Testnet on 23 September 2026 and independently source-verified with exact
+creation and runtime matches on Sourcify. The receipt was pushed the same day.
+On 24 September, `/agon/health` reported `listingVerifierReadiness` and
+`arenaEvaluatorReadiness` both assigned and execution-enabled for the V2 pair,
+and a hosted-file lookup returned 404 rather than 503, so the hosted-file store
+is registered.
+
+Still open after activation:
+
+- No listing exists on RegistryV2 yet (`getListing(1)` reverts
+  `ListingMissing()`), so the market is empty until providers publish fresh V2
+  listings.
+- Playground provider and endpoint QA configuration still names the old V1
+  listing scopes. Update both when the V2 listings exist.
+- The web app used the V1 addresses until the 24 September fix; its constants
+  now match the receipt, and a test fails if they drift.
+
+The rest of this page is the migration record as written before activation.
 
 ## Deployed pair checkpoint
 
