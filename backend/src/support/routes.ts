@@ -7,6 +7,7 @@ import { config } from "../config/index.js";
 import { query } from "../db/pool.js";
 import { answerSupportMessage } from "./assistant.js";
 import { redactSupportMessage } from "./core.js";
+import { clientAddress } from "../http/client-address.ts";
 import { llmConfigured } from "../runners/llm/client.js";
 import {
   hashOpaqueToken,
@@ -52,7 +53,7 @@ function cookieSecure(): boolean {
 }
 
 function requestIp(c: { req: { header: (name: string) => string | undefined } }): string {
-  return (c.req.header("cf-connecting-ip") ?? c.req.header("x-forwarded-for")?.split(",")[0] ?? "unknown").trim().slice(0, 80);
+  return clientAddress((name) => c.req.header(name));
 }
 
 async function consumeRateLimit(key: string, maximum: number, windowMinutes: number): Promise<boolean> {

@@ -9,6 +9,7 @@ import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { generateSiweNonce, parseSiweMessage } from "viem/siwe";
 import { z } from "zod";
 import { createSupportRoutes } from "../support/routes.js";
+import { secretMatches } from "../support/security.js";
 
 import { createWalletClient, http, parseAbi } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -75,7 +76,8 @@ import { notify } from "../notifications/index.js";
 import { setTierGate, getTierGate, type GateSurface } from "../lib/tierGate.js";
 import { merkleProof, merkleRoot, payoutLeaf } from "../coordinator/merkle.js";
 import { redis } from "../redis.js";
-import { issueToken, requireAgonScope, requireAuth, SESSION_COOKIE, verifyTokenClaims } from "./jwt.js";
+import { issueToken, requestClaims, requireAgonScope, requireAuth, SESSION_COOKIE, verifyTokenClaims } from "./jwt.js";
+import { authorizeWalletExecute, createWalletExecutePolicy } from "./wallet-execute-policy.ts";
 import { walletPrincipalForOperator } from "./wallet-principal.js";
 import { walletPrincipalForLinkedCircleWallet } from "./wallet-principal.js";
 import { getWalletPrincipal, listWalletPrincipals, linkCircleUserControlledWallet } from "./wallet-principal-repository.js";
@@ -189,7 +191,10 @@ const NONCE_TTL = 300; // seconds
 const STATE_TTL = 600;
 const CLI_DEVICE_TTL = 10 * 60;
 const CLI_SCOPES = ["agon:read", "listing:prepare", "listing:write", "listing:confirm", "wallet:execute", "playground:run", "arena:prepare"] as const;
-const DEFAULT_CLI_SCOPES = ["agon:read", "listing:prepare", "listing:write", "listing:confirm", "wallet:execute", "playground:run", "arena:prepare"] as const;
+// A device request that names no scopes gets read access only. Tools that
+// need more (the ASP CLI, MCP clients) request each scope explicitly, and the
+// approval page shows the user exactly what they grant.
+const DEFAULT_CLI_SCOPES = ["agon:read"] as const;
 const cliDeviceRequestSchema = z.object({
   clientName: z.string().trim().min(1).max(80).default("agon-cli"),
   scopes: z.array(z.enum(CLI_SCOPES)).min(1).max(CLI_SCOPES.length).default([...DEFAULT_CLI_SCOPES]),
@@ -290,7 +295,7 @@ app.post("/auth/cli/device/approve", requireAuth, async (c) => {
       where user_code_hash = $1
         and status = 'pending'
         and expires_at > now()
-      returning client_name, expires_at`,
+      returning client_name, scopes, expires_at`,
     [hashCliCode(userCode), c.get("address")],
   );
   const approved = rows[0];
@@ -748,6 +753,8 @@ app.route("/agon", createAgonRoutes({
   requireListingConfirmAuth: createAgonAuthMiddleware(config.adminToken, requireAgonScope("listing:confirm")),
   requirePlaygroundAuth: createAgonAuthMiddleware(config.adminToken, requireAgonScope("playground:run")),
   requireArenaAuth: createAgonAuthMiddleware(config.adminToken, requireAgonScope("arena:prepare")),
+  requireHireReadAuth: createAgonAuthMiddleware(config.adminToken, requireAgonScope("agon:read")),
+  requireHireWalletAuth: createAgonAuthMiddleware(config.adminToken, requireAgonScope("wallet:execute")),
   requirePrincipal: createAgonPrincipalMiddleware(async (operatorAddress, requestedAddress) =>
     Boolean(await getWalletPrincipal(operatorAddress, requestedAddress, pool)),
   ),
@@ -1300,6 +1307,30 @@ const AGON_ARENA_WRITE_ADDRESSES = new Set(
     : [],
 );
 
+// Function-level rules for the Circle signer. See wallet-execute-policy.ts.
+const walletExecutePolicy = createWalletExecutePolicy({
+  usdc: config.external.USDC,
+  identityRegistry: config.agon.deployment?.external.IdentityRegistry.address ?? null,
+  intentBound: [...AGON_WRITE_ADDRESSES, ...AGON_ARENA_WRITE_ADDRESSES],
+  usdcSpenders: [
+    config.contracts.ContestEngine,
+    config.contracts.ChallengeArena,
+    config.contracts.AgentRegistry,
+    config.contracts.PrizeEscrow,
+    config.contracts.SyndicateFactory,
+    ...(config.agon.deployment?.contracts.AgonJobEscrow ? [config.agon.deployment.contracts.AgonJobEscrow] : []),
+    ...(config.agon.deployment?.contracts.AgonPrizeVault ? [config.agon.deployment.contracts.AgonPrizeVault] : []),
+  ],
+  legacy: [
+    config.contracts.ContestEngine,
+    config.contracts.ChallengeArena,
+    config.contracts.AgentRegistry,
+    config.contracts.PrizeEscrow,
+    config.contracts.SyndicateFactory,
+    config.contracts.PointsLedger,
+  ],
+});
+
 const executeBodySchema = {
   parse(body: unknown): {
     contractAddress: `0x${string}`;
@@ -1356,6 +1387,24 @@ app.post("/wallet/execute", requireAgonScope("wallet:execute"), async (c) => {
 
   if (!WRITE_ALLOWLIST.has(body.contractAddress.toLowerCase())) {
     return c.json({ error: "contract address is not part of ArcRun" }, 400);
+  }
+  const claims = await requestClaims(c);
+  const decision = authorizeWalletExecute(walletExecutePolicy, {
+    client: claims?.client ?? null,
+    contractAddress: body.contractAddress,
+    abiFunctionSignature: body.abiFunctionSignature,
+    abiParameters: body.abiParameters,
+  });
+  if (!decision.ok) {
+    void logEvent({
+      level: "warn",
+      kind: "wallet_execute_refused",
+      address: operator,
+      message: decision.message,
+      context: { fn: body.abiFunctionSignature, contract: body.contractAddress, client: claims?.client ?? null },
+      source: "auth",
+    });
+    return c.json({ error: decision.message }, decision.status);
   }
 
   if (AGON_WRITE_ADDRESSES.has(body.contractAddress.toLowerCase())) {
@@ -1850,7 +1899,7 @@ app.post("/auth/circle/user-controlled/contract-status", requireAuth, async (c) 
   }
 });
 
-app.get("/auth/me", requireAuth, async (c) => {
+app.get("/auth/me", requireAgonScope("agon:read"), async (c) => {
   const address = c.get("address");
   const { rows } = await query<{
     address: string;
@@ -1970,7 +2019,7 @@ app.get("/admin/events", async (c) => {
 // balances come from balanceOf at the canonical USDC address.
 
 function adminAuthed(c: { req: { header: (k: string) => string | undefined } }): boolean {
-  return Boolean(config.adminToken) && c.req.header("x-admin-token") === config.adminToken;
+  return secretMatches(c.req.header("x-admin-token"), config.adminToken);
 }
 
 type AdminLevel = "admin" | "support";
@@ -1981,8 +2030,8 @@ type AdminLevel = "admin" | "support";
 function adminLevel(c: { req: { header: (k: string) => string | undefined } }): AdminLevel | null {
   const t = c.req.header("x-admin-token");
   if (!t) return null;
-  if (config.adminToken && t === config.adminToken) return "admin";
-  if (config.supportToken && t === config.supportToken) return "support";
+  if (secretMatches(t, config.adminToken)) return "admin";
+  if (secretMatches(t, config.supportToken)) return "support";
   return null;
 }
 /// Read-only gate: admin OR support may pass.

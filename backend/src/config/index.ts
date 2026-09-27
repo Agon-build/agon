@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { privateKeyToAccount } from "viem/accounts";
 import { z } from "zod";
 import { loadAgonDeployment } from "./deployments.js";
+import { productionSecretProblems } from "./secret-guard.ts";
 
 /// Loads and validates all backend configuration in one place. Secrets come
 /// from the environment; public contract addresses come from the committed
@@ -641,6 +642,10 @@ function loadEnv() {
   if (!parsed.success) {
     const issues = parsed.error.issues.map((i) => `  ${i.path.join(".")}: ${i.message}`).join("\n");
     throw new Error(`Invalid backend environment:\n${issues}`);
+  }
+  const secretProblems = productionSecretProblems({ ...parsed.data, NODE_ENV: process.env.NODE_ENV });
+  if (secretProblems.length > 0) {
+    throw new Error(`Refusing to start with unsafe production secrets:\n  ${secretProblems.join("\n  ")}`);
   }
   return parsed.data;
 }

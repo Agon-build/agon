@@ -4,6 +4,7 @@ import { listPlaygroundCategories, runPlaygroundTask, PlaygroundError } from "..
 import { PlaygroundProviderError, type PlaygroundProviderRunner } from "../playground-provider.ts";
 import { PlaygroundRunConflictError, type PlaygroundRateLimiter, type PlaygroundRunStore } from "../playground-store.ts";
 import { inspectManifest, ManifestInspectionError } from "../manifest-inspector.ts";
+import { clientAddress } from "../../http/client-address.ts";
 import { createMcpAccessAdapter } from "../mcp/adapter.ts";
 import { createAgonNativeMcpHandler } from "../mcp/native-server.ts";
 import type { ManagedPublisher } from "../mcp/managed-publisher.ts";
@@ -380,6 +381,10 @@ export type CreateAgonRoutesOptions = {
   requireListingConfirmAuth?: MiddlewareHandler<{ Variables: AgonRouteVariables }>;
   requirePlaygroundAuth?: MiddlewareHandler<{ Variables: AgonRouteVariables }>;
   requireArenaAuth?: MiddlewareHandler<{ Variables: AgonRouteVariables }>;
+  /** CLI tokens need `agon:read` to preview or read a hire, matching the native MCP tools. */
+  requireHireReadAuth?: MiddlewareHandler<{ Variables: AgonRouteVariables }>;
+  /** CLI tokens need `wallet:execute` to authorize a hire, matching the native MCP tools. */
+  requireHireWalletAuth?: MiddlewareHandler<{ Variables: AgonRouteVariables }>;
   requirePrincipal?: MiddlewareHandler<{ Variables: AgonRouteVariables }>;
   playgroundStore?: PlaygroundRunStore;
   playgroundRateLimiter?: PlaygroundRateLimiter;
@@ -793,12 +798,12 @@ export function createAgonRoutes(options: CreateAgonRoutesOptions) {
     }
   });
 
-  async function consumePlaygroundLimit(context: Context<{ Variables: AgonRouteVariables }>, scope: "sample" | "evaluation") {
+  async function consumePlaygroundLimit(context: Context<{ Variables: AgonRouteVariables }>, scope: "sample" | "evaluation" | "inspect") {
     if (!options.playgroundRateLimiter) return true;
     const actor = context.get("address");
-    const forwarded = context.req.header("x-real-ip") ?? context.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+    const forwarded = clientAddress((name) => context.req.header(name));
     const key = actor ? `${scope}:actor:${actor}` : `${scope}:ip:${forwarded}`;
-    const result = await options.playgroundRateLimiter.consume(key, scope === "evaluation" ? 10 : 30, 60);
+    const result = await options.playgroundRateLimiter.consume(key, scope === "evaluation" ? 10 : scope === "inspect" ? 20 : 30, 60);
     if (!result.allowed) {
       context.header("retry-after", String(result.retryAfterSeconds));
       return false;
@@ -1107,6 +1112,10 @@ export function createAgonRoutes(options: CreateAgonRoutesOptions) {
   });
 
   app.get("/manifests/inspect", async (context) => {
+    // Anonymous callers can make this server fetch a URL, so cap it per address.
+    if (!(await consumePlaygroundLimit(context, "inspect"))) {
+      return context.json({ error: { code: "rate_limited", message: "Too many manifest checks. Try again in a minute." } }, 429);
+    }
     const uri = context.req.query("uri")?.trim() ?? "";
     if (!uri || uri.length > 2048) {
       return context.json({ error: { code: "invalid_request", message: "provide a manifest HTTPS URL no longer than 2048 characters" } }, 400);
@@ -1162,14 +1171,14 @@ export function createAgonRoutes(options: CreateAgonRoutesOptions) {
     return result.ok ? context.json(result.value) : context.json({ error: { code: result.code, message: result.message } }, 404);
   });
 
-  app.post("/mcp/preview-hire", options.requireAuth, async (context) => {
+  app.post("/mcp/preview-hire", options.requireHireReadAuth ?? options.requireAuth, async (context) => {
     const body = await parseJson(context);
     if (isApiError(body)) return context.json(body, 400);
     const result = await mcp.previewHire(context.get("address"), body);
     return result.ok ? context.json(result.value) : context.json({ error: { code: result.code, message: result.message } }, 400);
   });
 
-  app.post("/mcp/hire/:hireId/authorize", options.requireAuth, async (context) => {
+  app.post("/mcp/hire/:hireId/authorize", options.requireHireWalletAuth ?? options.requireAuth, async (context) => {
     const body = await parseJson(context);
     if (isApiError(body)) return context.json(body, 400);
     const parsed = mcpAuthorizeHireSchema.safeParse(body);
@@ -1178,12 +1187,12 @@ export function createAgonRoutes(options: CreateAgonRoutesOptions) {
     return result.ok ? context.json(result.value) : context.json({ error: { code: result.code, message: result.message } }, 400);
   });
 
-  app.get("/mcp/hire/:hireId", options.requireAuth, async (context) => {
+  app.get("/mcp/hire/:hireId", options.requireHireReadAuth ?? options.requireAuth, async (context) => {
     const result = await mcp.getWork(context.get("address"), context.req.param("hireId"));
     return result.ok ? context.json(result.value) : context.json({ error: { code: result.code, message: result.message } }, 404);
   });
 
-  app.post("/mcp/hire/:hireId/retry-or-report", options.requireAuth, async (context) => {
+  app.post("/mcp/hire/:hireId/retry-or-report", options.requireHireReadAuth ?? options.requireAuth, async (context) => {
     const body = await parseJson(context);
     if (isApiError(body)) return context.json(body, 400);
     const parsed = mcpRetryOrReportSchema.safeParse(body);

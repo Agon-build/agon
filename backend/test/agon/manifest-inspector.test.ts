@@ -50,3 +50,29 @@ test("rejects malformed provider JSON", async () => {
     (error: unknown) => error instanceof ManifestInspectionError && error.code === "manifest_invalid_json",
   );
 });
+
+test("blocks mapped IPv6, carrier-grade NAT, benchmark, multicast and unspecified addresses", async () => {
+  const { assertPublicHttpsDestination: check } = await import("../../src/agon/manifest-inspector.ts");
+  for (const address of [
+    "::ffff:169.254.169.254",
+    "::ffff:a9fe:a9fe",
+    "::ffff:7f00:1",
+    "::ffff:10.0.0.5",
+    "100.64.0.1",
+    "100.127.255.254",
+    "0.1.2.3",
+    "198.18.0.1",
+    "224.0.0.1",
+    "255.255.255.255",
+    "::",
+    "fe80::1",
+    "fc00::1",
+  ]) {
+    await assert.rejects(
+      check("https://provider.example/service", { resolve: async () => [address] }),
+      (error: unknown) => error instanceof Error && "code" in error && (error as { code: string }).code === "manifest_uri_blocked",
+      address,
+    );
+  }
+  await check("https://provider.example/service", { resolve: async () => ["93.184.216.34", "2606:2800:220:1:248:1893:25c8:1946"] });
+});

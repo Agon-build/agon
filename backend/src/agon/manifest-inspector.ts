@@ -1,4 +1,5 @@
 import { lookup } from "node:dns/promises";
+import { BlockList, isIP } from "node:net";
 
 import { canonicalManifestHash, validateManifest } from "./core/manifest.ts";
 
@@ -54,13 +55,28 @@ function publicHttpsUri(value: string): URL {
   return uri;
 }
 
+// Private, reserved, shared, documentation, multicast and broadcast ranges.
+// Every IPv4-mapped IPv6 address is refused outright rather than unwrapped.
+// The lists stay separate because Node matches IPv4 input against the mapped
+// IPv6 rule, which would otherwise refuse every IPv4 address.
+const NON_PUBLIC_V4 = new BlockList();
+const NON_PUBLIC_V6 = new BlockList();
+for (const [network, prefix] of [
+  ["0.0.0.0", 8], ["10.0.0.0", 8], ["100.64.0.0", 10], ["127.0.0.0", 8], ["169.254.0.0", 16],
+  ["172.16.0.0", 12], ["192.0.0.0", 24], ["192.0.2.0", 24], ["192.168.0.0", 16], ["198.18.0.0", 15],
+  ["198.51.100.0", 24], ["203.0.113.0", 24], ["224.0.0.0", 4], ["240.0.0.0", 4],
+] as const) NON_PUBLIC_V4.addSubnet(network, prefix, "ipv4");
+for (const [network, prefix] of [
+  ["::", 128], ["::1", 128], ["::ffff:0:0", 96], ["64:ff9b::", 96], ["100::", 64],
+  ["2001:db8::", 32], ["fc00::", 7], ["fe80::", 10], ["ff00::", 8],
+] as const) NON_PUBLIC_V6.addSubnet(network, prefix, "ipv6");
+
 function isPublicAddress(address: string): boolean {
   const value = address.toLowerCase().replace(/^\[|\]$/g, "");
-  if (value === "::1" || value === "0.0.0.0" || value === "localhost") return false;
-  if (/^127\./.test(value) || /^10\./.test(value) || /^192\.168\./.test(value) || /^169\.254\./.test(value)) return false;
-  if (/^172\.(1[6-9]|2\d|3[01])\./.test(value)) return false;
-  if (/^fc|^fd|^fe[89a-f]/.test(value)) return false;
-  return true;
+  const family = isIP(value);
+  if (family === 4) return !NON_PUBLIC_V4.check(value, "ipv4");
+  if (family === 6) return !NON_PUBLIC_V6.check(value, "ipv6");
+  return false;
 }
 
 /** Validate and resolve a provider destination before making a request. */

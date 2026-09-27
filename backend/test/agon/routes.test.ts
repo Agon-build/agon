@@ -1424,3 +1424,15 @@ test("syndicate and prize intent routes require authentication and fail closed w
   assert.equal(unavailableClaim.status, 503);
   assert.equal((await app.request("/agon/prize-claims/00000000-0000-4000-8000-000000000001/reconcile", { method: "POST", headers: { "x-test-address": ADDRESS } })).status, 503);
 });
+
+test("public manifest inspection is rate limited per network address", async () => {
+  const app = testApp(new FakeAgonService(), true);
+  let last = 0;
+  for (let attempt = 0; attempt < 21; attempt += 1) {
+    const response = await app.request("/agon/manifests/inspect?uri=not-a-url", { headers: { "x-forwarded-for": "203.0.113.50" } });
+    last = response.status;
+  }
+  assert.equal(last, 429);
+  const other = await app.request("/agon/manifests/inspect?uri=not-a-url", { headers: { "x-forwarded-for": "203.0.113.51" } });
+  assert.notEqual(other.status, 429);
+});
