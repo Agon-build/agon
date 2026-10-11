@@ -77,3 +77,9 @@ test("model agents skip a market whose answer cannot be parsed or whose call fai
   assert.equal(out[0]!.probabilityBps, 3000);
   assert.equal(logs.length, 2);
 });
+
+test("prompt notes are appended when given and absent otherwise", () => {
+  const withNotes = forecastPrompt(DEFAULT_HOUSE_AGENTS[0]!, market(1), new Date("2026-10-13T06:00:00Z"), ["BTC spot price: $82,953"]);
+  assert.match(withNotes.userPrompt, /Notes:\n- BTC spot price: \$82,953/);
+  assert.doesNotMatch(forecastPrompt(DEFAULT_HOUSE_AGENTS[0]!, market(1), new Date()).userPrompt, /Notes:/);
+});

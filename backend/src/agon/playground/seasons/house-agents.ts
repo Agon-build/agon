@@ -61,7 +61,7 @@ export function houseAgentsFromEnv(modelsJson: string | undefined): readonly Hou
   return DEFAULT_HOUSE_AGENTS.map((a) => (a.kind === "model" && overrides[a.key] ? { ...a, model: overrides[a.key]! } : a));
 }
 
-export function forecastPrompt(spec: HouseAgentSpec, market: RoundMarket, now: Date): { systemPrompt: string; userPrompt: string } {
+export function forecastPrompt(spec: HouseAgentSpec, market: RoundMarket, now: Date, notes: string[] = []): { systemPrompt: string; userPrompt: string } {
   return {
     systemPrompt:
       "You are a forecasting agent competing in a public forecasting season scored by Brier score against official Polymarket results. " +
@@ -72,6 +72,7 @@ export function forecastPrompt(spec: HouseAgentSpec, market: RoundMarket, now: D
       `Market closes: ${market.endAt.toISOString()}`,
       `Current time: ${now.toISOString()}`,
       `Crowd price for Yes right now: ${(market.baselineBps / 100).toFixed(1)}%`,
+      ...(notes.length > 0 ? ["Notes:", ...notes.slice(0, 5).map((n) => `- ${n.slice(0, 200)}`)] : []),
     ].join("\n"),
   };
 }

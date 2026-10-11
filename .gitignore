@@ -94,6 +94,9 @@ backend/scripts/*
 !backend/scripts/season-register-house.ts
 !backend/scripts/season-slate-preview.ts
 !backend/scripts/verify-season.ts
+!backend/scripts/payment-wallets.ts
+!backend/scripts/hire-smoke.ts
+!backend/scripts/mainnet-first-purchase.ts
 !contracts/scripts/
 contracts/scripts/*
 !contracts/scripts/set-listing-fee.sh

@@ -21,6 +21,7 @@ import { pool, query } from "../db/pool.js";
 import { PostgresAgonRepository } from "../agon/store/repository.js";
 import { createAgonRoutes } from "../agon/http/routes.js";
 import { startSeasonRuntime } from "../agon/playground/seasons/runtime.ts";
+import { startPaymentsRuntime } from "../agon/payments/runtime.ts";
 import { createErc8004EntryVerifier, createSeasonRoutes } from "../agon/playground/seasons/routes.ts";
 import { createPublicClient as createSeasonClient, fallback as seasonFallback } from "viem";
 import { createCircleTestnetFacilitatorClient, createX402ExecutionPolicy, createX402FacilitatorAdapter } from "../agon/execution/x402-settlement.js";
@@ -764,6 +765,15 @@ if (agonSeason) {
       agonSeason.network.identityRegistry,
     ),
   }));
+}
+
+// Money path routes are mounted before the main /agon router for the same
+// reason as the season routes. `agonPayments.hire` is what channels call.
+const agonPayments = startPaymentsRuntime({ season: agonSeason });
+if (agonPayments) {
+  app.route("/agon", agonPayments.routes.payments);
+  app.route("/agon/agents/house", agonPayments.routes.house);
+  if (agonPayments.routes.standin) app.route("/agon/standin", agonPayments.routes.standin);
 }
 
 app.route("/agon", createAgonRoutes({

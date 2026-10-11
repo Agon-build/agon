@@ -2253,3 +2253,117 @@ create table if not exists agon_season_market_results (
   checked_at   timestamptz not null,
   check ((status = 'resolved') = (outcome is not null))
 );
+
+
+-- Money path (plan 2). Budget wallets are Circle developer-controlled wallets
+-- AGON operates for chat users; every spend is reserved against limits before
+-- a signature exists. Jobs form the receipt tree: a user's hire, the data the
+-- lead agent bought, and the forecaster it hired.
+create table if not exists agon_budget_wallets (
+  owner_ref         text not null check (char_length(owner_ref) between 3 and 128),
+  network           text not null check (network in ('arc-testnet', 'arc')),
+  circle_wallet_id  text not null,
+  address           text not null check (address ~ '^0x[0-9a-f]{40}$'),
+  per_hire_cap      numeric(78, 0) not null check (per_hire_cap > 0),
+  daily_cap         numeric(78, 0) not null check (daily_cap > 0),
+  frozen            boolean not null default false,
+  created_at        timestamptz not null default now(),
+  primary key (owner_ref, network)
+);
+
+create table if not exists agon_wallet_spends (
+  wallet_ref       text not null,
+  idempotency_key  text not null,
+  network          text not null check (network in ('arc-testnet', 'arc')),
+  day              date not null,
+  amount           numeric(78, 0) not null check (amount > 0),
+  payee            text not null check (payee ~ '^0x[0-9a-f]{40}$'),
+  job_id           uuid,
+  state            text not null check (state in ('reserved', 'settled', 'failed')),
+  tx_hash          text check (tx_hash is null or tx_hash ~ '^0x[0-9a-f]{64}$'),
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now(),
+  primary key (wallet_ref, idempotency_key)
+);
+create index if not exists agon_wallet_spends_day_idx on agon_wallet_spends(wallet_ref, network, day);
+
+create table if not exists agon_pay_confirmations (
+  code_hash   text primary key check (code_hash ~ '^0x[0-9a-f]{64}$'),
+  wallet_ref  text not null,
+  job_id      uuid not null,
+  amount      numeric(78, 0) not null check (amount > 0),
+  payee       text not null check (payee ~ '^0x[0-9a-f]{40}$'),
+  expires_at  timestamptz not null,
+  used_at     timestamptz,
+  attempts    integer not null default 0 check (attempts >= 0),
+  created_at  timestamptz not null default now()
+);
+create index if not exists agon_pay_confirmations_wallet_idx on agon_pay_confirmations(wallet_ref, created_at desc);
+
+create table if not exists agon_wallet_approvals (
+  token_hash  text primary key check (token_hash ~ '^0x[0-9a-f]{64}$'),
+  wallet_ref  text not null,
+  action      text not null check (action in ('over_limit_hire', 'withdraw', 'unfreeze')),
+  payload     jsonb not null,
+  expires_at  timestamptz not null,
+  used_at     timestamptz,
+  created_at  timestamptz not null default now()
+);
+
+create table if not exists agon_x402_seller_nonces (
+  network     text not null,
+  payer       text not null check (payer ~ '^0x[0-9a-f]{40}$'),
+  nonce       text not null check (nonce ~ '^0x[0-9a-f]{64}$'),
+  created_at  timestamptz not null default now(),
+  primary key (network, payer, nonce)
+);
+
+create table if not exists agon_x402_quotes (
+  quote_id    uuid primary key,
+  seller_key  text not null,
+  buyer       text not null check (buyer ~ '^0x[0-9a-f]{40}$'),
+  amount      numeric(78, 0) not null check (amount > 0),
+  expires_at  timestamptz not null,
+  used_at     timestamptz,
+  transcript  jsonb not null default '[]'::jsonb,
+  created_at  timestamptz not null default now()
+);
+
+create table if not exists agon_jobs (
+  job_id          uuid primary key,
+  parent_id       uuid references agon_jobs(job_id),
+  root_id         uuid not null,
+  depth           integer not null check (depth between 0 and 2),
+  buyer_ref       text not null,
+  provider_ref    text not null,
+  provider_label  text not null,
+  network         text not null check (network in ('arc-testnet', 'arc')),
+  price_atomic    numeric(78, 0) not null check (price_atomic >= 0),
+  budget_atomic   numeric(78, 0) not null default 0 check (budget_atomic >= 0),
+  state           text not null check (state in ('quoted', 'paying', 'paid', 'delivered', 'failed', 'refunded')),
+  trace_id        text not null,
+  request         jsonb not null,
+  result          jsonb,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now()
+);
+create index if not exists agon_jobs_root_idx on agon_jobs(root_id);
+create index if not exists agon_jobs_state_idx on agon_jobs(state, updated_at);
+
+create table if not exists agon_job_payments (
+  idempotency_key    text primary key,
+  job_id             uuid not null references agon_jobs(job_id),
+  kind               text not null check (kind in ('hire', 'data', 'refund')),
+  payer              text not null check (payer ~ '^0x[0-9a-f]{40}$'),
+  payee              text not null check (payee ~ '^0x[0-9a-f]{40}$'),
+  amount             numeric(78, 0) not null check (amount >= 0),
+  network            text not null check (network in ('arc-testnet', 'arc')),
+  status             text not null check (status in ('pending', 'settled', 'failed')),
+  tx_hash            text check (tx_hash is null or tx_hash ~ '^0x[0-9a-f]{64}$'),
+  detail             text,
+  auth_nonce         text check (auth_nonce is null or auth_nonce ~ '^0x[0-9a-f]{64}$'),
+  auth_valid_before  timestamptz,
+  created_at         timestamptz not null default now(),
+  updated_at         timestamptz not null default now()
+);
+create index if not exists agon_job_payments_job_idx on agon_job_payments(job_id);
