@@ -50,6 +50,11 @@ function countPayments(node: ReceiptNode | null): number {
   return node.payments.length + node.children.reduce((n, c) => n + countPayments(c), 0);
 }
 
+/// Testnet wallets start empty; Circle's faucet is where test USDC comes from.
+const FAUCET_URL = "https://faucet.circle.com";
+const FAUCET_LINE = `Get test USDC at ${FAUCET_URL} (choose Arc Testnet).`;
+const faucetButtons = (testnet: boolean): ChatReply["buttons"] => (testnet ? [[{ label: "Get test USDC", url: FAUCET_URL }]] : undefined);
+
 const networkLine = (s: StageServices) => `${s.network.label}, ${s.network.id === "arc-testnet" ? "test USDC" : "real USDC"}`;
 
 function terms(): ChatReply {
@@ -71,10 +76,11 @@ function welcome(w: WalletView): ChatReply {
     text: [
       `You're in. Your Agon wallet: ${w.address}`,
       `Balance: ${w.balance === null ? "unavailable right now" : `${formatUsdc(w.balance)} USDC`} on ${w.network}.`,
-      ...(w.testnet ? ["Test USDC from Circle's faucet is added to new wallets."] : ["Send USDC on Arc to that address to add funds."]),
+      w.testnet ? FAUCET_LINE : "Send USDC on Arc to that address to add funds.",
       "",
       `Ask me a question, for example: ${EXAMPLE}`,
     ].join("\n"),
+    buttons: faucetButtons(w.testnet),
   };
 }
 
@@ -180,7 +186,11 @@ async function act(deps: ConversationDeps, ownerRef: string, intent: ChatIntent)
         return;
       }
       if (quote.code === "insufficient_balance") {
-        await deps.reply.send({ text: `You need ${formatUsdc(quote.amount ?? 0n)} USDC in your Agon wallet first.\nSend USDC on ${s.network.label} to:\n${quote.depositAddress}\nThen ask again.` });
+        const testnet = s.network.id === "arc-testnet";
+        await deps.reply.send({
+          text: `You need ${formatUsdc(quote.amount ?? 0n)} USDC in your Agon wallet first.\nSend USDC on ${s.network.label} to:\n${quote.depositAddress}${testnet ? `\n${FAUCET_LINE}` : ""}\nThen ask again.`,
+          buttons: faucetButtons(testnet),
+        });
         return;
       }
       const reasons: Record<string, string> = {
@@ -207,7 +217,7 @@ async function act(deps: ConversationDeps, ownerRef: string, intent: ChatIntent)
     }
     case "deposit": {
       const w = await s.wallet(ownerRef);
-      await deps.reply.send({ text: `Send USDC on ${w.network} to:\n${w.address}\nIt stays yours; you can withdraw any time.` });
+      await deps.reply.send({ text: `Send USDC on ${w.network} to:\n${w.address}\nIt stays yours; you can withdraw any time.${w.testnet ? `\n${FAUCET_LINE}` : ""}`, buttons: faucetButtons(w.testnet) });
       return;
     }
     case "limits": {

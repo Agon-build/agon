@@ -57,7 +57,7 @@ export function WalletStrip({ wallet, onChanged }: { wallet: StageWallet; onChan
         <div className="stage-print border-t border-[color:var(--hairline)] py-4">
           <p className="text-sm leading-6 text-ink-2">Send USDC on {wallet.network} to this address. The balance is yours and you can withdraw it any time.</p>
           <p className="mt-2 break-all font-mono text-sm text-ink">{wallet.address}</p>
-          {wallet.testnet ? <p className="mt-2 text-xs text-ink-3">Test USDC from Circle's faucet was added when this wallet was created.</p> : null}
+          {wallet.testnet ? <p className="mt-2 text-xs text-ink-3">Get test USDC from <a href="https://faucet.circle.com" target="_blank" rel="noopener noreferrer" className="underline decoration-[color:var(--hairline-strong)] underline-offset-4 hover:text-accent">Circle's faucet</a>. Choose Arc Testnet and paste this address.</p> : null}
         </div>
       ) : null}
       {panel === "withdraw" ? (

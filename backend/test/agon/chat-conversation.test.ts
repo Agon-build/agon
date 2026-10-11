@@ -59,6 +59,21 @@ test("agreeing creates the wallet and shows its address; ids are stored only has
   assert.ok([...s.store.wallets.keys()].every((k) => k.startsWith(`tg:${hash}|`)));
 });
 
+test("on testnet every way to add funds points at Circle's faucet and never claims it ran", async () => {
+  const s = await accepted();
+  const faucet = [{ label: "Get test USDC", url: "https://faucet.circle.com" }];
+  assert.match(s.last().text, /Get test USDC at https:\/\/faucet\.circle\.com \(choose Arc Testnet\)\./);
+  assert.doesNotMatch(s.last().text, /is added to new wallets/);
+  assert.deepEqual(s.last().buttons, [faucet]);
+  await s.say("deposit");
+  assert.match(s.last().text, /faucet\.circle\.com/);
+  assert.deepEqual(s.last().buttons, [faucet]);
+  s.state.balance = 0n;
+  await s.say(QUESTION);
+  assert.match(s.last().text, /You need 0\.30 USDC[\s\S]*faucet\.circle\.com/);
+  assert.deepEqual(s.last().buttons, [faucet]);
+});
+
 test("a question gets the lead agent's price, a YES code and a pay button", async () => {
   const s = await accepted();
   await s.say(`${QUESTION} Spend up to 0.50`);
