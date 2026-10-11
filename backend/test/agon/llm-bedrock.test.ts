@@ -29,14 +29,15 @@ test("model ids route by shape: Bedrock profiles, OpenRouter slugs, bare Claude 
   assert.equal(modelFamily("claude-haiku-4-5-20251001"), "anthropic");
 });
 
-test("a Claude call sends the profile id, system and user text, explicit maxTokens and temperature", async () => {
+test("a Claude call sends the profile id, system and user text and explicit maxTokens, never a temperature", async () => {
   const { sent, send } = stub({ output: { message: { role: "assistant", content: [{ text: ' {"probability": 0.4} ' }] } } });
   const r = await callBedrock(params, send, { log: quiet });
   assert.equal(sent.length, 1);
   assert.equal(sent[0]!.modelId, "global.anthropic.claude-sonnet-5-5");
   assert.deepEqual(sent[0]!.system, [{ text: "sys" }]);
   assert.deepEqual(sent[0]!.messages, [{ role: "user", content: [{ text: "user" }] }]);
-  assert.deepEqual(sent[0]!.inferenceConfig, { maxTokens: 400, temperature: 0.2 });
+  // Claude 5.5 on Bedrock rejects temperature ("deprecated for this model", seen live on 11 Oct 2026).
+  assert.deepEqual(sent[0]!.inferenceConfig, { maxTokens: 400 });
   assert.equal(r.text, '{"probability": 0.4}');
   assert.equal(r.inputTokens, 1500);
   assert.equal(r.outputTokens, 400);

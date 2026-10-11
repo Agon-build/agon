@@ -65,7 +65,9 @@ export async function callBedrock(
     modelId: params.model,
     system: [{ text: params.systemPrompt }],
     messages: [{ role: "user", content: [{ text: params.userPrompt }] }],
-    inferenceConfig: reasoning ? { maxTokens } : { maxTokens, temperature: params.temperature },
+    // No temperature for any Bedrock model: Claude 5.5 rejects it as deprecated
+    // and the reasoning models ignore it (seen live on 11 Oct 2026).
+    inferenceConfig: { maxTokens },
   };
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;

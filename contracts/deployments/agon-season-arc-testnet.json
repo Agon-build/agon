@@ -1,0 +1,9 @@
+{
+  "network": "arc-testnet",
+  "chainId": 5042002,
+  "deployedAt": "2026-10-11T22:43:06.000Z",
+  "deployBlock": 66720659,
+  "deployer": "0x0aeEF0Dd6b0754262d1a91e435565749Cdc365Ad",
+  "contracts": { "AgonSeasonCommits": "0xE23b731941b1e2aA6DB7CF9ce1Ab015831b3f8De" },
+  "transactions": { "AgonSeasonCommits": "0xf8dc7436415601e159d8746af8d36df8e4f4346e2702253c6236d9f81bb60679" }
+}
