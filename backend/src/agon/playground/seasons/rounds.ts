@@ -1,6 +1,7 @@
 import type { Address, Hex } from "viem";
 
 import { buildRoundTree, forecastLeaf, isProbabilityBps, slateLeaf, type Forecast } from "./forecast.ts";
+import { categoryFor } from "./categories.ts";
 import { selectSlate, type PolymarketClient } from "./polymarket.ts";
 import type { MarketResult, Season, SeasonStore } from "./types.ts";
 
@@ -58,7 +59,7 @@ export async function openCurrentRound(
   const candidates = (await deps.polymarket.listCandidates(now)).filter((m) => !used.has(m.conditionId));
   const slate = selectSlate(candidates, now);
   const markets = slate.map((m) => ({
-    seasonId, round, marketId: m.conditionId, question: m.question, slug: m.slug, endAt: m.endAt, baselineBps: m.yesPriceBps,
+    seasonId, round, marketId: m.conditionId, question: m.question, slug: m.slug, endAt: m.endAt, baselineBps: m.yesPriceBps, category: categoryFor(m.tags),
   }));
   const opened = await deps.store.openRound({ seasonId, round, openedAt, intakeClosesAt }, markets);
   if (!opened) return { status: "exists", round };

@@ -7,7 +7,10 @@ import { clientAddress } from "../../../http/client-address.ts";
 import { explorerAddressUrl, explorerTxUrl, type AgonNetwork } from "../../network.ts";
 import { allProofs, buildRoundTree, slateLeaf } from "./forecast.ts";
 import { acceptForecast, entryRoundAt, roundIndexAt, type RoundDeps } from "./rounds.ts";
-import { computeLeaderboard, type LeaderboardRow } from "./scoring.ts";
+import { SEASON_CATEGORIES, parseCategory } from "./categories.ts";
+import {
+  computeLeaderboard, computeRatings, MIN_RANKED_CATEGORY_FORECASTS, MIN_RANKED_FORECASTS, type AgentRatings, type LeaderboardRow, type RatingCell,
+} from "./scoring.ts";
 import type { SeasonStore } from "./types.ts";
 
 export type EntryFields = {
@@ -103,6 +106,7 @@ export function createSeasonRoutes(deps: {
 }): Hono {
   const app = new Hono();
   const boards = new Map<string, BoardCache>();
+  const ratings = new Map<string, { at: number; agents: AgentRatings[] }>();
   const proofs = new Map<string, ProofCache>();
   const cacheMs = deps.leaderboardCacheMs ?? 60_000;
   const postLimit = deps.postLimitPerMinute ?? 20;
@@ -159,16 +163,21 @@ export function createSeasonRoutes(deps: {
   app.get("/:seasonId/leaderboard", async (c) => {
     const season = await seasonFor(c.req.param("seasonId"));
     if (!season) return c.json({ error: "season_not_found" }, 404);
-    const key = season.seasonId.toString();
+    const asked = c.req.query("category");
+    const category = asked === undefined || asked === "" || asked === "overall" ? null : parseCategory(asked);
+    if (asked !== undefined && asked !== "" && asked !== "overall" && !category) return c.json({ error: "invalid_category" }, 400);
+    const key = `${season.seasonId}:${category ?? "overall"}`;
     let board = boards.get(key);
     if (!board || Date.now() - board.at >= cacheMs) {
       const raw = await deps.store.scoringRaw(season.seasonId);
       const lastCommit = raw.rounds.reduce<Date | null>((max, r) => (r.commitBlockTime && (!max || r.commitBlockTime > max) ? r.commitBlockTime : max), null);
-      board = { at: Date.now(), rows: computeLeaderboard(raw), lastCommitAt: lastCommit };
+      board = { at: Date.now(), rows: computeLeaderboard(raw, category ? { category } : {}), lastCommitAt: lastCommit };
       boards.set(key, board);
     }
     return c.json({
-      seasonId: key,
+      seasonId: season.seasonId.toString(),
+      category: category ?? "overall",
+      minRanked: category ? MIN_RANKED_CATEGORY_FORECASTS : MIN_RANKED_FORECASTS,
       network: deps.network.label,
       commitsAddress: season.commitsAddress,
       updatedAt: new Date(board.at).toISOString(),
@@ -177,6 +186,33 @@ export function createSeasonRoutes(deps: {
       rows: board.rows
         .filter((r) => r.house || r.forecastsResolved > 0)
         .map((r) => ({ ...r, meanSkill: round4(r.meanSkill), meanBrier: round4(r.meanBrier), rating: round4(r.rating) })),
+    });
+  });
+
+  app.get("/:seasonId/ratings", async (c) => {
+    const season = await seasonFor(c.req.param("seasonId"));
+    if (!season) return c.json({ error: "season_not_found" }, 404);
+    const key = season.seasonId.toString();
+    let cached = ratings.get(key);
+    if (!cached || Date.now() - cached.at >= cacheMs) {
+      cached = { at: Date.now(), agents: computeRatings(await deps.store.scoringRaw(season.seasonId)) };
+      ratings.set(key, cached);
+    }
+    const show = (x: RatingCell) => ({ ...x, rating: round4(x.rating), meanSkill: round4(x.meanSkill) });
+    return c.json({
+      seasonId: key,
+      updatedAt: new Date(cached.at).toISOString(),
+      categories: SEASON_CATEGORIES,
+      minRanked: { overall: MIN_RANKED_FORECASTS, category: MIN_RANKED_CATEGORY_FORECASTS },
+      agents: cached.agents
+        .filter((a) => a.house || a.overall.forecastsResolved > 0)
+        .map((a) => ({
+          agentAddress: a.agentAddress,
+          displayName: a.displayName,
+          house: a.house,
+          overall: show(a.overall),
+          categories: Object.fromEntries(SEASON_CATEGORIES.map((cat) => [cat, show(a.categories[cat])])),
+        })),
     });
   });
 
@@ -235,7 +271,7 @@ export function createSeasonRoutes(deps: {
       state: round.state,
       openedAt: round.openedAt.toISOString(),
       intakeClosesAt: round.intakeClosesAt.toISOString(),
-      markets: markets.map((m) => ({ marketId: m.marketId, question: m.question, slug: m.slug, endAt: m.endAt.toISOString(), baselineBps: m.baselineBps })),
+      markets: markets.map((m) => ({ marketId: m.marketId, question: m.question, slug: m.slug, endAt: m.endAt.toISOString(), baselineBps: m.baselineBps, category: m.category })),
       commit: committed
         ? {
             root: round.commitRoot,

@@ -195,3 +195,17 @@ test("results refresh maps yes, no and void and leaves pending markets alone", a
   assert.equal(byId.get(cid(2))!.status, "void");
   assert.equal(await refreshResults(deps), 0);
 });
+
+test("opened slate markets carry the category of their tags", async () => {
+  const { store, deps } = setup();
+  await store.ensureSeason(season);
+  deps.polymarket.listCandidates = async () => [market(1), market(2, { tags: ["politics", "elections"] }), market(3, { tags: [] })];
+  await openCurrentRound(deps, 1n);
+  const markets = await store.listRoundMarkets(1n, 1n);
+  assert.deepEqual(markets.map((m) => [m.marketId, m.category]), [[cid(1), "crypto"], [cid(2), "politics"], [cid(3), "other"]]);
+});
+
+test("the committed slate leaf does not depend on categories", () => {
+  const base = { seasonId: 1n, round: 0n, marketId: cid(1), question: "q", slug: "q", endAt: new Date("2026-10-21T00:00:00Z"), baselineBps: 4000 };
+  assert.equal(slateLeaf(1n, 0n, [{ ...base, category: "crypto" as const }]), slateLeaf(1n, 0n, [{ ...base, category: "politics" as const }]));
+});

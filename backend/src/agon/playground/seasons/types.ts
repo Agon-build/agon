@@ -1,5 +1,6 @@
 import type { Address, Hex } from "viem";
 import type { AgonNetworkId } from "../../network.ts";
+import type { MarketCategory } from "./categories.ts";
 
 export type Season = {
   seasonId: bigint;
@@ -42,6 +43,8 @@ export type RoundMarket = {
   slug: string;
   endAt: Date;
   baselineBps: number;
+  /** Derived from Gamma event tags at round open; not part of the committed slate leaf. */
+  category: MarketCategory;
 };
 
 export type StoredForecast = {

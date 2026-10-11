@@ -203,6 +203,8 @@ test("round detail hides forecasts until committed, then publishes forecasts and
   assert.equal(after.commit.txUrl, `https://explorer.testnet.arc.io/tx/${cid(999)}`);
   assert.equal(verifyProof(after.forecasts[0]!.leaf, after.forecasts[0]!.proof, after.commit.root), true);
   assert.equal(verifyProof(after.slate.leaf, after.slate.proof, after.commit.root), true);
+  const detail = (await (await app.request("/1/rounds/0")).json()) as { markets: { category: string }[] };
+  assert.equal(detail.markets[0]!.category, "other");
 });
 
 test("leaderboard hides outside entries with no scored forecasts and reports real freshness", async () => {
@@ -224,4 +226,35 @@ test("unknown season and malformed ids return 404 and 400", async () => {
   assert.equal((await app.request("/9/leaderboard")).status, 404);
   assert.equal((await app.request("/abc/leaderboard")).status, 400);
   assert.equal((await app.request("/1/rounds/x")).status, 400);
+});
+
+test("leaderboard by category: valid names, overall, and a 400 for anything else", async () => {
+  const { app, store } = await setup();
+  await store.upsertEntry({ seasonId: 1n, agentAddress: other.address, erc8004AgentId: null, displayName: "Mirror (house, market copy)", house: true, forecastEndpoint: null, enteredRound: 0n });
+  const politics = (await (await app.request("/1/leaderboard?category=politics")).json()) as { category: string; minRanked: number; rows: unknown[] };
+  assert.equal(politics.category, "politics");
+  assert.equal(politics.minRanked, 10);
+  assert.equal(politics.rows.length, 1);
+  const overall = (await (await app.request("/1/leaderboard")).json()) as { category: string; minRanked: number };
+  assert.equal(overall.category, "overall");
+  assert.equal(overall.minRanked, 20);
+  assert.equal(((await (await app.request("/1/leaderboard?category=overall")).json()) as { category: string }).category, "overall");
+  const bad = await app.request("/1/leaderboard?category=politcs");
+  assert.equal(bad.status, 400);
+  assert.deepEqual(await bad.json(), { error: "invalid_category" });
+});
+
+test("ratings list every shown agent with an overall cell and six category cells", async () => {
+  const { app, store } = await setup();
+  await store.upsertEntry({ seasonId: 1n, agentAddress: other.address, erc8004AgentId: null, displayName: "Mirror (house, market copy)", house: true, forecastEndpoint: null, enteredRound: 0n });
+  await app.request("/1/entries", post(entry()));
+  const body = (await (await app.request("/1/ratings")).json()) as {
+    categories: string[]; minRanked: { overall: number; category: number };
+    agents: { agentAddress: string; house: boolean; overall: { rank: number | null }; categories: Record<string, { forecastsResolved: number }> }[];
+  };
+  assert.deepEqual(body.categories, ["sports", "crypto", "economics", "politics", "world", "culture"]);
+  assert.deepEqual(body.minRanked, { overall: 20, category: 10 });
+  assert.deepEqual(body.agents.map((a) => a.agentAddress), [other.address.toLowerCase()], "outside entries appear once they have a scored forecast");
+  assert.deepEqual(Object.keys(body.agents[0]!.categories).sort(), [...body.categories].sort());
+  assert.equal((await app.request("/9/ratings")).status, 404);
 });

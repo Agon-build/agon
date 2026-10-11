@@ -2230,6 +2230,9 @@ create table if not exists agon_season_round_markets (
   foreign key (season_id, round) references agon_season_rounds(season_id, round)
 );
 create index if not exists agon_season_round_markets_end_idx on agon_season_round_markets(end_at);
+alter table agon_season_round_markets
+  add column if not exists category text not null default 'other'
+  check (category in ('sports', 'crypto', 'economics', 'politics', 'world', 'culture', 'other'));
 
 create table if not exists agon_season_forecasts (
   season_id        bigint not null,

@@ -39,7 +39,7 @@ export async function rebuildLeaderboard(input: {
   const forecasts: StoredForecast[] = [];
   for (const pr of input.rounds) {
     for (const m of pr.markets) {
-      markets.push({ seasonId: input.seasonId, round: pr.round, marketId: m.marketId, question: "", slug: "", endAt: m.endAt, baselineBps: m.baselineBps });
+      markets.push({ seasonId: input.seasonId, round: pr.round, marketId: m.marketId, question: "", slug: "", endAt: m.endAt, baselineBps: m.baselineBps, category: "other" });
     }
     const chain = earliest.get(pr.round);
     if (!chain) {

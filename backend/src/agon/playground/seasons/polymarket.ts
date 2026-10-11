@@ -1,6 +1,8 @@
 import { z } from "zod";
 import type { Hex } from "viem";
 
+import { CATEGORY_QUERY_TAGS, SEASON_CATEGORIES, categoryFor } from "./categories.ts";
+
 /// Polymarket Gamma API adapter (public, keyless). Field shapes verified on
 /// 2026-10-11: outcomes and outcomePrices are JSON-encoded strings; resolution
 /// is final only when umaResolutionStatus is "resolved".
@@ -83,9 +85,10 @@ const eventShape = z.object({
   markets: z.array(z.unknown()).optional(),
 });
 
-export function createGammaClient(options: { fetchImpl?: typeof fetch; baseUrl?: string } = {}): PolymarketClient {
+export function createGammaClient(options: { fetchImpl?: typeof fetch; baseUrl?: string; log?: (m: string) => void } = {}): PolymarketClient {
   const fetchImpl = options.fetchImpl ?? fetch;
   const base = options.baseUrl ?? "https://gamma-api.polymarket.com";
+  const log = options.log ?? ((m: string) => console.warn(m));
 
   async function getJson(url: string): Promise<unknown> {
     const response = await fetchImpl(url, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(15_000) });
@@ -101,22 +104,37 @@ export function createGammaClient(options: { fetchImpl?: typeof fetch; baseUrl?:
         end_date_min: new Date(now.getTime() + SLATE_MIN_END_MS).toISOString(),
         end_date_max: new Date(now.getTime() + SLATE_MAX_END_MS).toISOString(),
       };
-      const [events, markets] = await Promise.all([
-        getJson(`${base}/events?${new URLSearchParams({ ...window, tag_slug: "crypto" })}`),
-        getJson(`${base}/markets?${new URLSearchParams({ ...window, order: "liquidityNum", ascending: "false" })}`),
-      ]);
+      // One events query per category (events carry the tags that decide a
+      // market's category), then the most liquid markets overall for refill.
+      const requests = [
+        ...SEASON_CATEGORIES.map((c) => ({ events: true, url: `${base}/events?${new URLSearchParams({ ...window, tag_slug: CATEGORY_QUERY_TAGS[c], order: "liquidity", ascending: "false" })}` })),
+        { events: false, url: `${base}/markets?${new URLSearchParams({ ...window, order: "liquidityNum", ascending: "false" })}` },
+      ];
+      const settled = await Promise.allSettled(requests.map((r) => getJson(r.url)));
+      if (settled.every((s) => s.status === "rejected")) throw (settled[0] as PromiseRejectedResult).reason;
       const byId = new Map<string, PolymarketMarket>();
-      for (const event of z.array(eventShape).catch([]).parse(events)) {
-        const tags = (event.tags ?? []).map((t) => t.slug);
-        for (const raw of event.markets ?? []) {
-          const m = parseGammaMarket(raw, tags);
-          if (m) byId.set(m.conditionId, m);
+      settled.forEach((s, i) => {
+        if (s.status === "rejected") {
+          log(`season candidates: ${(s.reason as Error).message}`);
+          return;
         }
-      }
-      for (const raw of z.array(z.unknown()).catch([]).parse(markets)) {
-        const m = parseGammaMarket(raw);
-        if (m && !byId.has(m.conditionId)) byId.set(m.conditionId, m);
-      }
+        if (!requests[i]!.events) return;
+        for (const event of z.array(eventShape).catch([]).parse(s.value)) {
+          const tags = (event.tags ?? []).map((t) => t.slug);
+          for (const raw of event.markets ?? []) {
+            const m = parseGammaMarket(raw, tags);
+            if (m && !byId.has(m.conditionId)) byId.set(m.conditionId, m);
+          }
+        }
+      });
+      // Market-only results come last so a market's event tags always win.
+      settled.forEach((s, i) => {
+        if (s.status !== "fulfilled" || requests[i]!.events) return;
+        for (const raw of z.array(z.unknown()).catch([]).parse(s.value)) {
+          const m = parseGammaMarket(raw);
+          if (m && !byId.has(m.conditionId)) byId.set(m.conditionId, m);
+        }
+      });
       return [...byId.values()];
     },
     async getMarkets(conditionIds) {
@@ -134,15 +152,17 @@ export function createGammaClient(options: { fetchImpl?: typeof fetch; baseUrl?:
   };
 }
 
-const isCrypto = (m: PolymarketMarket) => m.tags.includes("crypto") || m.tags.includes("crypto-prices");
-
+/// Season slate (structure spec section 7): the two most liquid eligible
+/// markets of each category, then the most liquid remaining eligible markets
+/// of any category (Other included) until the slate is full. Output is sorted
+/// by end time, then condition id, so the same input always gives the same slate.
 export function selectSlate(
   candidates: PolymarketMarket[],
   now: Date,
-  options: { size?: number; cryptoMax?: number; minLiquidity?: number } = {},
+  options: { size?: number; perCategory?: number; minLiquidity?: number } = {},
 ): PolymarketMarket[] {
-  const size = options.size ?? 10;
-  const cryptoMax = options.cryptoMax ?? 6;
+  const size = options.size ?? 12;
+  const perCategory = options.perCategory ?? 2;
   const minLiquidity = options.minLiquidity ?? 5_000;
   const earliest = now.getTime() + SLATE_MIN_END_MS;
   const latest = now.getTime() + SLATE_MAX_END_MS;
@@ -152,11 +172,21 @@ export function selectSlate(
     .filter((m) => m.yesPriceBps >= 500 && m.yesPriceBps <= 9500)
     .filter((m) => m.liquidity >= minLiquidity)
     .sort((a, b) => b.liquidity - a.liquidity || (a.conditionId < b.conditionId ? -1 : 1));
-  const crypto = eligible.filter(isCrypto).slice(0, cryptoMax);
-  // Fill the remaining slots with event markets only, so cryptoMax holds even
-  // when more crypto markets have higher liquidity.
-  const rest = eligible.filter((m) => !isCrypto(m)).slice(0, Math.max(0, size - crypto.length));
-  return [...crypto, ...rest]
+  const picked: PolymarketMarket[] = [];
+  const taken = new Set<string>();
+  for (const category of SEASON_CATEGORIES) {
+    for (const m of eligible.filter((c) => categoryFor(c.tags) === category).slice(0, perCategory)) {
+      picked.push(m);
+      taken.add(m.conditionId);
+    }
+  }
+  for (const m of eligible) {
+    if (picked.length >= size) break;
+    if (taken.has(m.conditionId)) continue;
+    picked.push(m);
+    taken.add(m.conditionId);
+  }
+  return picked
     .slice(0, size)
     .sort((a, b) => a.endAt.getTime() - b.endAt.getTime() || (a.conditionId < b.conditionId ? -1 : 1));
 }

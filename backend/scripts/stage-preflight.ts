@@ -66,7 +66,7 @@ async function main(): Promise<void> {
       ...Object.entries(s.houseSellers).map(([key, w]) => ({ label: `House ${key}`, peek: peek(`${s.publicApiUrl}/agon/agents/house/${key}/forecast`, forecastBody), expectAmount: s.houseAsk, expectPayTo: w.address })),
     ],
     lastCommitAt: async () => {
-      const res = await fetch(`${s.publicApiUrl}/agon/seasons/${seasonId}/leaderboard`, { signal: AbortSignal.timeout(15_000) });
+      const res = await fetch(`${s.publicApiUrl}/agon/seasons/${seasonId}/leaderboard?category=politics`, { signal: AbortSignal.timeout(15_000) });
       if (!res.ok) throw new Error(`leaderboard ${res.status}`);
       const body = (await res.json()) as { lastCommitAt: string | null };
       return body.lastCommitAt ? new Date(body.lastCommitAt) : null;

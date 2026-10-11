@@ -93,7 +93,7 @@ export function createHouseSellerRoutes(deps: {
       const body = forecastBody.parse(await c.req.json());
       const market = {
         seasonId: 0n, round: 0n, marketId: body.marketId as Hex, question: body.question, slug: "",
-        endAt: new Date(body.endDate), baselineBps: body.crowdBps ?? 5_000,
+        endAt: new Date(body.endDate), baselineBps: body.crowdBps ?? 5_000, category: "other" as const,
       };
       const reply = await deps.callModel({ model: s.spec.model!, ...forecastPrompt(s.spec, market, now(), body.notes ?? []), maxTokens: 400, temperature: 0.2 });
       const parsed = parseProbability(reply.text);

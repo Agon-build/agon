@@ -106,3 +106,12 @@ test("season market ids and agent-id lookups", async () => {
   assert.equal((await store.getEntryByAgentId(1n, 42n))!.agentAddress, A);
   assert.equal(await store.getEntryByAgentId(1n, 7n), null);
 });
+
+test("round markets keep their category; a market without one is stored as other", async () => {
+  const round = { seasonId: 1n, round: 7n, openedAt: new Date("2026-10-21T18:00:00Z"), intakeClosesAt: new Date("2026-10-21T18:30:00Z") };
+  const politics = { ...market(70), round: 7n, category: "politics" as const };
+  const bare = { ...market(71), round: 7n };
+  assert.equal(await store.openRound(round, [politics, bare as typeof politics]), true);
+  const stored = await store.listRoundMarkets(1n, 7n);
+  assert.deepEqual(stored.map((m) => [m.marketId, m.category]), [[hex(70), "politics"], [hex(71), "other"]]);
+});

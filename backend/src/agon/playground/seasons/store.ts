@@ -1,6 +1,8 @@
 import type pg from "pg";
 import type { Address, Hex } from "viem";
 
+import type { MarketCategory } from "./categories.ts";
+
 import type {
   CommitRecord,
   InsertForecastResult,
@@ -20,7 +22,7 @@ const lower = <T extends string>(value: T) => value.toLowerCase() as T;
 type SeasonRow = { season_id: string; network: Season["network"]; commits_address: Address; starts_at: Date; ends_at: Date; round_hours: number };
 type EntryRow = { season_id: string; agent_address: Address; erc8004_agent_id: string | null; display_name: string; house: boolean; forecast_endpoint: string | null; entered_round: string };
 type RoundRow = { season_id: string; round: string; opened_at: Date; intake_closes_at: Date; state: RoundState; commit_root: Hex | null; commit_count: number | null; commit_tx: Hex | null; commit_block_time: Date | null };
-type MarketRow = { season_id: string; round: string; market_id: Hex; question: string; slug: string; end_at: Date; baseline_bps: number };
+type MarketRow = { season_id: string; round: string; market_id: Hex; question: string; slug: string; end_at: Date; baseline_bps: number; category: string | null };
 type ForecastRow = { season_id: string; round: string; market_id: Hex; agent_address: Address; probability_bps: number; salt: Hex; signature: Hex; leaf: Hex };
 type ResultRow = { market_id: Hex; status: MarketResult["status"]; outcome: number | null; checked_at: Date };
 
@@ -49,6 +51,7 @@ const toRound = (r: RoundRow): SeasonRound => ({
 });
 const toMarket = (r: MarketRow): RoundMarket => ({
   seasonId: BigInt(r.season_id), round: BigInt(r.round), marketId: r.market_id, question: r.question, slug: r.slug, endAt: r.end_at, baselineBps: r.baseline_bps,
+  category: (r.category ?? "other") as MarketCategory,
 });
 const toForecast = (r: ForecastRow): StoredForecast => ({
   seasonId: BigInt(r.season_id),
@@ -135,9 +138,9 @@ export class PostgresSeasonStore implements SeasonStore {
       }
       for (const m of markets) {
         await client.query(
-          `insert into agon_season_round_markets (season_id, round, market_id, question, slug, end_at, baseline_bps)
-           values ($1, $2, $3, $4, $5, $6, $7)`,
-          [m.seasonId.toString(), m.round.toString(), lower(m.marketId), m.question, m.slug, m.endAt, m.baselineBps],
+          `insert into agon_season_round_markets (season_id, round, market_id, question, slug, end_at, baseline_bps, category)
+           values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [m.seasonId.toString(), m.round.toString(), lower(m.marketId), m.question, m.slug, m.endAt, m.baselineBps, m.category ?? "other"],
         );
       }
       await client.query("commit");

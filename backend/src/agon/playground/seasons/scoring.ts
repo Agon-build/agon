@@ -1,9 +1,13 @@
 import type { Address, Hex } from "viem";
 
+import { SEASON_CATEGORIES, type SeasonCategory } from "./categories.ts";
 import { committedInTime } from "./forecast.ts";
 import type { ScoringRaw } from "./types.ts";
 
 export const MIN_RANKED_FORECASTS = 20;
+/// Structure spec section 7: a category rank shows at 10 resolved forecasts in
+/// that category; below that the row is provisional.
+export const MIN_RANKED_CATEGORY_FORECASTS = 10;
 export const SHRINK_K = 20;
 
 export type LeaderboardRow = {
@@ -29,8 +33,10 @@ const key = (round: bigint, marketId: Hex) => `${round}:${marketId.toLowerCase()
 /// Season 1 rules (spec section 10): skill is the baseline's Brier minus the
 /// agent's; the mean runs over every resolved slate market since entry, with a
 /// skipped or invalid forecast counted as zero skill; rating shrinks the mean
-/// toward zero by n / (n + 20) where n is resolved forecasts submitted.
-export function computeLeaderboard(raw: ScoringRaw): LeaderboardRow[] {
+/// toward zero by n / (n + 20) where n is resolved forecasts submitted. With a
+/// category, only that category's slate markets count and the rank threshold
+/// is MIN_RANKED_CATEGORY_FORECASTS.
+export function computeLeaderboard(raw: ScoringRaw, options: { category?: SeasonCategory } = {}): LeaderboardRow[] {
   const outcomes = new Map<string, 0 | 1>();
   for (const r of raw.results) {
     if (r.status === "resolved" && (r.outcome === 0 || r.outcome === 1)) outcomes.set(r.marketId.toLowerCase(), r.outcome);
@@ -39,7 +45,10 @@ export function computeLeaderboard(raw: ScoringRaw): LeaderboardRow[] {
   for (const r of raw.rounds) {
     if (r.state === "committed" && r.commitBlockTime) committed.set(r.round, r.commitBlockTime);
   }
-  const slate = raw.markets.filter((m) => committed.has(m.round) && outcomes.has(m.marketId.toLowerCase()));
+  const slate = raw.markets.filter(
+    (m) => committed.has(m.round) && outcomes.has(m.marketId.toLowerCase()) && (!options.category || m.category === options.category),
+  );
+  const minRanked = options.category ? MIN_RANKED_CATEGORY_FORECASTS : MIN_RANKED_FORECASTS;
   const marketEnd = new Map(raw.markets.map((m) => [key(m.round, m.marketId), m.endAt]));
 
   const valid = new Map<string, number>();
@@ -76,7 +85,7 @@ export function computeLeaderboard(raw: ScoringRaw): LeaderboardRow[] {
       meanSkill,
       meanBrier: forecastsResolved > 0 ? brierSum / forecastsResolved : null,
       rating: meanSkill * (forecastsResolved / (forecastsResolved + SHRINK_K)),
-      ranked: forecastsResolved >= MIN_RANKED_FORECASTS,
+      ranked: forecastsResolved >= minRanked,
       rank: null,
     };
   });
@@ -88,4 +97,32 @@ export function computeLeaderboard(raw: ScoringRaw): LeaderboardRow[] {
   ranked.forEach((r, i) => (r.rank = i + 1));
   const unranked = rows.filter((r) => !r.ranked).sort((a, b) => b.forecastsResolved - a.forecastsResolved || byAddress(a, b));
   return [...ranked, ...unranked];
+}
+
+export type RatingCell = { rating: number; meanSkill: number; forecastsResolved: number; ranked: boolean; rank: number | null };
+export type AgentRatings = {
+  agentAddress: Address;
+  displayName: string;
+  house: boolean;
+  overall: RatingCell;
+  categories: Record<SeasonCategory, RatingCell>;
+};
+
+const cell = (r: LeaderboardRow): RatingCell => ({ rating: r.rating, meanSkill: r.meanSkill, forecastsResolved: r.forecastsResolved, ranked: r.ranked, rank: r.rank });
+
+/// Every agent's overall rating and its rating in each category, in overall
+/// leaderboard order. Hire matching and agent pages read this.
+export function computeRatings(raw: ScoringRaw): AgentRatings[] {
+  const boards = new Map(
+    SEASON_CATEGORIES.map((c) => [c, new Map(computeLeaderboard(raw, { category: c }).map((r) => [r.agentAddress.toLowerCase(), r]))]),
+  );
+  return computeLeaderboard(raw).map((row) => ({
+    agentAddress: row.agentAddress,
+    displayName: row.displayName,
+    house: row.house,
+    overall: cell(row),
+    categories: Object.fromEntries(
+      SEASON_CATEGORIES.map((c) => [c, cell(boards.get(c)!.get(row.agentAddress.toLowerCase())!)]),
+    ) as Record<SeasonCategory, RatingCell>,
+  }));
 }
