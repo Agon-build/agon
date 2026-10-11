@@ -53,6 +53,7 @@ test("agreeing creates the wallet and shows its address; ids are stored only has
   const s = await accepted();
   assert.match(s.last().text, /Your Agon wallet: 0x[0-9a-f]{40}/);
   assert.match(s.last().text, /5\.00 USDC on Arc Testnet/);
+  assert.match(s.last().text, /\nCommands: \/balance \/deposit \/history \/leaderboard \/limits \/freeze \/withdraw \/help\n/);
   const hash = hashChatUser(PEPPER, "telegram", USER);
   assert.equal((await s.channels.getAccount("telegram", hash))!.termsVersion, CHAT_TERMS_VERSION);
   assert.ok([...s.channels.accounts.keys()].every((k) => !k.includes(USER)));

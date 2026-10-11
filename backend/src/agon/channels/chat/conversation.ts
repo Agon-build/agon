@@ -77,6 +77,7 @@ function welcome(w: WalletView): ChatReply {
       `You're in. Your Agon wallet: ${w.address}`,
       `Balance: ${w.balance === null ? "unavailable right now" : `${formatUsdc(w.balance)} USDC`} on ${w.network}.`,
       w.testnet ? FAUCET_LINE : "Send USDC on Arc to that address to add funds.",
+      "Commands: /balance /deposit /history /leaderboard /limits /freeze /withdraw /help",
       "",
       `Ask me a question, for example: ${EXAMPLE}`,
     ].join("\n"),
