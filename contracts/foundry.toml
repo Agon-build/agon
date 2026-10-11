@@ -16,6 +16,7 @@ verbosity = 4
 
 [rpc_endpoints]
 arc_testnet = "https://rpc.testnet.arc.io"
+arc_mainnet = "https://rpc.mainnet.arc.io"
 
 [etherscan]
 arc_testnet = { key = "${ARCSCAN_API_KEY}", url = "https://testnet.arcscan.app/api", chain = 5042002 }

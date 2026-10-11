@@ -90,6 +90,10 @@ backend/scripts/*
 !backend/scripts/prove-agon-foundation.ts
 !backend/scripts/prove-agon-write-readiness.ts
 !backend/scripts/prove-agon-protocol-readiness.ts
+!backend/scripts/season-wallets.ts
+!backend/scripts/season-register-house.ts
+!backend/scripts/season-slate-preview.ts
+!backend/scripts/verify-season.ts
 !contracts/scripts/
 contracts/scripts/*
 !contracts/scripts/set-listing-fee.sh
