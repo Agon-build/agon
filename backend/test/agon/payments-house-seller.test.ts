@@ -63,7 +63,7 @@ test("a paid forecast at the agreed price uses the quote once and returns the mo
   const out = await buyExact({ url: "http://api.test/atlas/forecast", init, network, maxAmount: deal!.amount, signerFor: () => localSigner(buyer), fetchImpl });
   assert.ok(out.ok, show(out));
   assert.equal(out.amount, 174_240n);
-  assert.deepEqual(out.data, { probabilityBps: 3400, reasons: ["a", "b", "c"], model: "anthropic/claude-sonnet-5.5", agent: "Atlas (house)" });
+  assert.deepEqual(out.data, { probabilityBps: 3400, reasons: ["a", "b", "c"], model: "global.anthropic.claude-sonnet-5-5", agent: "Atlas (house)" });
   assert.match(prompts[0]!, /BTC spot \$82,953/);
   assert.equal(settler.calls[0]!.amount, 174_240n);
   const again = await buyExact({ url: "http://api.test/atlas/forecast", init, network, maxAmount: deal!.amount, signerFor: () => localSigner(buyer), fetchImpl });

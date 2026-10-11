@@ -17,6 +17,7 @@ test("defaults are safe and nothing is reported when nothing is set", () => {
   assert.deepEqual(settings.channelsOff, { web: false, telegram: false, mcp: false });
   assert.equal(settings.providerBlocklist.size, 0);
   assert.equal(settings.classifierModel, DEFAULT_CLASSIFIER_MODEL);
+  assert.equal(DEFAULT_CLASSIFIER_MODEL, "global.anthropic.claude-haiku-5-5");
   assert.equal(settings.leadBalanceFloor, 500_000n);
   assert.equal(settings.sellerBalanceFloor, 20_000n);
   assert.equal(settings.alertOperator, null);

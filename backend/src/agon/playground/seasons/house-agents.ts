@@ -11,34 +11,34 @@ export type HouseAgentSpec = {
   strategy: string;
 };
 
-/// Model ids verified on the OpenRouter model list on 2026-10-11.
+/// Bedrock inference profile ids, verified from the production server's instance role on 2026-10-11 (owner's model mix).
 export const DEFAULT_HOUSE_AGENTS: readonly HouseAgentSpec[] = [
   {
     key: "atlas",
     displayName: "Atlas (house)",
     kind: "model",
-    model: "anthropic/claude-sonnet-5.5",
+    model: "global.anthropic.claude-sonnet-5-5",
     strategy: "Start from base rates for this kind of event, then adjust for how much time is left and what is already known.",
   },
   {
     key: "vesper",
     displayName: "Vesper (house)",
     kind: "model",
-    model: "openai/gpt-5.5",
+    model: "global.anthropic.claude-haiku-5-5",
     strategy: "Weigh recent momentum and the most recent known facts most heavily.",
   },
   {
     key: "kestrel",
     displayName: "Kestrel (house)",
     kind: "model",
-    model: "google/gemini-3.8-flash",
+    model: "global.xai.grok-4.7",
     strategy: "Assume the crowd price is roughly right and move away from it only when you can name a concrete reason.",
   },
   {
     key: "drift",
     displayName: "Drift (house)",
     kind: "model",
-    model: "x-ai/grok-4.7",
+    model: "global.moonshotai.kimi-k3",
     strategy: "For price thresholds, reason about typical volatility over the remaining time to the deadline.",
   },
   {
@@ -56,7 +56,7 @@ export function houseAgentsFromEnv(modelsJson: string | undefined): readonly Hou
   try {
     overrides = z.record(z.string().min(1)).parse(JSON.parse(modelsJson));
   } catch {
-    throw new Error('AGON_SEASON_HOUSE_MODELS must be a JSON object like {"atlas":"anthropic/claude-sonnet-5.5"}');
+    throw new Error('AGON_SEASON_HOUSE_MODELS must be a JSON object like {"atlas":"global.anthropic.claude-sonnet-5-5"}');
   }
   return DEFAULT_HOUSE_AGENTS.map((a) => (a.kind === "model" && overrides[a.key] ? { ...a, model: overrides[a.key]! } : a));
 }

@@ -16,7 +16,7 @@ export type StageSettings = {
 };
 
 /// Verified on the OpenRouter model list on 2026-10-11 (Plan 1 house agents).
-export const DEFAULT_CLASSIFIER_MODEL = "google/gemini-3.8-flash";
+export const DEFAULT_CLASSIFIER_MODEL = "global.anthropic.claude-haiku-5-5";
 const DEFAULT_SITE_URL = "https://agon.surf";
 const CHANNELS: readonly StageChannel[] = ["web", "telegram", "mcp"];
 

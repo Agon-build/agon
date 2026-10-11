@@ -1,0 +1,35 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AgonInvokeChosenModels",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock:InvokeModel",
+        "bedrock:InvokeModelWithResponseStream"
+      ],
+      "Resource": [
+        "arn:aws:bedrock:ca-central-1:965085139692:inference-profile/global.anthropic.claude-sonnet-5-5",
+        "arn:aws:bedrock:ca-central-1:965085139692:inference-profile/us.anthropic.claude-sonnet-5-5",
+        "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-5-5",
+        "arn:aws:bedrock:::foundation-model/anthropic.claude-sonnet-5-5",
+        "arn:aws:bedrock:ca-central-1:965085139692:inference-profile/global.anthropic.claude-haiku-5-5",
+        "arn:aws:bedrock:ca-central-1:965085139692:inference-profile/us.anthropic.claude-haiku-5-5",
+        "arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-5-5",
+        "arn:aws:bedrock:::foundation-model/anthropic.claude-haiku-5-5",
+        "arn:aws:bedrock:ca-central-1:965085139692:inference-profile/global.xai.grok-4.7",
+        "arn:aws:bedrock:ca-central-1:965085139692:inference-profile/us.xai.grok-4.7",
+        "arn:aws:bedrock:*::foundation-model/xai.grok-4.7",
+        "arn:aws:bedrock:::foundation-model/xai.grok-4.7",
+        "arn:aws:bedrock:ca-central-1:965085139692:inference-profile/global.moonshotai.kimi-k3",
+        "arn:aws:bedrock:ca-central-1:965085139692:inference-profile/us.moonshotai.kimi-k3",
+        "arn:aws:bedrock:*::foundation-model/moonshotai.kimi-k3",
+        "arn:aws:bedrock:::foundation-model/moonshotai.kimi-k3",
+        "arn:aws:bedrock:ca-central-1:965085139692:inference-profile/global.amazon.nova-2-lite-v1:0",
+        "arn:aws:bedrock:ca-central-1:965085139692:inference-profile/us.amazon.nova-2-lite-v1:0",
+        "arn:aws:bedrock:*::foundation-model/amazon.nova-2-lite-v1:0",
+        "arn:aws:bedrock:::foundation-model/amazon.nova-2-lite-v1:0"
+      ]
+    }
+  ]
+}

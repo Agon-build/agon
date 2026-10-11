@@ -6,6 +6,7 @@ import {
   DEFAULT_HOUSE_AGENTS, forecastPrompt, forecastSlate, houseAgentsFromEnv, parseProbability, type ModelCaller,
 } from "../../src/agon/playground/seasons/house-agents.ts";
 import type { RoundMarket } from "../../src/agon/playground/seasons/types.ts";
+import { modelFamily } from "../../src/runners/llm/bedrock.ts";
 
 const market = (n: number, baselineBps = 4100): RoundMarket => ({
   seasonId: 1n,
@@ -17,20 +18,19 @@ const market = (n: number, baselineBps = 4100): RoundMarket => ({
   baselineBps,
 });
 
-test("five house agents, all labelled house, one market-copy benchmark, models verified on OpenRouter", () => {
+test("five house agents, all labelled house, one market-copy benchmark, models on Bedrock", () => {
   assert.deepEqual(DEFAULT_HOUSE_AGENTS.map((a) => a.key), ["atlas", "vesper", "kestrel", "drift", "mirror"]);
   assert.ok(DEFAULT_HOUSE_AGENTS.every((a) => a.displayName.includes("(house")));
   assert.deepEqual(DEFAULT_HOUSE_AGENTS.filter((a) => a.kind === "market-copy").map((a) => a.key), ["mirror"]);
-  assert.deepEqual(
-    DEFAULT_HOUSE_AGENTS.filter((a) => a.kind === "model").map((a) => a.model),
-    ["anthropic/claude-sonnet-5.5", "openai/gpt-5.5", "google/gemini-3.8-flash", "x-ai/grok-4.7"],
-  );
+  const models = DEFAULT_HOUSE_AGENTS.filter((a) => a.kind === "model").map((a) => a.model!);
+  assert.deepEqual(models, ["global.anthropic.claude-sonnet-5-5", "global.anthropic.claude-haiku-5-5", "global.xai.grok-4.7", "global.moonshotai.kimi-k3"]);
+  assert.ok(models.every((m) => modelFamily(m) === "bedrock"));
 });
 
 test("env can override models by key without touching names", () => {
-  const agents = houseAgentsFromEnv('{"atlas":"anthropic/claude-opus-5.5"}');
-  assert.equal(agents.find((a) => a.key === "atlas")!.model, "anthropic/claude-opus-5.5");
-  assert.equal(agents.find((a) => a.key === "vesper")!.model, "openai/gpt-5.5");
+  const agents = houseAgentsFromEnv('{"atlas":"global.anthropic.claude-opus-5-5"}');
+  assert.equal(agents.find((a) => a.key === "atlas")!.model, "global.anthropic.claude-opus-5-5");
+  assert.equal(agents.find((a) => a.key === "vesper")!.model, "global.anthropic.claude-haiku-5-5");
   assert.deepEqual(houseAgentsFromEnv(undefined), DEFAULT_HOUSE_AGENTS);
   assert.throws(() => houseAgentsFromEnv("not json"), /AGON_SEASON_HOUSE_MODELS/);
 });
@@ -66,7 +66,7 @@ test("market copy returns the baseline without calling a model", async () => {
 test("model agents skip a market whose answer cannot be parsed or whose call fails", async () => {
   const replies = ['{"probability":0.3,"reasons":["r1","r2","r3"]}', "no idea"];
   const caller: ModelCaller = async (p) => {
-    assert.equal(p.model, "anthropic/claude-sonnet-5.5");
+    assert.equal(p.model, "global.anthropic.claude-sonnet-5-5");
     const next = replies.shift();
     if (next === undefined) throw new Error("provider down");
     return { text: next };

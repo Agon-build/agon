@@ -1,6 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { config } from "../../config/index.js";
 import { query } from "../../db/pool.js";
+import { bedrockSender, callBedrock, modelFamily, type BedrockSend } from "./bedrock.js";
+import { createBreakerSet } from "./breaker.js";
 
 /// Thin Anthropic SDK wrapper used by every real-LLM runner. Centralizes:
 /// - lazy client construction (so a missing API key is detectable),
@@ -156,47 +158,20 @@ function getProviders(): Provider[] {
   return providers;
 }
 
-/// Fast-fail circuit breaker, per provider family (anthropic-compatible vs
-/// openrouter). When the LLM is genuinely down, every call would otherwise walk
-/// the full provider loop (N providers x retries x a 60s timeout), so a single
-/// mission with ~21 calls hangs for many minutes and looks stuck. After
-/// LLM_BREAKER_FAILS consecutive total failures the breaker OPENS for
-/// LLM_BREAKER_COOLDOWN_MS: calls throw immediately so callers use their
-/// fallbacks (heuristic decide, concat synthesize, "judge error") and the
-/// mission settles in seconds. The first call after the cooldown is a probe that
-/// closes the breaker on success. Any success resets it. Process-global and
-/// best-effort; the tradeoff is up to one cooldown window of fallback output in
-/// exchange for never hanging a settlement.
-interface Breaker {
-  fails: number;
-  openUntil: number;
-}
-const breakers: Record<"anthropic" | "openrouter", Breaker> = {
-  anthropic: { fails: 0, openUntil: 0 },
-  openrouter: { fails: 0, openUntil: 0 },
-};
-const BREAKER_FAILS = Number(process.env.LLM_BREAKER_FAILS ?? "3");
-const BREAKER_COOLDOWN_MS = Number(process.env.LLM_BREAKER_COOLDOWN_MS ?? "60000");
+/// Fast-fail circuit breakers (see breaker.ts). Keys: "anthropic" for the
+/// Anthropic-compatible loop, "openrouter" for slugs, and "bedrock:<model>" per
+/// Bedrock model. When the LLM is genuinely down, every call would otherwise walk
+/// the full provider loop with retries and a 60s timeout, so callers wait
+/// minutes; an open breaker throws at once and callers use their fallbacks.
+const breakers = createBreakerSet({
+  fails: Number(process.env.LLM_BREAKER_FAILS ?? "3"),
+  cooldownMs: Number(process.env.LLM_BREAKER_COOLDOWN_MS ?? "60000"),
+});
+const breakerOpen = (key: string): boolean => breakers.open(key);
+const breakerRecord = (key: string, ok: boolean): void => breakers.record(key, ok);
 
-function breakerOpen(family: "anthropic" | "openrouter"): boolean {
-  return breakers[family].openUntil > Date.now();
-}
-function breakerRecord(family: "anthropic" | "openrouter", ok: boolean): void {
-  const b = breakers[family];
-  if (ok) {
-    b.fails = 0;
-    b.openUntil = 0;
-    return;
-  }
-  b.fails += 1;
-  if (b.fails >= BREAKER_FAILS) {
-    b.openUntil = Date.now() + BREAKER_COOLDOWN_MS;
-    b.fails = 0; // after the cooldown, one probe call runs before re-opening
-    console.warn(
-      `llm: ${family} breaker OPEN for ${Math.round(BREAKER_COOLDOWN_MS / 1000)}s after ${BREAKER_FAILS} consecutive failures; calls fast-fail to fallbacks until it recovers`,
-    );
-  }
-}
+let bedrockSend: BedrockSend | null = null;
+const getBedrockSend = (): BedrockSend => (bedrockSend ??= bedrockSender(process.env.BEDROCK_REGION || "ca-central-1"));
 
 /// Sum of cost_usd in llm_runs since UTC midnight. Cheap query on the
 /// llm_runs_created_idx, called before every LLM call to enforce the kill
@@ -250,9 +225,22 @@ export async function callModel(params: CallParams): Promise<CallResult> {
 /// guarded by its circuit breaker. Throws when that model can't be served;
 /// callModel decides whether to retry with the fallback model.
 async function callModelOnce(params: CallParams): Promise<CallResult> {
-  // Slug models (provider/model) go through OpenRouter; bare claude-* ids use
-  // the Anthropic SDK below.
-  if (params.model.includes("/")) {
+  // Bedrock profile ids (global.vendor.model) go to Bedrock, slug models
+  // (provider/model) to OpenRouter, and bare claude-* ids to the Anthropic SDK below.
+  const family = modelFamily(params.model);
+  if (family === "bedrock") {
+    const key = `bedrock:${params.model}`;
+    if (breakerOpen(key)) throw new Error(`llm ${key} unavailable (breaker open)`);
+    try {
+      const r = await callBedrock(params, getBedrockSend(), { timeoutMs: Number(process.env.LLM_TIMEOUT_MS ?? "60000") });
+      breakerRecord(key, true);
+      return r;
+    } catch (err) {
+      breakerRecord(key, false);
+      throw err;
+    }
+  }
+  if (family === "openrouter") {
     if (breakerOpen("openrouter")) throw new Error("llm openrouter unavailable (breaker open)");
     try {
       const r = await callOpenRouter(params);

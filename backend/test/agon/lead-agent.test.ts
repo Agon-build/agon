@@ -40,7 +40,7 @@ function world(opts: { atlasReply?: string; markets?: boolean; subHireBudget?: b
   app.route("/agon/standin", createStandinRoutes({ network, payTo: `0x${"5".repeat(40)}`, settle: settler.settle, claimNonce: (n, p, nonce) => store.claimSellerNonce(n, p, nonce), fetchImpl: upstream }));
   app.route("/agon/agents/house", createHouseSellerRoutes({
     network, store, ask: 220_000n, floor: 160_000n, sellers,
-    callModel: async (p) => ({ text: p.model.startsWith("anthropic/") ? replies.atlas! : replies.vesper! }),
+    callModel: async (p) => ({ text: p.model === "global.anthropic.claude-sonnet-5-5" ? replies.atlas! : replies.vesper! }),
   }));
   const candidate = (key: string, name: string, rank: number): ForecasterCandidate => ({
     agentAddress: `0x${String(rank).repeat(40)}` as Address, displayName: name, house: true, providerRef: `house:${key}`,

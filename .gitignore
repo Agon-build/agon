@@ -93,6 +93,7 @@ backend/scripts/*
 !backend/scripts/season-wallets.ts
 !backend/scripts/season-register-house.ts
 !backend/scripts/season-slate-preview.ts
+!backend/scripts/bedrock-forecast-sample.ts
 !backend/scripts/verify-season.ts
 !backend/scripts/payment-wallets.ts
 !backend/scripts/hire-smoke.ts
