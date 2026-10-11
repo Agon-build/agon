@@ -20,6 +20,9 @@ import { usdcMinimalAbi } from "../chain/abi.js";
 import { pool, query } from "../db/pool.js";
 import { PostgresAgonRepository } from "../agon/store/repository.js";
 import { createAgonRoutes } from "../agon/http/routes.js";
+import { startSeasonRuntime } from "../agon/playground/seasons/runtime.ts";
+import { createErc8004EntryVerifier, createSeasonRoutes } from "../agon/playground/seasons/routes.ts";
+import { createPublicClient as createSeasonClient, fallback as seasonFallback } from "viem";
 import { createCircleTestnetFacilitatorClient, createX402ExecutionPolicy, createX402FacilitatorAdapter } from "../agon/execution/x402-settlement.js";
 import { createX402ProviderExecutionAdapter } from "../agon/execution/x402-provider-execution.js";
 import { createAgonTestnetReceiptLookupAdapter } from "../agon/execution/x402-reconciliation.js";
@@ -743,6 +746,25 @@ const agonManagedPublisher = config.agon.managedPublisherEnabled
       publicationReady: async () => (await agonReadiness.get(true)).ready,
     })
   : undefined;
+
+// Season 1 routes are mounted before the main /agon router so its handlers
+// never shadow /agon/seasons.
+const agonSeason = startSeasonRuntime();
+if (agonSeason) {
+  const seasonClient = createSeasonClient({ transport: seasonFallback(agonSeason.network.rpcHttp.map((url) => http(url))) });
+  app.route("/agon/seasons", createSeasonRoutes({
+    store: agonSeason.store,
+    rounds: agonSeason.rounds,
+    network: agonSeason.network,
+    verifyEntry: createErc8004EntryVerifier(
+      {
+        readContract: (args) => seasonClient.readContract(args as never),
+        verifyMessage: (args) => seasonClient.verifyMessage(args),
+      },
+      agonSeason.network.identityRegistry,
+    ),
+  }));
+}
 
 app.route("/agon", createAgonRoutes({
   service: agonService,

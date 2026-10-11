@@ -192,6 +192,8 @@ export type ExecuteParams = {
   // calls are pure ERC20 + custom contract calls with no native value, so this
   // stays undefined for the common path.
   amount?: string;
+  /// UUID. Reusing it returns the original transaction instead of a new one.
+  idempotencyKey?: string;
 };
 
 /// Submits a contract execution from `walletId`. Returns the Circle tx id and
@@ -211,6 +213,7 @@ export async function executeContractCall(params: ExecuteParams): Promise<{
     fee: { type: "level", config: { feeLevel: "MEDIUM" } },
     ...(params.refId ? { refId: params.refId } : {}),
     ...(params.amount ? { amount: params.amount } : {}),
+    ...(params.idempotencyKey ? { idempotencyKey: params.idempotencyKey } : {}),
   };
   const res = await client.createContractExecutionTransaction(input);
   const data = res.data;
@@ -267,4 +270,56 @@ export async function createPlatformUsdcTransfer(params: {
   const data = response.data;
   if (!data?.id) throw new Error("Circle createTransaction returned no id");
   return { id: data.id, state: data.state };
+}
+
+/// Creates one EOA on an explicit Circle chain. The refId makes the wallet
+/// findable in the Circle console; the idempotency key makes a retried create
+/// return the same wallet instead of minting a second one. The installed SDK
+/// (9.6.0) types only list ARC-TESTNET; Circle's API accepts ARC (Arc mainnet,
+/// release note 2026-09-16), so the chain code is cast, as createUserWallet does.
+export async function createAgonWallet(input: {
+  refId: string;
+  idempotencyKey: string;
+  circleChain: "ARC-TESTNET" | "ARC";
+}): Promise<{ walletId: string; address: `0x${string}` }> {
+  const walletSetId = config.circle.walletSetId;
+  if (!walletSetId) throw new Error("CIRCLE_WALLET_SET_ID is not set");
+  const response = await getClient().createWallets({
+    blockchains: [input.circleChain] as unknown as ["ARC-TESTNET"],
+    accountType: "EOA",
+    count: 1,
+    walletSetId,
+    metadata: [{ refId: input.refId }],
+    idempotencyKey: input.idempotencyKey,
+  });
+  const wallet = response.data?.wallets?.[0];
+  if (!wallet?.id || !wallet.address || !/^0x[0-9a-fA-F]{40}$/.test(wallet.address)) {
+    throw new Error("Circle did not return a valid wallet");
+  }
+  return { walletId: wallet.id, address: wallet.address.toLowerCase() as `0x${string}` };
+}
+
+/// Signs an EIP-712 JSON document with a developer-controlled wallet. Callers
+/// must only pass documents built by an AGON module that checks what is being
+/// signed (season forecasts here; USDC authorizations behind the signing
+/// policy in plan 2). Never pass caller-supplied JSON straight through.
+export async function signTypedDataJson(walletId: string, typedDataJson: string): Promise<`0x${string}`> {
+  const response = await getClient().signTypedData({ walletId, data: typedDataJson });
+  const signature = response.data?.signature;
+  if (!signature || !/^0x[0-9a-fA-F]+$/.test(signature)) throw new Error("Circle returned no signature");
+  return signature as `0x${string}`;
+}
+
+/// Finds an earlier transaction from this wallet submitted with this refId, so
+/// a retry after an uncertain response reuses it instead of sending a second
+/// transaction. SDK 9.6.0 does not expose the refId query filter, so this
+/// reads the wallet's recent transactions and matches refId locally.
+export async function findTransactionByRefId(
+  refId: string,
+  walletId: string,
+): Promise<{ id: string; state: string; txHash: string | null } | null> {
+  const response = await getClient().listTransactions({ walletIds: [walletId] });
+  const tx = (response.data?.transactions ?? []).find((t) => (t as { refId?: string }).refId === refId);
+  if (!tx?.id) return null;
+  return { id: tx.id, state: tx.state, txHash: tx.txHash ?? null };
 }

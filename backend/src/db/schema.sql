@@ -2173,3 +2173,83 @@ begin
   end if;
 end;
 $$;
+
+-- Playground seasons. A season is one category on one network. Forecasts are
+-- signed by agents and committed as one merkle root per round on
+-- AgonSeasonCommits; these tables hold the published leaves and the results
+-- used to score them. Nothing here moves money.
+create table if not exists agon_seasons (
+  season_id        bigint primary key check (season_id > 0),
+  network          text not null check (network in ('arc-testnet', 'arc')),
+  commits_address  text not null check (commits_address ~ '^0x[0-9a-f]{40}$'),
+  category         text not null default 'polymarket-forecasting' check (category = 'polymarket-forecasting'),
+  starts_at        timestamptz not null,
+  ends_at          timestamptz not null,
+  round_hours      integer not null default 6 check (round_hours between 1 and 24),
+  created_at       timestamptz not null default now(),
+  check (ends_at > starts_at)
+);
+
+create table if not exists agon_season_entries (
+  season_id          bigint not null references agon_seasons(season_id),
+  agent_address      text not null check (agent_address ~ '^0x[0-9a-f]{40}$'),
+  erc8004_agent_id   numeric(78, 0),
+  display_name       text not null check (char_length(display_name) between 1 and 48),
+  house              boolean not null default false,
+  forecast_endpoint  text check (forecast_endpoint is null or forecast_endpoint ~ '^https://'),
+  entered_round      bigint not null check (entered_round >= 0),
+  created_at         timestamptz not null default now(),
+  primary key (season_id, agent_address)
+);
+
+create table if not exists agon_season_rounds (
+  season_id          bigint not null references agon_seasons(season_id),
+  round              bigint not null check (round >= 0),
+  opened_at          timestamptz not null,
+  intake_closes_at   timestamptz not null,
+  state              text not null default 'open' check (state in ('open', 'committing', 'committed', 'skipped')),
+  commit_root        text check (commit_root is null or commit_root ~ '^0x[0-9a-f]{64}$'),
+  commit_count       integer check (commit_count is null or commit_count > 0),
+  commit_tx          text check (commit_tx is null or commit_tx ~ '^0x[0-9a-f]{64}$'),
+  commit_block_time  timestamptz,
+  circle_tx_id       text,
+  primary key (season_id, round),
+  check ((state = 'committed') = (commit_root is not null and commit_tx is not null and commit_block_time is not null))
+);
+create index if not exists agon_season_rounds_due_idx on agon_season_rounds(state, intake_closes_at);
+
+create table if not exists agon_season_round_markets (
+  season_id     bigint not null,
+  round         bigint not null,
+  market_id     text not null check (market_id ~ '^0x[0-9a-f]{64}$'),
+  question      text not null,
+  slug          text not null default '',
+  end_at        timestamptz not null,
+  baseline_bps  integer not null check (baseline_bps between 0 and 10000),
+  primary key (season_id, round, market_id),
+  foreign key (season_id, round) references agon_season_rounds(season_id, round)
+);
+create index if not exists agon_season_round_markets_end_idx on agon_season_round_markets(end_at);
+
+create table if not exists agon_season_forecasts (
+  season_id        bigint not null,
+  round            bigint not null,
+  market_id        text not null,
+  agent_address    text not null check (agent_address ~ '^0x[0-9a-f]{40}$'),
+  probability_bps  integer not null check (probability_bps between 0 and 10000),
+  salt             text not null check (salt ~ '^0x[0-9a-f]{64}$'),
+  signature        text not null check (signature ~ '^0x[0-9a-f]+$'),
+  leaf             text not null check (leaf ~ '^0x[0-9a-f]{64}$'),
+  created_at       timestamptz not null default now(),
+  primary key (season_id, round, market_id, agent_address),
+  foreign key (season_id, round, market_id) references agon_season_round_markets(season_id, round, market_id),
+  foreign key (season_id, agent_address) references agon_season_entries(season_id, agent_address)
+);
+
+create table if not exists agon_season_market_results (
+  market_id    text primary key check (market_id ~ '^0x[0-9a-f]{64}$'),
+  status       text not null check (status in ('pending', 'resolved', 'void')),
+  outcome      smallint check (outcome in (0, 1)),
+  checked_at   timestamptz not null,
+  check ((status = 'resolved') = (outcome is not null))
+);
