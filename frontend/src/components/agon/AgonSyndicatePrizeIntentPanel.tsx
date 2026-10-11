@@ -168,7 +168,7 @@ export function AgonSyndicatePrizeIntentPanel() {
 
   return (
     <section className="border border-[color:var(--hairline-strong)] bg-canvas p-5">
-      <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3">SYNDICATE + PRIZE INTENTS</div>
+      <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3">SYNDICATE AND PRIZE INTENTS</div>
       <p className="mt-2 max-w-3xl font-mono text-[10px] leading-5 text-ink-3">Prepare an authenticated, idempotent intent; inspect the exact unsigned calldata; then explicitly sign from the connected wallet. A confirmed hash is recorded as a submission marker, not treated as final reconciliation.</p>
       {message ? <p role="status" className="mt-3 border-l-2 border-accent p-3 font-mono text-[10px] leading-5">{message}</p> : null}
       {error ? <p role="alert" className="mt-3 border-l-2 border-[color:var(--err)] p-3 font-mono text-[10px] leading-5 text-[color:var(--err)]">{error}</p> : null}
@@ -182,7 +182,7 @@ export function AgonSyndicatePrizeIntentPanel() {
           <Field label="EVIDENCE HASH" value={evidenceHash} onChange={setEvidenceHash} placeholder="bytes32" />
           <button type="button" disabled={busy || isPending || !contributionValid} onClick={() => void prepareContribution()} className="action">{busy ? "WORKING" : "PREPARE CONTRIBUTION"}</button>
           {contribution ? <IntentDetails intentId={contribution.intentId} state={contribution.state} nextAction={contribution.nextAction} transaction={contributionTx} /> : null}
-          {contribution && contributionTx ? <button type="button" disabled={busy || isPending || contribution.state !== "prepared"} onClick={() => void submitContribution()} className="action bg-accent text-accent-ink">SIGN + RECORD SUBMISSION</button> : null}
+          {contribution && contributionTx ? <button type="button" disabled={busy || isPending || contribution.state !== "prepared"} onClick={() => void submitContribution()} className="action bg-accent text-accent-ink">SIGN AND RECORD SUBMISSION</button> : null}
           {contribution?.state === "submitted" ? <button type="button" disabled={busy} onClick={() => void reconcileContribution()} className="action">RECONCILE FINALITY</button> : null}
         </IntentCard>
 
@@ -193,7 +193,7 @@ export function AgonSyndicatePrizeIntentPanel() {
           <Field label="MERKLE PROOF" value={claimProof} onChange={setClaimProof} placeholder="bytes32 hashes separated by spaces" />
           <button type="button" disabled={busy || isPending || !claimValid} onClick={() => void prepareClaim()} className="action">{busy ? "WORKING" : "PREPARE PRIZE CLAIM"}</button>
           {claim ? <IntentDetails intentId={claim.intentId} state={claim.state} nextAction={claim.nextAction} transaction={claimTx} /> : null}
-          {claim && claimTx ? <button type="button" disabled={busy || isPending || claim.state !== "prepared"} onClick={() => void submitClaim()} className="action bg-accent text-accent-ink">SIGN + RECORD SUBMISSION</button> : null}
+          {claim && claimTx ? <button type="button" disabled={busy || isPending || claim.state !== "prepared"} onClick={() => void submitClaim()} className="action bg-accent text-accent-ink">SIGN AND RECORD SUBMISSION</button> : null}
           {claim?.state === "submitted" ? <button type="button" disabled={busy} onClick={() => void reconcileClaim()} className="action">RECONCILE FINALITY</button> : null}
         </IntentCard>
       </div>

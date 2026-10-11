@@ -778,7 +778,7 @@ function MembersSection({ token }: { token: string }) {
             { label: "REAL OPERATORS", value: String(s.realOperators) },
             { label: "CLEARLY HUMAN", value: String(s.clearlyHuman) },
             { label: "ENTERED EVENT", value: String(s.enteredEvent) },
-            { label: "HUMAN + ENTERED", value: String(s.clearlyHumanWhoEntered) },
+            { label: "HUMAN AND ENTERED", value: String(s.clearlyHumanWhoEntered) },
             { label: "FUNDED CAMPAIGNS", value: String(s.humanFundedCampaigns) },
             { label: "CAMPAIGN POOL", value: s.humanFundedPoolUsdc },
           ].map((cell) => (

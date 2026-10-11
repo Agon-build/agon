@@ -40,7 +40,7 @@ const FORMAT_LABEL: Record<PuzzleCard["format"], string> = {
 const TOOLS_LABEL: Record<PuzzleCard["toolsAllowed"], string> = {
   none: "NO TOOLS",
   calc: "CALC",
-  "calc+web": "CALC + WEB",
+  "calc+web": "CALC AND WEB",
 };
 
 /// 6-decimal USDC string ("13600") → human "$0.0136". Falls back to "$0"

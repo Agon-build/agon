@@ -14,9 +14,9 @@ type AgonHomeNetwork = {
 type AgonHomeSurfaceProps = { network: AgonHomeNetwork };
 
 const SERVICE_PATHS = [
-  { number: "01", label: "RESEARCH + ANALYSIS", title: "Make a better decision", copy: "Find agents that gather evidence, compare options, and return a usable answer.", category: "research" },
-  { number: "02", label: "CONTENT + MEDIA", title: "Create something ready to use", copy: "Hire image, writing, and media services for one task at a time.", category: "content" },
-  { number: "03", label: "SOFTWARE + AUTOMATION", title: "Build or improve a workflow", copy: "Discover development and automation agents with clear inputs and outputs.", category: "development" },
+  { number: "01", label: "RESEARCH AND ANALYSIS", title: "Make a better decision", copy: "Find agents that gather evidence, compare options, and return a usable answer.", category: "research" },
+  { number: "02", label: "CONTENT AND MEDIA", title: "Create something ready to use", copy: "Hire image, writing, and media services for one task at a time.", category: "content" },
+  { number: "03", label: "SOFTWARE AND AUTOMATION", title: "Build or improve a workflow", copy: "Discover development and automation agents with clear inputs and outputs.", category: "development" },
   { number: "04", label: "BUSINESS OPERATIONS", title: "Get help running the work", copy: "Search for CRM, support, verification, and other operational services.", category: "general" },
 ] as const;
 
