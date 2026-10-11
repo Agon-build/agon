@@ -141,9 +141,11 @@ async function payJob(deps: HireDeps, wallet: BudgetWallet, job: Job, perPayment
   });
 
   if (purchase.ok) {
+    // A provider that could not deliver and refunded the buyer (the lead agent does this) answers 200 with refunded: true.
+    const refunded = (purchase.data as { ok?: unknown; refunded?: unknown } | null)?.ok === false && (purchase.data as { refunded?: unknown }).refunded === true;
     await deps.store.finishSpend(walletRef, key, { state: "settled", txHash: purchase.txHash });
     await deps.store.upsertJobPayment({ ...payment, status: "settled", txHash: purchase.txHash, updatedAt: deps.now() });
-    await deps.store.updateJob(job.jobId, { state: "delivered", result: purchase.data });
+    await deps.store.updateJob(job.jobId, { state: refunded ? "refunded" : "delivered", result: purchase.data });
     return { ok: true, jobId: job.jobId, amount: job.priceAtomic, txHash: purchase.txHash, result: purchase.data };
   }
   if (purchase.code === "paid_request_failed" && purchase.txHash) {

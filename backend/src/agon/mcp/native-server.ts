@@ -1,8 +1,9 @@
 import { McpServer, createMcpHandler, fromJsonSchema, type AuthInfo } from "@modelcontextprotocol/server";
 
-import { canUseAgonScope } from "../../auth/scope-policy.ts";
 import { createMcpAccessAdapter } from "./adapter.ts";
 import type { ManagedPublisher } from "./managed-publisher.ts";
+import { registerStageTools, type StageMcpDeps } from "./stage-tools.ts";
+import { adapterResult, failure, requireActor, result } from "./tool-results.ts";
 
 type AccessAdapter = ReturnType<typeof createMcpAccessAdapter>;
 
@@ -61,42 +62,12 @@ const hireStatusSchema = fromJsonSchema<{ hireId: string }>({
   additionalProperties: false,
 });
 
-function result(value: unknown) {
-  return { content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }] };
-}
-
-function failure(code: string, message: string) {
-  return { content: [{ type: "text" as const, text: JSON.stringify({ error: { code, message } }, null, 2) }], isError: true };
-}
-
-function adapterResult(value: { ok: true; value: unknown } | { ok: false; code: string; message: string }) {
-  return value.ok ? result(value.value) : failure(value.code, value.message);
-}
-
-function actor(authInfo: AuthInfo | undefined): string | null {
-  const address = authInfo?.extra?.address;
-  return typeof address === "string" && address ? address : null;
-}
-
-function requireActor(authInfo: AuthInfo | undefined, scope: string): string | ReturnType<typeof failure> {
-  const address = actor(authInfo);
-  if (!address) return failure("authentication_required", "Connect AGON with an access token before preparing a hire or managing a listing.");
-  const client = authInfo?.extra?.client;
-  const claims = {
-    client: client === null ? null : typeof client === "string" ? client : "agon-cli",
-    scopes: authInfo?.scopes ?? [],
-  };
-  return canUseAgonScope(claims, scope)
-    ? address
-    : failure("scope_required", `This access token needs the ${scope} capability.`);
-}
-
 /**
  * Standards-based MCP tool surface. Public discovery remains available without
  * an account. Every provider or buyer mutation receives the authenticated AGON
  * wallet address from the validated bearer token at the HTTP edge.
  */
-export function createAgonNativeMcpHandler(access: AccessAdapter, publisher?: ManagedPublisher) {
+export function createAgonNativeMcpHandler(access: AccessAdapter, publisher?: ManagedPublisher, stage?: StageMcpDeps) {
   return createMcpHandler((context) => {
     const server = new McpServer({ name: "AGON", version: "1.0.0" });
 
@@ -294,6 +265,7 @@ export function createAgonNativeMcpHandler(access: AccessAdapter, publisher?: Ma
       }, async ({ draftId }) => managed("listing:write", (owner) => publisher.advance(owner, draftId)));
     }
 
+    if (stage) registerStageTools(server, () => context.authInfo, stage);
     return server;
   }, { responseMode: "json" });
 }

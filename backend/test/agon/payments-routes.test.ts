@@ -40,6 +40,10 @@ test("the lead agent endpoint charges 0.30 and passes the payer and a valid pare
   const parent = newJob({ parent: null, buyerRef: "budget:wa:abc", providerRef: "agent:lead", providerLabel: "Agon Lead Agent", network: "arc-testnet", price: 300_000n, request: {}, now: new Date() });
   parent.state = "paying";
   await store.insertJob(parent);
+  await store.upsertJobPayment({
+    idempotencyKey: `hire:${parent.jobId}`, jobId: parent.jobId, kind: "hire", payer: buyer.address.toLowerCase() as Address, payee: LEAD, amount: 300_000n,
+    network: "arc-testnet", status: "pending", txHash: null, detail: null, authNonce: null, authValidBefore: null, createdAt: new Date(), updatedAt: new Date(),
+  });
   const out = await buyExact({
     url: "http://api.test/agents/lead/forecast", init: post({ question: "Will BTC close above $82k on Friday?" }, { "x-agon-job": parent.jobId }),
     network, maxAmount: 300_000n, signerFor: () => localSigner(buyer), fetchImpl,
@@ -77,4 +81,17 @@ test("receipts are public by job id and show the whole tree", async () => {
   assert.equal(body.receipt.label, "Agon Lead Agent", "any job id in the tree shows the whole tree");
   assert.equal(body.receipt.children[0]!.label, "Atlas (house)");
   assert.equal((await app.request("http://api.test/jobs/not-a-job")).status, 404);
+});
+
+test("a paying stranger cannot attach to someone else's running job", async () => {
+  const { store, runs, fetchImpl } = setup();
+  const parent = newJob({ parent: null, buyerRef: "budget:op:victim", providerRef: "agent:lead", providerLabel: "Agon Lead Agent", network: "arc-testnet", price: 300_000n, request: {}, now: new Date() });
+  parent.state = "paying";
+  await store.insertJob(parent);
+  await store.upsertJobPayment({
+    idempotencyKey: `hire:${parent.jobId}`, jobId: parent.jobId, kind: "hire", payer: `0x${"9".repeat(40)}` as Address, payee: LEAD, amount: 300_000n,
+    network: "arc-testnet", status: "pending", txHash: null, detail: null, authNonce: null, authValidBefore: null, createdAt: new Date(), updatedAt: new Date(),
+  });
+  await buyExact({ url: "http://api.test/agents/lead/forecast", init: post({ question: "Will BTC close above $82k?" }, { "x-agon-job": parent.jobId }), network, maxAmount: 300_000n, signerFor: () => localSigner(buyer), fetchImpl });
+  assert.equal(runs[0]!.parentJobId, null, "the stranger gets their own job");
 });

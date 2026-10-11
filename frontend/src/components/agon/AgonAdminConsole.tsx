@@ -9,6 +9,7 @@ import { ProtocolActions } from "@/components/agon/ProtocolActions";
 import { X402CallIntentPanel } from "@/components/agon/X402CallIntentPanel";
 import { AgonSyndicatePrizeIntentPanel } from "@/components/agon/AgonSyndicatePrizeIntentPanel";
 import { AgonOperationsAlertsPanel } from "@/components/agon/AgonOperationsAlertsPanel";
+import { AgonLiveJobsPanel } from "@/components/agon/AgonLiveJobsPanel";
 import { useAuth } from "@/hooks/useAuth";
 import { useArcWrite } from "@/hooks/useArcWrite";
 import { confirmTx } from "@/lib/arc";
@@ -118,6 +119,7 @@ export function AgonAdminConsole({ adminToken }: { adminToken: string }) {
       {error ? <p className="border-l-2 border-[color:var(--err)] p-3 font-mono text-xs text-[color:var(--err)]">{error}</p> : null}
       <AgonStatusSummary health={health} address={signerAddress ?? connectedAddress ?? null} signerRoute={signerRoute} authenticated={Boolean(me)} listingCount={listings.length} />
       <AgonOperationsAlertsPanel adminToken={adminToken} />
+      <AgonLiveJobsPanel adminToken={adminToken} />
 
       <section>
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><div className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">01 / CHOOSE A SERVICE</div><h3 className="mt-2 font-stencil text-3xl uppercase leading-none">What are you working on?</h3></div><p className="max-w-md text-sm leading-5 text-ink-2">Every action below uses the selected listing and its immutable version.</p></div>

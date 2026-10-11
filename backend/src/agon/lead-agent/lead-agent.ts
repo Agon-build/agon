@@ -43,11 +43,15 @@ export type LeadAnswer =
       forecaster: { name: string; reason: string; asked: string; agreed: string };
       progress: string[];
       haggle: BargainStep[];
+      events?: LiveEvent[];
     }
-  | { ok: false; jobId: string; code: "no_market" | "no_forecaster" | "lead_error"; refunded: boolean; refundTx: Hex | null; progress: string[] };
+  | { ok: false; jobId: string; code: "no_market" | "no_forecaster" | "lead_error"; refunded: boolean; refundTx: Hex | null; progress: string[]; events?: LiveEvent[] };
 
 const forecastResult = z.object({ probabilityBps: z.number().int().min(0).max(10_000), reasons: z.array(z.string()).max(5) });
 const quoteReply = z.object({ kind: z.enum(["accept", "counter", "walk"]), amount: z.string().regex(/^\d+$/).optional(), quoteId: z.string().optional() });
+
+export type LiveEventKind = "note" | "data" | "haggle" | "hire" | "refund" | "fail";
+export type LiveEvent = { at: string; text: string; kind: LiveEventKind };
 
 type SignedAuthorization = { nonce: Hex; validBefore: Date };
 
@@ -78,6 +82,20 @@ export async function runLeadForecast(
     job = { ...job, budgetAtomic: deps.subHireBudget };
   }
   const root = job;
+
+  // Progress is written onto the user's job as it happens, so every channel
+  // can show the run live by reading the job.
+  const startedAt = now().toISOString();
+  const events: LiveEvent[] = [];
+  let liveHaggle: BargainStep[] = [];
+  async function persist(): Promise<void> {
+    await deps.store.updateJob(root.jobId, { result: { live: true, startedAt, events, haggle: liveHaggle } });
+  }
+  async function say(text: string, kind: LiveEventKind): Promise<void> {
+    progress.push(text);
+    events.push({ at: now().toISOString(), text, kind });
+    await persist();
+  }
 
   const recordPayment = (p: Omit<JobPayment, "createdAt" | "updatedAt" | "network" | "authNonce" | "authValidBefore">, signed: SignedAuthorization | null = null) =>
     deps.store.upsertJobPayment({
@@ -115,12 +133,12 @@ export async function runLeadForecast(
     // Peek first so the reservation is the real price, not the per-purchase cap.
     const peek = await peekExactTerms({ url, network: deps.network, fetchImpl: deps.fetchImpl });
     if (!peek.ok) {
-      progress.push(`Could not buy ${what} from ${label} (${peek.code})`);
+      await say(`Could not buy ${what} from ${label} (${peek.code})`, "fail");
       return null;
     }
     if (!("option" in peek)) return peek.data;
     if (peek.option.amount > LEAD_LIMITS.perData) {
-      progress.push(`Skipped ${what}: ${formatUsdc(peek.option.amount)} USDC is over the lead agent limit`);
+      await say(`Skipped ${what}: ${formatUsdc(peek.option.amount)} USDC is over the lead agent limit`, "note");
       return null;
     }
     const reserved = await deps.store.reserveSpend({
@@ -128,7 +146,7 @@ export async function runLeadForecast(
       perPaymentCap: LEAD_LIMITS.perData, dailyCap: LEAD_LIMITS.daily, now: now(),
     });
     if (reserved !== "reserved") {
-      progress.push(`Skipped ${what}: lead agent limit reached`);
+      await say(`Skipped ${what}: lead agent limit reached`, "note");
       return null;
     }
     const holder: { signed: SignedAuthorization | null } = { signed: null };
@@ -153,21 +171,21 @@ export async function runLeadForecast(
       );
     }
     if (out.ok) {
-      if (out.amount > 0n) progress.push(`Bought ${what} from ${label}: ${formatUsdc(out.amount)} USDC`);
+      if (out.amount > 0n) await say(`Bought ${what} from ${label}: ${formatUsdc(out.amount)} USDC`, "data");
       return out.data;
     }
-    progress.push(`Could not buy ${what} from ${label} (${out.code})`);
+    await say(`Could not buy ${what} from ${label} (${out.code})`, "fail");
     return null;
   }
 
   async function refundOnce(code: "no_market" | "no_forecaster" | "lead_error"): Promise<LeadAnswer> {
     if (!paid) {
-      await deps.store.updateJob(root.jobId, { state: "failed", result: { error: code } });
-      return { ok: false, jobId: root.jobId, code, refunded: false, refundTx: null, progress };
+      await deps.store.updateJob(root.jobId, { state: "failed", result: { error: code, events, haggle: liveHaggle } });
+      return { ok: false, jobId: root.jobId, code, refunded: false, refundTx: null, progress, events };
     }
     const key = `refund:${root.jobId}`;
     const existing = (await deps.store.listJobPayments(root.rootId)).find((p) => p.idempotencyKey === key && p.status === "settled");
-    if (existing) return { ok: false, jobId: root.jobId, code, refunded: true, refundTx: existing.txHash, progress };
+    if (existing) return { ok: false, jobId: root.jobId, code, refunded: true, refundTx: existing.txHash, progress, events };
     let refundTx: Hex | null = null;
     try {
       refundTx = await deps.refund(input.payer, deps.leadPrice, key);
@@ -179,9 +197,10 @@ export async function runLeadForecast(
       idempotencyKey: key, jobId: root.jobId, kind: "refund", payer: deps.leadAddress, payee: input.payer, amount: deps.leadPrice,
       status: refundTx ? "settled" : "failed", txHash: refundTx, detail: reason,
     });
-    if (refundTx) await deps.store.updateJob(root.jobId, { state: "refunded", result: { error: code } });
-    progress.push(refundTx ? `Refunded ${formatUsdc(deps.leadPrice)} USDC` : "Refund failed; an operator has been alerted");
-    return { ok: false, jobId: root.jobId, code, refunded: Boolean(refundTx), refundTx, progress };
+    // The refund line is saved first, so the final state write keeps it.
+    await say(refundTx ? `Refunded ${formatUsdc(deps.leadPrice)} USDC` : "Refund failed; an operator has been alerted", refundTx ? "refund" : "fail");
+    if (refundTx) await deps.store.updateJob(root.jobId, { state: "refunded", result: { error: code, events, haggle: liveHaggle } });
+    return { ok: false, jobId: root.jobId, code, refunded: Boolean(refundTx), refundTx, progress, events };
   }
 
   async function sellerQuote(quoteUrl: string, offer: bigint, round: number, lastCounter: bigint | null): Promise<SellerReply> {
@@ -202,6 +221,7 @@ export async function runLeadForecast(
   }
 
   async function run(): Promise<LeadAnswer> {
+    await say("Reading the question and looking for the market", "note");
     // 1. Find the market.
     const search = await buyData(deps.data.marketSearch(searchQueryFor(input.question)), deps.data.searchLabel, "market search");
     const market = pickMarket(findMarkets(search), input.question, now());
@@ -222,13 +242,14 @@ export async function runLeadForecast(
     // 3. Hire the best forecaster that will meet the budget.
     const body = { marketId: market.conditionId, question: market.question, endDate: market.endDate, crowdBps: market.yesPriceBps ?? undefined, notes };
     const init = (headers: Record<string, string>): RequestInit => ({ method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
+    await say("Asking Season 1 for the best forecasters", "note");
     for (const cand of (await deps.forecasters()).slice(0, 3)) {
       const tree = await deps.store.listJobTree(root.rootId);
       const payments = await deps.store.listJobPayments(root.rootId);
       const remaining = root.budgetAtomic - spentUnder(root.jobId, tree, payments);
       const peek = await peekExactTerms({ url: cand.forecastUrl, init: init({}), network: deps.network, fetchImpl: deps.fetchImpl });
       if (!peek.ok || !("option" in peek)) {
-        progress.push(`${cand.displayName} is not selling forecasts right now`);
+        await say(`${cand.displayName} is not selling forecasts right now`, "note");
         continue;
       }
       const ask = peek.option.amount;
@@ -242,19 +263,21 @@ export async function runLeadForecast(
           quote: (offer, round, lastCounter) => sellerQuote(quoteUrl, offer, round, lastCounter),
         });
         haggle = deal.transcript;
+        liveHaggle = deal.transcript;
+        await persist();
         if (!deal.deal) {
-          progress.push(`${cand.displayName} would not meet the budget`);
+          await say(`${cand.displayName} would not meet the budget`, "haggle");
           continue;
         }
         amount = deal.deal.amount;
         quoteId = deal.deal.quoteId;
       } else if (ask > remaining) {
-        progress.push(`${cand.displayName} would not meet the budget`);
+        await say(`${cand.displayName} would not meet the budget`, "haggle");
         continue;
       }
       const check = checkSubHire({ tree, payments, parentJobId: root.jobId, hirerRef: LEAD_PROVIDER_REF, providerRef: cand.providerRef, amount });
       if (!check.ok) {
-        progress.push(`Skipped ${cand.displayName} (${check.code})`);
+        await say(`Skipped ${cand.displayName} (${check.code})`, "note");
         continue;
       }
       const child = newJob({
@@ -269,7 +292,7 @@ export async function runLeadForecast(
       });
       if (reserved !== "reserved") {
         await deps.store.updateJob(child.jobId, { state: "failed", result: { error: reserved } });
-        progress.push(`Skipped ${cand.displayName}: lead agent limit reached`);
+        await say(`Skipped ${cand.displayName}: lead agent limit reached`, "note");
         continue;
       }
       await deps.store.updateJob(child.jobId, { state: "paying" });
@@ -291,7 +314,7 @@ export async function runLeadForecast(
       );
       if (result?.success) {
         await deps.store.updateJob(child.jobId, { state: "delivered", result: result.data });
-        progress.push(`Hired ${cand.displayName}, ${cand.reason}: ${formatUsdc(amount)} USDC (asked ${formatUsdc(ask)}, agreed ${formatUsdc(amount)})`);
+        await say(`Hired ${cand.displayName}, ${cand.reason}: ${formatUsdc(amount)} USDC (asked ${formatUsdc(ask)}, agreed ${formatUsdc(amount)})`, "hire");
         const answer: LeadAnswer = {
           ok: true,
           jobId: root.jobId,
@@ -302,6 +325,7 @@ export async function runLeadForecast(
           forecaster: { name: cand.displayName, reason: cand.reason, asked: formatUsdc(ask), agreed: formatUsdc(amount) },
           progress,
           haggle,
+          events,
         };
         // Stored even when the hire engine owns the job's state, so a buyer
         // that timed out still gets the answer once reconciliation runs.
@@ -310,11 +334,11 @@ export async function runLeadForecast(
       }
       if (outcome === "unknown") {
         // Left "paying" with its nonce recorded: reconciliation settles or releases it.
-        progress.push(`Payment to ${cand.displayName} has not confirmed; it still counts against the budget`);
+        await say(`Payment to ${cand.displayName} has not confirmed; it still counts against the budget`, "note");
         continue;
       }
       await deps.store.updateJob(child.jobId, { state: "failed", result: { error: out.ok ? "invalid_forecast" : out.code } });
-      progress.push(outcome === "settled" ? `${cand.displayName} was paid but did not deliver; trying the next forecaster` : `Could not pay ${cand.displayName} (${out.ok ? "invalid_forecast" : out.code})`);
+      await say(outcome === "settled" ? `${cand.displayName} was paid but did not deliver; trying the next forecaster` : `Could not pay ${cand.displayName} (${out.ok ? "invalid_forecast" : out.code})`, "fail");
     }
     return refundOnce("no_forecaster");
   }

@@ -8,7 +8,7 @@ import { useOperatorAddress } from "@/hooks/useAuth";
 import { IS_AGON_DEPLOYMENT } from "@/lib/product";
 import { useAgonNetwork } from "@/hooks/useAgonNetwork";
 import { networkHref } from "@/lib/agon/network";
-import { isLegacyArcRunRoute, isPublicMarketplaceDocsRoute } from "@/lib/agon/routes";
+import { isLegacyArcRunRoute, isPublicMarketplaceDocsRoute, isStagePublicRoute } from "@/lib/agon/routes";
 
 /**
  * Agon has a public discovery layer. Keep the landing page, catalog, service
@@ -32,8 +32,9 @@ export function AgonAccessGate({ children }: { children: ReactNode }) {
   // screen without entering the wallet/email session flow.
   const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
   const isSupportRoute = pathname === "/support" || pathname.startsWith("/support/");
+  const isStagePublic = isStagePublicRoute(pathname);
   const isLegacyRoute = isLegacyArcRunRoute(pathname);
-  const isPublicDiscovery = isLanding || isLogin || isProtocolDocument || isPublicMarket || isMcpGuide || isPublicDocs || isPublicPlayground || isPublicOperator || isAdminRoute || isSupportRoute;
+  const isPublicDiscovery = isLanding || isLogin || isProtocolDocument || isPublicMarket || isMcpGuide || isPublicDocs || isPublicPlayground || isPublicOperator || isAdminRoute || isSupportRoute || isStagePublic;
   const shouldGate = IS_AGON_DEPLOYMENT && !isPublicDiscovery;
 
   useEffect(() => {

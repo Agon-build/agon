@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomInt } from "node:crypto";
 import type { Address, Hex } from "viem";
 
-import type { ApprovalAction, PaymentsStore } from "./types.ts";
+import type { Approval, ApprovalAction, PaymentsStore } from "./types.ts";
 
 export const BUDGET_DEFAULTS = { perHireCap: 500_000n, dailyCap: 2_000_000n } as const;
 export const LEAD_LIMITS = { perData: 50_000n, daily: 3_000_000n } as const;
@@ -73,4 +73,18 @@ export async function redeemApproval(
   if (approval.expiresAt <= input.now) return { ok: false, code: "expired" };
   if (!(await store.useApproval(tokenHash, input.now))) return { ok: false, code: "used" };
   return { ok: true, walletRef: approval.walletRef, payload: approval.payload };
+}
+
+/// Reads an approval so a page can show what it does before anyone approves.
+/// Never marks it used.
+export async function peekApproval(
+  store: PaymentsStore,
+  input: { token: string; now: Date },
+): Promise<{ ok: true; approval: Approval } | { ok: false; code: "unknown" | "used" | "expired" }> {
+  if (!/^[A-Za-z0-9_-]{20,128}$/.test(input.token)) return { ok: false, code: "unknown" };
+  const approval = await store.getApproval(sha256(`approval|${input.token}`));
+  if (!approval) return { ok: false, code: "unknown" };
+  if (approval.usedAt) return { ok: false, code: "used" };
+  if (approval.expiresAt <= input.now) return { ok: false, code: "expired" };
+  return { ok: true, approval };
 }

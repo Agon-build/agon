@@ -64,6 +64,7 @@ export function startSeasonRuntime(env: Record<string, string | undefined> = pro
       callModel: async (p) => ({ text: (await callModel(p)).text }),
       signTypedData: signTypedDataJson,
       newSalt,
+      commitsOff: () => env.AGON_SEASON_COMMITS_OFF === "true",
     };
     void seasonWorkerLoop(worker, { season, intervalMs: s.tickMs }).catch((error) =>
       console.error(`[season] loop stopped: ${(error as Error).message}`),

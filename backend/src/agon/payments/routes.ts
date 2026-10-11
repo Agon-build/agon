@@ -36,9 +36,14 @@ export function createPaymentRoutes(deps: {
       const { question } = leadBody.parse(await c.req.json());
       const header = c.req.header("x-agon-job");
       const parent = header ? await deps.store.getJob(header) : null;
-      const parentJobId = parent && parent.providerRef === LEAD_PROVIDER_REF && parent.state === "paying" ? parent.jobId : null;
+      const paid = c.get("x402");
+      // A run may join an existing job only when the payer is that job's own budget wallet;
+      // otherwise anyone who saw the job id could share its budget and take its refund.
+      const parentPayment = parent && parent.providerRef === LEAD_PROVIDER_REF && parent.state === "paying"
+        ? (await deps.store.listJobPayments(parent.rootId)).find((p) => p.idempotencyKey === `hire:${parent.jobId}`)
+        : undefined;
+      const parentJobId = parentPayment && parentPayment.payer.toLowerCase() === paid.payer.toLowerCase() ? parent!.jobId : null;
       try {
-        const paid = c.get("x402");
         return c.json(await deps.lead.run({ parentJobId, payer: paid.payer, question, payment: { txHash: paid.txHash, amount: paid.amount } }));
       } catch (error) {
         deps.log?.(`lead agent failed after payment: ${(error as Error).message}`);

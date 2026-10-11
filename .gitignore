@@ -97,6 +97,8 @@ backend/scripts/*
 !backend/scripts/payment-wallets.ts
 !backend/scripts/hire-smoke.ts
 !backend/scripts/mainnet-first-purchase.ts
+!backend/scripts/telegram-webhook.ts
+!backend/scripts/stage-preflight.ts
 !contracts/scripts/
 contracts/scripts/*
 !contracts/scripts/set-listing-fee.sh

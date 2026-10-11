@@ -18,12 +18,16 @@ const LEAD = `0x${"c".repeat(40)}` as Address;
 function world(opts: { price?: bigint } = {}) {
   const store = new MemoryPaymentsStore();
   const settler = fakeSettler();
-  const state = { price: opts.price ?? 300_000n, payTo: LEAD, fail: false };
+  const state = { price: opts.price ?? 300_000n, payTo: LEAD, fail: false, refundBody: false };
   const app = new Hono<{ Variables: { x402: X402Paid } }>();
   app.post(
     "/agon/agents/lead/forecast",
     exactPayment({ network, payTo: LEAD, price: async () => state.price, settle: settler.settle, claimNonce: (n, p, nonce) => store.claimSellerNonce(n, p, nonce), description: "Lead" }),
-    async (c) => (state.fail ? c.json({ error: "boom" }, 500) : c.json({ ok: true, probabilityBps: 3400, job: c.req.header("x-agon-job") })),
+    async (c) => (state.fail
+      ? c.json({ error: "boom" }, 500)
+      : state.refundBody
+        ? c.json({ ok: false, code: "no_market", refunded: true, refundTx: `0x${"fe".repeat(32)}`, progress: [] })
+        : c.json({ ok: true, probabilityBps: 3400, job: c.req.header("x-agon-job") })),
   );
   const deps: HireDeps = {
     store, network, now: () => new Date(), off: { all: false, budget: false },
@@ -223,4 +227,14 @@ test("reconcile delivers a stuck hire whose payment settled and whose answer was
   const job = await store.getJob(jobId);
   assert.equal(job!.state, "delivered");
   assert.deepEqual(job!.result, { ok: true, probabilityBps: 3400 });
+});
+
+test("a provider that refunds the buyer leaves the hire refunded, not delivered", async () => {
+  const { deps, req, store, state } = world();
+  state.refundBody = true;
+  const q = await quoteHire(deps, req);
+  assert.ok(q.ok && q.quote.step === "confirm_code");
+  const out = await confirmHire(deps, { ownerRef: "wa:abc", code: q.quote.code });
+  assert.ok(out.ok, show(out));
+  assert.equal((await store.getJob(q.quote.jobId))!.state, "refunded");
 });

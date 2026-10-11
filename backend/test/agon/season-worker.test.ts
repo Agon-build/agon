@@ -156,3 +156,16 @@ test("the loop retries bootstrap until the database is reachable", { timeout: 5_
   assert.ok(await store.getSeason(1n));
   assert.ok(logs.some((m) => m.includes("bootstrap failed")));
 });
+
+test("with Season commits switched off the tick never calls the committer", async () => {
+  const { deps, setNow } = setup();
+  let commits = 0;
+  deps.committer = { commit: async () => { commits += 1; return { txHash: cid(999), blockTime: new Date(), circleTxId: "c-1" }; } };
+  deps.commitsOff = () => true;
+  await bootstrapSeason(deps, season);
+  await runSeasonTick(deps);
+  setNow("2026-10-20T00:31:00Z");
+  const tick = await runSeasonTick(deps);
+  assert.equal(tick.committed, 0);
+  assert.equal(commits, 0);
+});

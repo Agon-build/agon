@@ -13,11 +13,11 @@ type WalletRow = { owner_ref: string; network: AgonNetworkId; circle_wallet_id: 
 type ConfirmationRow = { code_hash: Hex; wallet_ref: string; job_id: string; amount: string; payee: Address; expires_at: Date; used_at: Date | null; attempts: number; created_at: Date };
 type ApprovalRow = { token_hash: Hex; wallet_ref: string; action: Approval["action"]; payload: Record<string, unknown>; expires_at: Date; used_at: Date | null };
 type QuoteRow = { quote_id: string; seller_key: string; buyer: Address; amount: string; expires_at: Date; used_at: Date | null; transcript: unknown[] };
-type JobRow = {
+export type JobRow = {
   job_id: string; parent_id: string | null; root_id: string; depth: number; buyer_ref: string; provider_ref: string; provider_label: string; network: AgonNetworkId;
   price_atomic: string; budget_atomic: string; state: JobState; trace_id: string; request: Record<string, unknown>; result: unknown; created_at: Date; updated_at: Date;
 };
-type PaymentRow = {
+export type PaymentRow = {
   idempotency_key: string; job_id: string; kind: JobPayment["kind"]; payer: Address; payee: Address; amount: string; network: AgonNetworkId; status: JobPayment["status"];
   tx_hash: Hex | null; detail: string | null; auth_nonce: Hex | null; auth_valid_before: Date | null; created_at: Date; updated_at: Date;
 };
@@ -32,12 +32,12 @@ const toConfirmation = (r: ConfirmationRow): Confirmation => ({
 });
 const toApproval = (r: ApprovalRow): Approval => ({ tokenHash: r.token_hash, walletRef: r.wallet_ref, action: r.action, payload: r.payload, expiresAt: r.expires_at, usedAt: r.used_at });
 const toQuote = (r: QuoteRow): Quote => ({ quoteId: r.quote_id, sellerKey: r.seller_key, buyer: r.buyer, amount: BigInt(r.amount), expiresAt: r.expires_at, usedAt: r.used_at, transcript: r.transcript });
-const toJob = (r: JobRow): Job => ({
+export const toJob = (r: JobRow): Job => ({
   jobId: r.job_id, parentId: r.parent_id, rootId: r.root_id, depth: r.depth, buyerRef: r.buyer_ref, providerRef: r.provider_ref, providerLabel: r.provider_label,
   network: r.network, priceAtomic: BigInt(r.price_atomic), budgetAtomic: BigInt(r.budget_atomic), state: r.state, traceId: r.trace_id,
   request: r.request, result: r.result, createdAt: r.created_at, updatedAt: r.updated_at,
 });
-const toPayment = (r: PaymentRow): JobPayment => ({
+export const toPayment = (r: PaymentRow): JobPayment => ({
   idempotencyKey: r.idempotency_key, jobId: r.job_id, kind: r.kind, payer: r.payer, payee: r.payee, amount: BigInt(r.amount), network: r.network,
   status: r.status, txHash: r.tx_hash, detail: r.detail, authNonce: r.auth_nonce, authValidBefore: r.auth_valid_before, createdAt: r.created_at, updatedAt: r.updated_at,
 });
@@ -222,6 +222,23 @@ export class PostgresPaymentsStore implements PaymentsStore {
   async listStuckJobs(state: JobState, updatedBefore: Date): Promise<Job[]> {
     const { rows } = await this.pool.query<JobRow>("select * from agon_jobs where state = $1 and updated_at < $2 order by updated_at limit 100", [state, updatedBefore]);
     return rows.map(toJob);
+  }
+
+  async listJobsByBuyer(buyerRef: string, limit: number): Promise<Job[]> {
+    const { rows } = await this.pool.query<JobRow>(
+      "select * from agon_jobs where buyer_ref = $1 and parent_id is null order by created_at desc limit $2",
+      [buyerRef, Math.max(1, Math.min(limit, 100))],
+    );
+    return rows.map(toJob);
+  }
+
+  async dailySpent(walletRef: string, network: AgonNetworkId, now: Date): Promise<bigint> {
+    const { rows } = await this.pool.query<{ total: string }>(
+      `select coalesce(sum(amount), 0)::text as total from agon_wallet_spends
+        where wallet_ref = $1 and network = $2 and day = $3 and state in ('reserved', 'settled')`,
+      [walletRef, network, utcDay(now)],
+    );
+    return BigInt(rows[0]!.total);
   }
 
   async upsertJobPayment(p: JobPayment): Promise<void> {

@@ -24,6 +24,7 @@ import { PostgresPaymentsStore } from "./store.ts";
 import type { BudgetWallet } from "./types.ts";
 
 const AUTHORIZATION_STATE_ABI = parseAbi(["function authorizationState(address authorizer, bytes32 nonce) view returns (bool)"]);
+const USDC_BALANCE_ABI = parseAbi(["function balanceOf(address owner) view returns (uint256)"]);
 
 export type HireService = {
   leadProviderUrl: string;
@@ -43,7 +44,13 @@ export type HireService = {
   };
 };
 
-export type PaymentsRuntime = { settings: PaymentSettings; store: PostgresPaymentsStore; hire: HireService; routes: { payments: Hono; house: Hono; standin: Hono | null } };
+export type PaymentsRuntime = {
+  settings: PaymentSettings;
+  store: PostgresPaymentsStore;
+  hire: HireService;
+  routes: { payments: Hono; house: Hono; standin: Hono | null };
+  balanceOf(address: Address): Promise<bigint | null>;
+};
 
 /// Production wiring for the money path. Never throws: a disabled or broken
 /// config logs why and returns null so the auth service always starts.
@@ -51,6 +58,7 @@ export function startPaymentsRuntime(input: {
   season: SeasonRuntime | null;
   env?: Record<string, string | undefined>;
   startLoops?: boolean;
+  blockedProviders?: () => ReadonlySet<string>;
   wrapSignJson?: (fn: (walletId: string, json: string) => Promise<Hex>) => (walletId: string, json: string) => Promise<Hex>;
 }): PaymentsRuntime | null {
   try {
@@ -88,7 +96,9 @@ export function startPaymentsRuntime(input: {
       if (!input.season) return [];
       const seasonId = input.season.season.seasonId;
       const [raw, entries] = await Promise.all([input.season.store.scoringRaw(seasonId), input.season.store.listEntries(seasonId)]);
-      return rankForecasters({ rows: computeLeaderboard(raw), entries, publicApiUrl: s.publicApiUrl, hireableHouseKeys: Object.keys(s.houseSellers) });
+      const blocked = input.blockedProviders?.() ?? new Set<string>();
+      return rankForecasters({ rows: computeLeaderboard(raw), entries, publicApiUrl: s.publicApiUrl, hireableHouseKeys: Object.keys(s.houseSellers) })
+        .filter((c) => !blocked.has(c.providerRef.toLowerCase()));
     };
     const leadRun = (run: { parentJobId: string | null; payer: Address; question: string; payment?: { txHash: Hex; amount: bigint } }) =>
       runLeadForecast(
@@ -146,7 +156,14 @@ export function startPaymentsRuntime(input: {
       }, 5 * 60_000).unref();
     }
     log(`payments on ${network.label}; lead agent ${s.lead.address}; ${Object.keys(s.houseSellers).length} house sellers`);
-    return { settings: s, store, hire, routes };
+    const balanceOf = async (address: Address): Promise<bigint | null> => {
+      try {
+        return (await client.readContract({ address: network.usdc, abi: USDC_BALANCE_ABI, functionName: "balanceOf", args: [address] })) as bigint;
+      } catch {
+        return null;
+      }
+    };
+    return { settings: s, store, hire, routes, balanceOf };
   } catch (error) {
     console.error(`[payments] disabled: ${(error as Error).message}`);
     return null;

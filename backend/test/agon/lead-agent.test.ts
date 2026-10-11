@@ -232,3 +232,36 @@ test("a linked run stores its answer on the user job and leaves the state to the
   assert.equal(root.state, "paying");
   assert.equal((root.result as { probabilityBps: number }).probabilityBps, 3400);
 });
+
+test("the run writes timed events and the haggle onto the user job while it works, and the answer carries them", async () => {
+  const { store, deps } = world();
+  const parent = await userJob(store);
+  const snapshots: unknown[] = [];
+  const update = store.updateJob.bind(store);
+  store.updateJob = async (jobId, patch) => {
+    if (jobId === parent.jobId && patch.result !== undefined) snapshots.push(structuredClone(patch.result));
+    return update(jobId, patch);
+  };
+  const answer = await runLeadForecast(deps, { parentJobId: parent.jobId, payer: USER, question: QUESTION });
+  assert.ok(answer.ok);
+  const live = snapshots.filter((s) => (s as { live?: boolean }).live === true) as { startedAt: string; events: { kind: string; text: string; at: string }[]; haggle: unknown[] }[];
+  assert.ok(live.length >= 3, "progress is saved as it happens, not only at the end");
+  assert.ok(live.every((s) => typeof s.startedAt === "string"));
+  assert.ok(live.at(-1)!.haggle.length > 0, "the haggle is visible before the hire is paid");
+  const kinds = answer.events!.map((e) => e.kind);
+  assert.ok(kinds.includes("data") && kinds.includes("hire"), JSON.stringify(kinds));
+  assert.ok(answer.events!.every((e) => !Number.isNaN(Date.parse(e.at))));
+  const stored = (await store.getJob(parent.jobId))!.result as { events: unknown[]; probabilityBps: number };
+  assert.equal(stored.probabilityBps, 3400);
+  assert.equal(stored.events.length, answer.events!.length);
+});
+
+test("a refunded run keeps its events on the job", async () => {
+  const { store, deps } = world({ markets: false });
+  const parent = await userJob(store);
+  const answer = await runLeadForecast(deps, { parentJobId: parent.jobId, payer: USER, question: QUESTION });
+  assert.ok(!answer.ok && answer.refunded);
+  const stored = (await store.getJob(parent.jobId))!.result as { error: string; events: { kind: string }[] };
+  assert.equal(stored.error, "no_market");
+  assert.ok(stored.events.some((e) => e.kind === "refund"));
+});

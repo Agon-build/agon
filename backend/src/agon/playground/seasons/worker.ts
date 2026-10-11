@@ -16,6 +16,7 @@ export type SeasonWorkerDeps = RoundDeps & {
   callModel: ModelCaller;
   signTypedData: (walletId: string, json: string) => Promise<Hex>;
   newSalt: () => Hex;
+  commitsOff?: () => boolean;
 };
 
 export async function bootstrapSeason(deps: SeasonWorkerDeps, season: Season): Promise<void> {
@@ -87,7 +88,9 @@ export async function runSeasonTick(
 ): Promise<{ opened: boolean; houseForecasts: number; committed: number; resolved: number }> {
   const open = await phase<{ status: string }>(deps, "round open", { status: "failed" }, () => openCurrentRound(deps, deps.seasonId));
   const houseForecasts = await phase(deps, "house forecasts", 0, () => houseForecastsForOpenRound(deps));
-  const commits = await phase(deps, "commit", { committed: 0, skipped: 0, failed: 0 }, () => commitDueRounds(deps));
+  const commits = deps.commitsOff?.()
+    ? { committed: 0, skipped: 0, failed: 0 }
+    : await phase(deps, "commit", { committed: 0, skipped: 0, failed: 0 }, () => commitDueRounds(deps));
   const resolved = await phase(deps, "results", 0, () => refreshResults(deps));
   return { opened: open.status === "opened", houseForecasts, committed: commits.committed, resolved };
 }

@@ -109,3 +109,27 @@ test("jobs form a tree with payments, and stuck jobs are listed", async () => {
   const stuck = await store.listStuckJobs("paying", new Date(Date.now() + 60_000));
   assert.ok(stuck.some((j) => j.jobId === root.jobId));
 });
+
+test("root jobs list by buyer, newest first, and daily spend sums reserved and settled", async () => {
+  const mk = (id: string, createdAt: Date, parent: string | null = null): Job => ({
+    jobId: id, parentId: parent, rootId: parent ?? id, depth: parent ? 1 : 0, buyerRef: "budget:op:list", providerRef: "agent:lead", providerLabel: "Agon Lead Agent",
+    network: "arc", priceAtomic: 300_000n, budgetAtomic: 0n, state: "delivered", traceId: "t", request: { question: "Q?" }, result: null, createdAt, updatedAt: createdAt,
+  });
+  const a = randomUUID();
+  const b = randomUUID();
+  await store.insertJob(mk(a, new Date("2026-10-27T10:00:00Z")));
+  await store.insertJob(mk(b, new Date("2026-10-27T11:00:00Z")));
+  await store.insertJob({ ...mk(randomUUID(), new Date("2026-10-27T11:30:00Z"), b), buyerRef: "budget:op:list" });
+  assert.deepEqual((await store.listJobsByBuyer("budget:op:list", 10)).map((j) => j.jobId), [b, a]);
+  assert.deepEqual((await store.listJobsByBuyer("budget:op:list", 1)).map((j) => j.jobId), [b]);
+
+  const wallet = "budget:op:spend";
+  await store.reserveSpend(reservation("d1", 200_000n, { walletRef: wallet }));
+  await store.reserveSpend(reservation("d2", 100_000n, { walletRef: wallet }));
+  await store.reserveSpend(reservation("d3", 50_000n, { walletRef: wallet }));
+  await store.finishSpend(wallet, "d2", { state: "settled", txHash: null });
+  await store.finishSpend(wallet, "d3", { state: "failed" });
+  assert.equal(await store.dailySpent(wallet, "arc", now), 300_000n);
+  assert.equal(await store.dailySpent(wallet, "arc", new Date("2026-10-28T12:00:00Z")), 0n);
+  assert.equal(await store.dailySpent(wallet, "arc-testnet", now), 0n);
+});

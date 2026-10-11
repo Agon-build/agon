@@ -2367,3 +2367,29 @@ create table if not exists agon_job_payments (
   updated_at         timestamptz not null default now()
 );
 create index if not exists agon_job_payments_job_idx on agon_job_payments(job_id);
+
+-- Agon channels (Plan 3). Chat users are stored only as a keyed hash.
+create table if not exists agon_channel_accounts (
+  channel           text not null check (channel in ('telegram', 'whatsapp')),
+  user_hash         text not null check (user_hash ~ '^[0-9a-f]{64}$'),
+  operator_address  text check (operator_address ~ '^0x[0-9a-f]{40}$'),
+  terms_version     text check (terms_version is null or char_length(terms_version) between 1 and 64),
+  terms_at          timestamptz,
+  created_at        timestamptz not null default now(),
+  last_inbound_at   timestamptz,
+  primary key (channel, user_hash)
+);
+create table if not exists agon_channel_updates (
+  channel      text not null check (channel in ('telegram', 'whatsapp')),
+  update_id    text not null check (char_length(update_id) between 1 and 128),
+  received_at  timestamptz not null default now(),
+  primary key (channel, update_id)
+);
+
+-- Stage alerts share the operations alert pipeline.
+alter table agon_operations_alerts drop constraint if exists agon_operations_alerts_source_check;
+alter table agon_operations_alerts add constraint agon_operations_alerts_source_check
+  check (source in ('certification', 'arena', 'stage'));
+alter table agon_alert_subscriptions drop constraint if exists agon_alert_subscriptions_source_check;
+alter table agon_alert_subscriptions add constraint agon_alert_subscriptions_source_check
+  check (source in ('any', 'certification', 'arena', 'stage'));

@@ -9,6 +9,7 @@ import { UnverifiedWarning } from "@/components/agon/UnverifiedWarning";
 import { VerificationBadge } from "@/components/agon/VerificationBadge";
 import { X402CallIntentPanel } from "@/components/agon/X402CallIntentPanel";
 import { AgonJobEscrowPanel } from "@/components/agon/AgonJobEscrowPanel";
+import { ArenaRating } from "@/components/stage/ArenaRating";
 import { AppHeader } from "@/components/pengu/AppHeader";
 import { BracketedCell } from "@/components/redesign/BracketedCell";
 import { CornerMarkers } from "@/components/redesign/CornerMarkers";
@@ -173,6 +174,8 @@ function ArcListingDetailPage() {
                       <p className="mt-2">{availabilityMessage(listing.endpointQa.status)}</p>
                       {listing.endpointQa.status === "passed" && listing.endpointQa.attempts > 0 ? <p className="mt-1 uppercase tracking-[0.08em]">{listing.endpointQa.successRate}% recent reliability</p> : null}
                     </div>
+
+                    <ArenaRating agentId={listing.agentId} />
 
                     {listing.payment.rail === "X402" ? (
                       <X402CallIntentPanel listing={listing} defaultAmount={service.amountUSDC} endpointUrl={listing.endpointQa.endpointUrl ?? null} />

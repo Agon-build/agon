@@ -42,6 +42,8 @@ const AGON_TABLES = [
   "agon_x402_quotes",
   "agon_jobs",
   "agon_job_payments",
+  "agon_channel_accounts",
+  "agon_channel_updates",
   "agon_x402_call_receipts",
   "agon_x402_facilitator_verifications",
   "agon_x402_execution_approvals",

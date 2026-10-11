@@ -569,3 +569,29 @@ footer {
     max-width: 100%;
   }
 }
+
+/* Stage app (Plan 3). New ledger lines and flow rows print in; a settled
+   payment fills its connector in AGON pink. Transitions stay under 400 ms. */
+@keyframes stage-print {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.stage-print { animation: stage-print 220ms var(--ease-out, ease-out) both; }
+.stage-connector { position: relative; display: block; height: 1px; background: var(--hairline-strong); }
+.stage-connector::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 360ms var(--ease-out, ease-out);
+}
+.stage-connector[data-settled="true"]::after { transform: scaleX(1); }
+.stage-connector[data-failed="true"] { background: var(--err); }
+/* Projector mode: everything scales from the root size. */
+html.stage-mode { font-size: 125%; }
+@media (prefers-reduced-motion: reduce) {
+  .stage-print { animation: none; }
+  .stage-connector::after { transition: none; }
+}

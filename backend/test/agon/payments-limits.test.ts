@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Address } from "viem";
 
-import { issueApproval, issueConfirmation, redeemApproval, redeemConfirmation } from "../../src/agon/payments/limits.ts";
+import { issueApproval, issueConfirmation, peekApproval, redeemApproval, redeemConfirmation } from "../../src/agon/payments/limits.ts";
 import { MemoryPaymentsStore } from "./payments-memory-store.ts";
 
 const PAYEE = `0x${"b".repeat(40)}` as Address;
@@ -49,4 +49,17 @@ test("approval links are single use, action-bound and expire", async () => {
   const second = await issueApproval(store, { walletRef: "budget:u", action: "unfreeze", payload: {}, now });
   assert.deepEqual(await redeemApproval(store, { token: second.token, action: "unfreeze", now: later(900_001) }), { ok: false, code: "expired" });
   assert.deepEqual(await redeemApproval(store, { token: "not-a-token", action: "unfreeze", now }), { ok: false, code: "unknown" });
+});
+
+test("peeking an approval shows it without using it", async () => {
+  const store = new MemoryPaymentsStore();
+  const now = new Date("2026-10-27T12:00:00Z");
+  const { token } = await issueApproval(store, { walletRef: "budget:op:x", action: "withdraw", payload: { amount: "1000000" }, now });
+  const seen = await peekApproval(store, { token, now });
+  assert.ok(seen.ok && seen.approval.action === "withdraw" && seen.approval.walletRef === "budget:op:x");
+  assert.ok((await redeemApproval(store, { token, action: "withdraw", now })).ok, "still redeemable after a peek");
+  assert.deepEqual(await peekApproval(store, { token, now }), { ok: false, code: "used" });
+  assert.deepEqual(await peekApproval(store, { token: "not a token", now }), { ok: false, code: "unknown" });
+  const late = await issueApproval(store, { walletRef: "budget:op:x", action: "unfreeze", payload: {}, now });
+  assert.deepEqual(await peekApproval(store, { token: late.token, now: new Date(now.getTime() + 16 * 60_000) }), { ok: false, code: "expired" });
 });

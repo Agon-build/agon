@@ -22,6 +22,19 @@ import { PostgresAgonRepository } from "../agon/store/repository.js";
 import { createAgonRoutes } from "../agon/http/routes.js";
 import { startSeasonRuntime } from "../agon/playground/seasons/runtime.ts";
 import { startPaymentsRuntime } from "../agon/payments/runtime.ts";
+import { PostgresChannelStore } from "../agon/channels/store.ts";
+import { createApprovalRoutes } from "../agon/stage/approval-routes.ts";
+import { createAppRoutes } from "../agon/stage/app-routes.ts";
+import { createLeaderboardReader } from "../agon/stage/leaderboard.ts";
+import { createRateLimiter } from "../agon/stage/rate-limit.ts";
+import { createStageServices, type StageServices } from "../agon/stage/services.ts";
+import { resolveStageSettings } from "../agon/stage/settings.ts";
+import { classifyIntent } from "../agon/channels/chat/intents.ts";
+import { createTelegramChannel } from "../agon/channels/telegram/channel.ts";
+import { callModel } from "../runners/llm/client.js";
+import { formatUsdc } from "../agon/payments/bargain.ts";
+import { checkStage, startStageMonitor } from "../agon/stage/monitor.ts";
+import { PostgresMonitorStore } from "../agon/stage/monitor-store.ts";
 import { createErc8004EntryVerifier, createSeasonRoutes } from "../agon/playground/seasons/routes.ts";
 import { createPublicClient as createSeasonClient, fallback as seasonFallback } from "viem";
 import { createCircleTestnetFacilitatorClient, createX402ExecutionPolicy, createX402FacilitatorAdapter } from "../agon/execution/x402-settlement.js";
@@ -751,9 +764,10 @@ const agonManagedPublisher = config.agon.managedPublisherEnabled
 // Season 1 routes are mounted before the main /agon router so its handlers
 // never shadow /agon/seasons.
 const agonSeason = startSeasonRuntime();
+let seasonRoutes: ReturnType<typeof createSeasonRoutes> | null = null;
 if (agonSeason) {
   const seasonClient = createSeasonClient({ transport: seasonFallback(agonSeason.network.rpcHttp.map((url) => http(url))) });
-  app.route("/agon/seasons", createSeasonRoutes({
+  seasonRoutes = createSeasonRoutes({
     store: agonSeason.store,
     rounds: agonSeason.rounds,
     network: agonSeason.network,
@@ -764,21 +778,92 @@ if (agonSeason) {
       },
       agonSeason.network.identityRegistry,
     ),
-  }));
+  });
+  app.route("/agon/seasons", seasonRoutes);
 }
 
 // Money path routes are mounted before the main /agon router for the same
 // reason as the season routes. `agonPayments.hire` is what channels call.
-const agonPayments = startPaymentsRuntime({ season: agonSeason });
+const stage = resolveStageSettings(process.env);
+for (const problem of stage.problems) console.error(`[stage] ${problem}`);
+const agonPayments = startPaymentsRuntime({ season: agonSeason, blockedProviders: () => stage.settings.providerBlocklist });
+const channelStore = new PostgresChannelStore(pool);
+const monitorStore = new PostgresMonitorStore(pool);
+let stageServices: StageServices | null = null;
 if (agonPayments) {
   app.route("/agon", agonPayments.routes.payments);
   app.route("/agon/agents/house", agonPayments.routes.house);
   if (agonPayments.routes.standin) app.route("/agon/standin", agonPayments.routes.standin);
+  stageServices = createStageServices({
+    hire: agonPayments.hire,
+    store: agonPayments.store,
+    network: agonPayments.settings.network,
+    siteUrl: stage.settings.siteUrl,
+    balanceOf: agonPayments.balanceOf,
+    leaderboard: createLeaderboardReader(agonSeason),
+    leadPrice: async () => agonPayments.settings.leadPrice,
+    // Each new owner costs a Circle wallet: at most 60 new wallets an hour across all channels.
+    newWalletAllowed: (() => { const gate = createRateLimiter({ limit: 60, windowMs: 3_600_000 }); return () => gate("new-wallet"); })(),
+    now: () => new Date(),
+  });
+  app.route("/agon/app", createAppRoutes({ services: stageServices, requireAuth, off: () => stage.settings.channelsOff.web }));
+  app.route("/agon", createApprovalRoutes({
+    gate: { payments: agonPayments.store, channels: channelStore, chatIdPepper: stage.settings.chatIdPepper, network: agonPayments.settings.network, now: () => new Date() },
+    hire: agonPayments.hire,
+    requireAuth,
+  }));
+  console.log(`[stage] web app on ${agonPayments.settings.network.label}; site ${stage.settings.siteUrl}`);
+  if (stage.settings.telegram && stage.settings.chatIdPepper) {
+    const telegram = createTelegramChannel({
+      telegram: stage.settings.telegram,
+      pepper: stage.settings.chatIdPepper,
+      services: stageServices,
+      channels: channelStore,
+      classify: (text) => classifyIntent(text, { callModel: async (p) => ({ text: (await callModel(p)).text }), model: stage.settings.classifierModel, log: (m) => console.warn(`[telegram] ${m}`) }),
+      off: () => stage.settings.channelsOff.telegram,
+      log: (m) => console.warn(`[telegram] ${m}`),
+    });
+    app.route("/agon/telegram", telegram.routes);
+    console.log(`[stage] Telegram channel on @${stage.settings.telegram.botUsername}`);
+  }
+  const alertOperator = stage.settings.alertOperator ?? config.agon.operationsAlerts.operatorAddress ?? null;
+  if (alertOperator) {
+    const s = agonPayments.settings;
+    const watched = [
+      { label: "Lead agent", address: s.lead.address, floor: stage.settings.leadBalanceFloor },
+      ...Object.entries(s.houseSellers).map(([key, w]) => ({ label: `${key} seller`, address: w.address, floor: stage.settings.sellerBalanceFloor })),
+      ...(s.standin ? [{ label: "Testnet stand-in", address: s.standin.address, floor: stage.settings.sellerBalanceFloor }] : []),
+    ];
+    startStageMonitor({
+      intervalMs: 60_000,
+      log: (m) => console.warn(`[stage] ${m}`),
+      check: () => checkStage({
+        store: monitorStore, wallets: watched, balanceOf: agonPayments.balanceOf, siteUrl: stage.settings.siteUrl, now: () => new Date(),
+        lastCommitAt: async () => {
+          if (!agonSeason) return null;
+          const rounds = await agonSeason.store.listRounds(agonSeason.season.seasonId, 12);
+          const times = rounds.map((r) => r.commitBlockTime).filter((t): t is Date => t !== null);
+          return times.length ? new Date(Math.max(...times.map((t) => t.getTime()))) : null;
+        },
+      }),
+      raise: async (a) => { await agonOperationsAlerts.raise({ operator: alertOperator, fingerprint: a.fingerprint, source: "stage", severity: a.severity, title: a.title, body: a.body, ...(a.href ? { href: a.href } : {}) }); },
+      resolve: async (f) => { await agonOperationsAlerts.resolve(alertOperator, f); },
+    });
+    console.log(`[stage] monitor on; alerts to ${alertOperator}`);
+  }
 }
 
 app.route("/agon", createAgonRoutes({
   service: agonService,
   verifyMcpToken: verifyTokenClaims,
+  stageMcp: stageServices
+    ? {
+        services: stageServices,
+        season: seasonRoutes ? { request: (path: string, init?: RequestInit) => seasonRoutes!.request(path, init) } : null,
+        seasonId: agonSeason ? agonSeason.season.seasonId.toString() : "1",
+        off: () => stage.settings.channelsOff.mcp,
+      }
+    : undefined,
   requireAuth: createAgonAuthMiddleware(config.adminToken, requireAuth),
   requireListingPrepareAuth: createAgonAuthMiddleware(config.adminToken, requireAgonScope("listing:prepare")),
   requireListingWriteAuth: createAgonAuthMiddleware(config.adminToken, requireAgonScope("listing:write")),
@@ -2568,6 +2653,21 @@ app.get("/admin/commands", async (c) => {
   });
 });
 
+app.get("/admin/agon/jobs", async (c) => {
+  if (!config.adminToken) return c.json({ error: "admin disabled (set ADMIN_TOKEN)" }, 503);
+  if (!readAuthed(c)) return c.json({ error: "unauthorized" }, 401);
+  const limit = Math.max(1, Math.min(Number(c.req.query("limit") ?? "50") || 50, 200));
+  const jobs = await monitorStore.recentJobs(limit);
+  return c.json({
+    jobs: jobs.map((j) => ({
+      jobId: j.jobId, rootId: j.rootId, parentId: j.parentId, depth: j.depth, provider: j.providerLabel,
+      buyer: j.buyerRef.startsWith("budget:op:") ? "web" : j.buyerRef.startsWith("budget:tg:") ? "telegram" : j.buyerRef.startsWith("agent:") ? j.buyerRef : "other",
+      state: j.state, price: formatUsdc(j.priceAtomic), traceId: j.traceId, createdAt: j.createdAt.toISOString(), updatedAt: j.updatedAt.toISOString(),
+      receiptUrl: `${stage.settings.siteUrl}/r/${j.rootId}`,
+    })),
+  });
+});
+
 app.get("/admin/agon/alerts", async (c) => {
   if (!config.adminToken) return c.json({ error: "admin disabled (set ADMIN_TOKEN)" }, 503);
   if (!adminAuthed(c)) return c.json({ error: "unauthorized" }, 401);
@@ -2600,7 +2700,7 @@ app.post("/admin/agon/alert-subscriptions", async (c) => {
   if (!/^0x[0-9a-f]{40}$/.test(operatorAddress)) return c.json({ error: "operatorAddress must be a wallet address" }, 400);
   if (scopeType !== "platform" && scopeType !== "service") return c.json({ error: "invalid scopeType" }, 400);
   if (scopeType === "service" && !scopeReference) return c.json({ error: "service scope requires scopeReference" }, 400);
-  if (!(["any", "certification", "arena"] as unknown[]).includes(source)) return c.json({ error: "invalid alert source" }, 400);
+  if (!(["any", "certification", "arena", "stage"] as unknown[]).includes(source)) return c.json({ error: "invalid alert source" }, 400);
   if (!(["info", "warning", "critical"] as unknown[]).includes(minimumSeverity)) return c.json({ error: "invalid minimum severity" }, 400);
   if (!inApp && !telegram) return c.json({ error: "at least one alert channel is required" }, 400);
   const recipient = await query<{ telegram_linked: boolean }>(
@@ -2613,7 +2713,7 @@ app.post("/admin/agon/alert-subscriptions", async (c) => {
     operatorAddress,
     scopeType,
     scopeReference: scopeType === "platform" ? null : scopeReference,
-    source: source as "any" | "certification" | "arena",
+    source: source as "any" | "certification" | "arena" | "stage",
     minimumSeverity: minimumSeverity as "info" | "warning" | "critical",
     inApp,
     telegram,
@@ -4791,7 +4891,7 @@ app.post("/agon/alert-subscriptions", requireAuth, async (c) => {
   const telegram = body.telegram === true;
   const enabled = body.enabled !== false;
   if (!listingReference) return c.json({ error: "listingReference is required" }, 400);
-  if (!(["any", "certification", "arena"] as unknown[]).includes(source)) return c.json({ error: "invalid alert source" }, 400);
+  if (!(["any", "certification", "arena", "stage"] as unknown[]).includes(source)) return c.json({ error: "invalid alert source" }, 400);
   if (!(["info", "warning", "critical"] as unknown[]).includes(minimumSeverity)) return c.json({ error: "invalid minimum severity" }, 400);
   if (!inApp && !telegram) return c.json({ error: "at least one alert channel is required" }, 400);
   if (!await agonOperationsAlerts.ownsListing(operator, listingReference)) return c.json({ error: "only the indexed service provider can subscribe to this listing" }, 403);
@@ -4803,7 +4903,7 @@ app.post("/agon/alert-subscriptions", requireAuth, async (c) => {
     operatorAddress: operator,
     scopeType: "service",
     scopeReference: listingReference,
-    source: source as "any" | "certification" | "arena",
+    source: source as "any" | "certification" | "arena" | "stage",
     minimumSeverity: minimumSeverity as "info" | "warning" | "critical",
     inApp,
     telegram,

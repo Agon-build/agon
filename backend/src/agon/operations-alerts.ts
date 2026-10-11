@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 
 export type AgonAlertSeverity = "info" | "warning" | "critical";
-export type AgonAlertSource = "certification" | "arena";
+export type AgonAlertSource = "certification" | "arena" | "stage";
 export type AgonAlertStatus = "open" | "acknowledged" | "resolved";
 
 export type AgonOperationsAlert = {

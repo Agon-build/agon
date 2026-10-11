@@ -7,6 +7,7 @@ import { inspectManifest, ManifestInspectionError } from "../manifest-inspector.
 import { clientAddress } from "../../http/client-address.ts";
 import { createMcpAccessAdapter } from "../mcp/adapter.ts";
 import { createAgonNativeMcpHandler } from "../mcp/native-server.ts";
+import type { StageMcpDeps } from "../mcp/stage-tools.ts";
 import type { ManagedPublisher } from "../mcp/managed-publisher.ts";
 import type { ProviderDraftStore } from "../mcp/provider-draft-store.ts";
 import type { McpHireStore } from "../mcp/hire-store.ts";
@@ -373,6 +374,7 @@ export type AgonMarketService = {
 export type CreateAgonRoutesOptions = {
   service: AgonMarketService;
   verifyMcpToken: (token: string) => Promise<{ address: string; client: string | null; scopes: string[] } | null>;
+  stageMcp?: StageMcpDeps;
   /** Optional external marketplace adapters. Arc remains the default source. */
   marketSources?: MarketSource[];
   requireAuth: MiddlewareHandler<{ Variables: AgonRouteVariables }>;
@@ -727,7 +729,7 @@ function queryFromRequest(context: Context, overrides: Partial<ListingQuery> = {
 export function createAgonRoutes(options: CreateAgonRoutesOptions) {
   const app = new Hono<{ Variables: AgonRouteVariables }>();
   const mcp = createMcpAccessAdapter(options.service, { providerDraftStore: options.providerDraftStore, hostedManifestStore: options.hostedManifestStore, hireStore: options.hireStore });
-  const nativeMcp = createAgonNativeMcpHandler(mcp, options.managedPublisher);
+  const nativeMcp = createAgonNativeMcpHandler(mcp, options.managedPublisher, options.stageMcp);
   const marketAggregator = createMarketAggregator(options.marketSources ?? [
     {
       id: "arc",

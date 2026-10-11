@@ -6,7 +6,7 @@ const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_URL ?? "http://localhost:8082";
 
 type OperationsAlert = {
   alertId: string;
-  source: "certification" | "arena";
+  source: "certification" | "arena" | "stage";
   severity: "info" | "warning" | "critical";
   status: "open" | "acknowledged" | "resolved";
   title: string;
