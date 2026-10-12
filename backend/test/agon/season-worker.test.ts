@@ -3,7 +3,7 @@ import test from "node:test";
 import { privateKeyToAccount } from "viem/accounts";
 import type { Hex } from "viem";
 
-import { bootstrapSeason, runSeasonTick, seasonWorkerLoop, type SeasonWorkerDeps } from "../../src/agon/playground/seasons/worker.ts";
+import { MAX_FORECAST_ATTEMPTS, bootstrapSeason, runSeasonTick, seasonWorkerLoop, type SeasonWorkerDeps } from "../../src/agon/playground/seasons/worker.ts";
 import { createForecastVerifier, forecastDomain } from "../../src/agon/playground/seasons/forecast.ts";
 import { DEFAULT_HOUSE_AGENTS } from "../../src/agon/playground/seasons/house-agents.ts";
 import type { PolymarketMarket } from "../../src/agon/playground/seasons/polymarket.ts";
@@ -168,4 +168,20 @@ test("with Season commits switched off the tick never calls the committer", asyn
   const tick = await runSeasonTick(deps);
   assert.equal(tick.committed, 0);
   assert.equal(commits, 0);
+});
+
+test("an answer that never parses is retried at most MAX_FORECAST_ATTEMPTS times per market in a round", async () => {
+  const { deps, setNow } = setup();
+  let calls = 0;
+  deps.callModel = async () => {
+    calls += 1;
+    return { text: "no idea" };
+  };
+  await bootstrapSeason(deps, season);
+  for (let minute = 5; minute < 12; minute++) {
+    setNow(`2026-10-20T00:${String(minute).padStart(2, "0")}:00Z`);
+    await runSeasonTick(deps);
+  }
+  assert.equal(MAX_FORECAST_ATTEMPTS, 3);
+  assert.equal(calls, 2 * MAX_FORECAST_ATTEMPTS, "two markets, atlas only (mirror never calls a model)");
 });

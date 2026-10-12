@@ -99,6 +99,10 @@ export type ModelCaller = (p: {
   temperature: number;
 }) => Promise<{ text: string }>;
 
+/// Output room for one forecast. Claude 5.5 writes fuller reasons than older
+/// models and its JSON was cut off at 400 tokens (seen live on 12 Oct 2026).
+export const FORECAST_MAX_TOKENS = 1200;
+
 export async function forecastSlate(
   callModel: ModelCaller,
   spec: HouseAgentSpec,
@@ -113,7 +117,7 @@ export async function forecastSlate(
   for (const market of markets) {
     try {
       const prompt = forecastPrompt(spec, market, now);
-      const reply = await callModel({ model: spec.model!, ...prompt, maxTokens: 400, temperature: 0.2 });
+      const reply = await callModel({ model: spec.model!, ...prompt, maxTokens: FORECAST_MAX_TOKENS, temperature: 0.2 });
       const parsed = parseProbability(reply.text);
       if (!parsed) {
         log?.(`house ${spec.key}: unparseable answer for ${market.marketId}`);

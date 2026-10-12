@@ -7,7 +7,7 @@ import type { AgonNetwork } from "../../network.ts";
 import { sellerRespond } from "../../payments/bargain.ts";
 import { exactPayment, type ExactSettler, type X402Paid } from "../../payments/exact-seller.ts";
 import type { PaymentsStore } from "../../payments/types.ts";
-import { forecastPrompt, parseProbability, type HouseAgentSpec, type ModelCaller } from "./house-agents.ts";
+import { FORECAST_MAX_TOKENS, forecastPrompt, parseProbability, type HouseAgentSpec, type ModelCaller } from "./house-agents.ts";
 
 export type HouseSeller = { spec: HouseAgentSpec; payTo: Address; settle: ExactSettler };
 
@@ -95,7 +95,7 @@ export function createHouseSellerRoutes(deps: {
         seasonId: 0n, round: 0n, marketId: body.marketId as Hex, question: body.question, slug: "",
         endAt: new Date(body.endDate), baselineBps: body.crowdBps ?? 5_000, category: "other" as const,
       };
-      const reply = await deps.callModel({ model: s.spec.model!, ...forecastPrompt(s.spec, market, now(), body.notes ?? []), maxTokens: 400, temperature: 0.2 });
+      const reply = await deps.callModel({ model: s.spec.model!, ...forecastPrompt(s.spec, market, now(), body.notes ?? []), maxTokens: FORECAST_MAX_TOKENS, temperature: 0.2 });
       const parsed = parseProbability(reply.text);
       if (!parsed) return c.json({ error: "model_unparseable" }, 502);
       return c.json({ probabilityBps: parsed.probabilityBps, reasons: parsed.reasons, model: s.spec.model, agent: s.spec.displayName });

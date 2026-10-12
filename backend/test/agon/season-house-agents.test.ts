@@ -3,7 +3,7 @@ import test from "node:test";
 import type { Hex } from "viem";
 
 import {
-  DEFAULT_HOUSE_AGENTS, forecastPrompt, forecastSlate, houseAgentsFromEnv, parseProbability, type ModelCaller,
+  DEFAULT_HOUSE_AGENTS, FORECAST_MAX_TOKENS, forecastPrompt, forecastSlate, houseAgentsFromEnv, parseProbability, type ModelCaller,
 } from "../../src/agon/playground/seasons/house-agents.ts";
 import type { RoundMarket } from "../../src/agon/playground/seasons/types.ts";
 import { modelFamily } from "../../src/runners/llm/bedrock.ts";
@@ -82,4 +82,15 @@ test("prompt notes are appended when given and absent otherwise", () => {
   const withNotes = forecastPrompt(DEFAULT_HOUSE_AGENTS[0]!, market(1), new Date("2026-10-13T06:00:00Z"), ["BTC spot price: $82,953"]);
   assert.match(withNotes.userPrompt, /Notes:\n- BTC spot price: \$82,953/);
   assert.doesNotMatch(forecastPrompt(DEFAULT_HOUSE_AGENTS[0]!, market(1), new Date()).userPrompt, /Notes:/);
+});
+
+test("forecast calls leave room for a full answer (Claude 5.5 truncated at 400 tokens, seen live 12 Oct)", async () => {
+  const seen: number[] = [];
+  const caller: ModelCaller = async (p) => {
+    seen.push(p.maxTokens);
+    return { text: '{"probability":0.3,"reasons":["r1","r2","r3"]}' };
+  };
+  await forecastSlate(caller, DEFAULT_HOUSE_AGENTS[0]!, [market(1)], new Date("2026-10-13T06:00:00Z"));
+  assert.deepEqual(seen, [FORECAST_MAX_TOKENS]);
+  assert.ok(FORECAST_MAX_TOKENS >= 1000);
 });

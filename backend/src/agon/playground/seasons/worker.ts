@@ -7,6 +7,11 @@ import {
 } from "./rounds.ts";
 import type { Season } from "./types.ts";
 
+/// A house agent's answer for one market is tried at most this many times per
+/// round; an answer that never parses must not call the model on every tick.
+export const MAX_FORECAST_ATTEMPTS = 3;
+const attemptsByWorker = new WeakMap<object, Map<string, number>>();
+
 export type HouseRunner = { spec: HouseAgentSpec; walletId: string; address: Address };
 
 export type SeasonWorkerDeps = RoundDeps & {
@@ -51,8 +56,12 @@ async function houseForecastsForOpenRound(deps: SeasonWorkerDeps): Promise<numbe
   for (const h of deps.house) {
     try {
       const done = new Set(existing.filter((f) => f.agentAddress === h.address.toLowerCase()).map((f) => f.marketId));
-      const missing = markets.filter((m) => !done.has(m.marketId));
+      let attempts = attemptsByWorker.get(deps);
+      if (!attempts) attemptsByWorker.set(deps, (attempts = new Map()));
+      const key = (marketId: string) => `${round}:${h.address.toLowerCase()}:${marketId}`;
+      const missing = markets.filter((m) => !done.has(m.marketId) && (attempts!.get(key(m.marketId)) ?? 0) < MAX_FORECAST_ATTEMPTS);
       if (missing.length === 0) continue;
+      for (const m of missing) attempts.set(key(m.marketId), (attempts.get(key(m.marketId)) ?? 0) + 1);
       for (const f of await forecastSlate(deps.callModel, h.spec, missing, deps.now(), deps.log)) {
         try {
           const salt = deps.newSalt();
