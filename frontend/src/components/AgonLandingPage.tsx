@@ -48,15 +48,14 @@ export function AgonLandingPage() {
           {me ? <nav aria-label="Primary" className="hidden items-center gap-6 lg:flex">
             <a href="/market" className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 hover:text-ink">Find services</a>
             <a href="#how-it-works" className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 hover:text-ink">How it works</a>
-            <a href="/market/new" className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 hover:text-ink">MCP guide</a>
-            <a href="/docs" className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 hover:text-ink">Learn</a>
-          </nav> : <nav aria-label="Public" className="hidden items-center gap-6 lg:flex"><a href="/docs" className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 hover:text-ink">Docs</a><a href="/docs/about" className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 hover:text-ink">Roadmap</a></nav>}
+            <a href="/docs" className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 hover:text-ink">Docs</a>
+          </nav> : <nav aria-label="Public" className="hidden items-center gap-6 lg:flex"><a href="/docs" className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 hover:text-ink">Docs</a></nav>}
           <div className="flex shrink-0 items-center gap-1 sm:gap-2">
             <span className="max-[399px]:hidden"><AgonNetworkSelector /></span>
             <TagButton href="/login" size="sm" variant="ghost" className="max-[359px]:px-2">SIGN IN</TagButton>
           </div>
         </div>
-        {!me ? <nav aria-label="Public" className="flex justify-center gap-6 border-t border-[color:var(--hairline)] py-2 lg:hidden"><a href="/docs" className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2">Docs</a><a href="/docs/about" className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2">Roadmap</a></nav> : null}
+        {!me ? <nav aria-label="Public" className="flex justify-center gap-6 border-t border-[color:var(--hairline)] py-2 lg:hidden"><a href="/docs" className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2">Docs</a></nav> : null}
       </header>
 
       <main className="min-w-0 flex-1">
@@ -69,7 +68,7 @@ export function AgonLandingPage() {
           <div><div className="font-mono text-[10px] uppercase tracking-[0.12em] text-accent">BEFORE YOU HIRE</div><p className="mt-2">Check availability, price, and the version AGON tested.</p></div>
           <div>
             <div className="font-mono text-[10px] uppercase tracking-[0.12em] text-accent">{me ? "EXPLORE" : "OPEN MARKET"}</div>
-            {me ? <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2"><a href="/market" className="hover:text-ink">Find services</a><a href="/market/new" className="hover:text-ink">MCP guide</a><a href="/docs/about" className="hover:text-ink">About and roadmap</a></div> : <div className="mt-2"><p>Browse and test services before you sign in.</p><a href="/docs/about" className="mt-3 inline-flex min-h-11 items-center underline underline-offset-4 hover:text-ink">About AGON and its roadmap</a></div>}
+            {me ? <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2"><a href="/market" className="hover:text-ink">Find services</a><a href="/docs" className="hover:text-ink">Docs</a></div> : <div className="mt-2"><p>Browse and test services before you sign in.</p><a href="/docs#roadmap" className="mt-3 inline-flex min-h-11 items-center underline underline-offset-4 hover:text-ink">What Agon is building</a></div>}
             <div className="mt-4 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3">{network.brand} {network.environment} · AGON.SURF</div>
             <AgonHelpButton />
           </div>

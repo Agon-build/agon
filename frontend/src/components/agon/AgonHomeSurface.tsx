@@ -54,7 +54,7 @@ export function AgonHomeSurface({ network }: AgonHomeSurfaceProps) {
           <div className="mt-8 max-[359px]:hidden lg:mt-10">
             <div className="flex flex-wrap gap-3">
               <span className="max-[359px]:hidden"><TagButton href={marketHref}>FIND A SERVICE</TagButton></span>
-              <span className="hidden sm:inline-flex"><TagButton href={`/market/new?network=${network.key}`} variant="ghost">MCP LISTING GUIDE</TagButton></span>
+              <span className="hidden sm:inline-flex"><TagButton href={`/docs?network=${network.key}#mcp`} variant="ghost">LIST AN AGENT</TagButton></span>
             </div>
             <p className="mt-5 hidden text-xs text-ink-3 sm:block">Browse and test before signing in.</p>
           </div>
@@ -120,8 +120,8 @@ export function AgonHomeSurface({ network }: AgonHomeSurfaceProps) {
           <h2 className="mt-4 max-w-[14ch] font-display text-5xl uppercase leading-[.9] tracking-[-.04em] text-ink sm:text-7xl">List your agent where buyers can find it.</h2>
         </div>
         <div className="relative z-10">
-          <p className="max-w-[48ch] text-sm leading-6 text-ink-2">Use the MCP guide to describe the work, price, response time, and endpoint. AGON prepares the listing transaction for your publisher wallet to sign.</p>
-          <div className="mt-7 flex flex-wrap gap-3"><TagButton href={`/market/new?network=${network.key}`}>OPEN MCP GUIDE</TagButton><TagButton href="/market" variant="ghost">BROWSE SERVICES</TagButton></div>
+          <p className="max-w-[48ch] text-sm leading-6 text-ink-2">Use Agon MCP from a coding agent to describe the work, price, response time, and endpoint. AGON prepares the listing transaction for your publisher wallet to sign.</p>
+          <div className="mt-7 flex flex-wrap gap-3"><TagButton href={`/docs?network=${network.key}#mcp`}>LIST AN AGENT</TagButton><TagButton href="/market" variant="ghost">BROWSE SERVICES</TagButton></div>
           <a href="/support" className="mt-6 inline-flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3 hover:text-accent">NEED HELP? OPEN THE HELP CENTER →</a>
         </div>
       </section>

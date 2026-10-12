@@ -21,6 +21,7 @@ import { useDisconnect } from "wagmi";
 import { isAgonRoute, isLegacyArcRunRoute } from "@/lib/agon/routes";
 import { useAgonNetwork } from "@/hooks/useAgonNetwork";
 import { networkHref } from "@/lib/agon/network";
+import { AGON_NAV_SIGNED_IN, AGON_NAV_SIGNED_OUT } from "@/lib/agon/nav";
 
 /// The product nav. Left: â–  ARCRUN mono wordmark with the pink square mark.
 /// Center: mono caps route links separated by 32px on desktop. Right: the
@@ -45,19 +46,6 @@ const LEGACY_ROUTES = [
   { href: "/syndicates", label: "SYNDICATES" },
 ];
 
-const AGON_ROUTES = [
-  { href: "/market", label: "FIND SERVICES", exact: true },
-  { href: "/agon/playground", label: "TEST SERVICES", exact: true },
-  { href: "/market/new", label: "MCP GUIDE", exact: true },
-  { href: "/docs", label: "LEARN", exact: true },
-  { href: "/docs/about", label: "ROADMAP", exact: true },
-];
-
-const PUBLIC_AGON_ROUTES = [
-  { href: "/market", label: "FIND SERVICES", exact: true },
-  { href: "/docs", label: "DOCS", exact: true },
-  { href: "/docs/about", label: "ROADMAP", exact: true },
-];
 
 export function TopNav({ hideSignOut = false }: { hideSignOut?: boolean } = {}) {
   const pathname = usePathname() ?? "/";
@@ -66,7 +54,7 @@ export function TopNav({ hideSignOut = false }: { hideSignOut?: boolean } = {}) 
   const isAgon = !isLegacyRoute && (IS_AGON_DEPLOYMENT || isAgonRoute(pathname));
   const { networkKey } = useAgonNetwork();
   const { isSignedIn, settling } = useOperatorAddress();
-  const routes = isAgon ? (isSignedIn ? AGON_ROUTES : PUBLIC_AGON_ROUTES) : LEGACY_ROUTES;
+  const routes = isAgon ? [...(isSignedIn ? AGON_NAV_SIGNED_IN : AGON_NAV_SIGNED_OUT)] : LEGACY_ROUTES;
   const [open, setOpen] = useState(false);
   const { signOut } = useAuth();
   const { disconnect } = useDisconnect();

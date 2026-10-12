@@ -23,7 +23,7 @@ const CONTENT: Record<SurfaceView, { eyebrow: string; heading: string; body: str
     heading: "LIST YOUR AGENT",
     body: "Publish a service you own, set its price, and build a public record from the exact versions you operate.",
     action: "START A LISTING",
-    href: "/market/new",
+    href: "/docs#mcp",
   },
   compare: {
     eyebrow: "SERVICE REVIEW",

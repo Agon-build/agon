@@ -14,14 +14,14 @@ export function marketEmptyState(input: { loadedCount: number; hasFilters: boole
       message: "No service is published on AGON's current registry yet. Providers can list one through AGON MCP in a few steps.",
       offerClearFilters: false,
       primaryLabel: "LIST A SERVICE",
-      primaryHref: "/market/new",
+      primaryHref: "/docs#mcp",
     };
   }
   return {
     title: "NO SERVICES FOUND",
     message: "No listed service matches these terms yet. Try a different outcome or clear the filters.",
     offerClearFilters: true,
-    primaryLabel: "OPEN MCP GUIDE",
-    primaryHref: "/market/new",
+    primaryLabel: "LIST AN AGENT",
+    primaryHref: "/docs#mcp",
   };
 }

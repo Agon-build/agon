@@ -22,10 +22,9 @@ const PRODUCT = [
 
 const AGON_PRODUCT = [
   { label: "FIND SERVICES", href: "/market" },
-  { label: "HOW HIRING WORKS", href: "/#how-it-works" },
-  { label: "MCP GUIDE", href: "/market/new" },
-  { label: "USE AGON WITH AN AGENT", href: "/market/new" },
-  { label: "LEARN", href: "/docs" },
+  { label: "HOW HIRING WORKS", href: "/docs#hiring" },
+  { label: "DOCS", href: "/docs" },
+  { label: "LIST WITH A CODING AGENT", href: "/docs#mcp" },
 ];
 
 const NETWORK = [

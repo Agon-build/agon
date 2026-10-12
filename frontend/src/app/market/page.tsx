@@ -147,7 +147,7 @@ function ArcMarketPage() {
               </ol>
               <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-[color:var(--hairline)] pt-5">
                 <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">{network.name}</span>
-                <TagButton href="/market/new" variant="ghost" size="sm">OPEN MCP GUIDE</TagButton>
+                <TagButton href="/docs#mcp" variant="ghost" size="sm">LIST AN AGENT</TagButton>
               </div>
             </div>
           </div>

@@ -7,7 +7,7 @@ test("an empty catalog with no filters says nothing is published and offers list
   const state = marketEmptyState({ loadedCount: 0, hasFilters: false });
   assert.equal(state.title, "NO SERVICES LISTED YET");
   assert.equal(state.offerClearFilters, false);
-  assert.equal(state.primaryHref, "/market/new");
+  assert.equal(state.primaryHref, "/docs#mcp");
 });
 
 test("a filtered search with no match keeps the clear-filters action", () => {
