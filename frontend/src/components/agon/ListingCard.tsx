@@ -56,7 +56,7 @@ export function ListingCard({ listing, searchMatchTerms = [] }: { listing: AgonL
 
   return (
     <article className="min-w-0">
-      <Link href={`/market/${encodeURIComponent(listing.id)}`} aria-label={`Open ${service.name}`} className="group block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas">
+      <Link href={`/agents/${encodeURIComponent(listing.id)}`} aria-label={`Open ${service.name}`} className="group block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas">
         <BracketedCell hover className="h-full" pad="md">
           <div className="flex min-w-0 gap-4 sm:gap-5">
             <AgentLogo logoUrl={service.logoUrl} name={service.name} cacheKey={`${listing.version}-${listing.manifest.hash}`} />

@@ -1,4 +1,4 @@
-import type { BargainStep, LeaderboardRow, LivePhase, ReceiptNode, SeasonEntry, StageAnswer, StageEvent, StageEventKind } from "./stage-types.ts";
+import { SEASON_CATEGORY_TABS, type BargainStep, type HistoryItem, type LeaderboardResponse, type LeaderboardRow, type LivePhase, type RatingsResponse, type ReceiptNode, type SeasonEntry, type StageAnswer, type StageEvent, type StageEventKind } from "./stage-types.ts";
 
 export type FlowStatus = "pending" | "settled" | "failed";
 export type FlowNode = { id: string; role: "lead" | "data" | "forecaster" | "refund"; label: string; sublabel: string; amount: string; status: FlowStatus; txUrl: string | null };
@@ -151,4 +151,47 @@ export function ratingForAgent(agentId: string, entries: SeasonEntry[], rows: Le
   const entry = entries.find((e) => e.erc8004AgentId === agentId);
   if (!entry) return null;
   return rows.find((r) => r.agentAddress.toLowerCase() === entry.agentAddress.toLowerCase()) ?? null;
+}
+
+/// One cell per Arena tab for an agent: its rank, a provisional count, or nothing yet.
+export function categoryCells(ratings: RatingsResponse, agentAddress: string): { key: string; label: string; text: string }[] {
+  const agent = ratings.agents.find((a) => a.agentAddress.toLowerCase() === agentAddress.toLowerCase());
+  if (!agent) return [];
+  return SEASON_CATEGORY_TABS.map((t) => {
+    const c = t.key === "overall" ? agent.overall : agent.categories[t.key];
+    const min = t.key === "overall" ? ratings.minRanked.overall : ratings.minRanked.category;
+    const text = c.forecastsResolved === 0 ? "No forecasts yet"
+      : c.ranked && c.rank ? (t.key === "overall" ? `#${c.rank} of ranked · ${c.forecastsResolved} scored` : `#${c.rank} · ${c.forecastsResolved} scored`)
+      : `Provisional · ${c.forecastsResolved} of ${min}`;
+    return { key: t.key, label: t.label, text };
+  });
+}
+
+const CATEGORY_LABEL: Record<string, string> = { overall: "Overall", crypto: "Crypto", politics: "Politics", sports: "Sports", economics: "Economics", world: "World", culture: "Culture" };
+
+/// A plain line above the table when the board cannot rank anyone yet.
+export function boardNotice(board: LeaderboardResponse): string | null {
+  const min = board.minRanked ?? 20;
+  const cat = board.category ?? "overall";
+  if (board.rows.every((r) => r.forecastsResolved === 0) && cat !== "overall") return `No ${CATEGORY_LABEL[cat] ?? cat} forecasts have been scored yet. Rankings appear after ${min} scored forecasts.`;
+  if (!board.rows.some((r) => r.ranked)) return `Rankings appear after ${min} scored forecasts. Agents below that are shown as provisional.`;
+  return null;
+}
+
+/// Account hire history: newest first, each with its receipt.
+export function historyRows(items: HistoryItem[], nowMs: number): { jobId: string; when: string; label: string; amount: string; state: string; href: string }[] {
+  return [...items]
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+    .map((h) => ({
+      jobId: h.jobId, when: timeAgo(h.createdAt, nowMs), label: h.question ?? "Agent job", amount: h.price,
+      state: h.state.charAt(0).toUpperCase() + h.state.slice(1), href: `/r/${h.jobId}`,
+    }));
+}
+
+/// The Season page address for a tab, keeping every other parameter (stage mode, network).
+export function categoryHref(search: string, key: string): string {
+  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  if (key === "overall") params.delete("category"); else params.set("category", key);
+  const query = params.toString();
+  return `/arena/season-1${query ? `?${query}` : ""}`;
 }

@@ -25,7 +25,7 @@ type Mode =
   | { kind: "refused"; question: string; code: string; amount?: string }
   | { kind: "run"; jobId: string; question: string | null; paying: boolean; confirmError: string | null };
 
-export function AskClient() {
+export function HireClient() {
   const router = useRouter();
   const params = useSearchParams();
   const { me } = useAuth();
@@ -67,7 +67,7 @@ export function AskClient() {
   async function pay(quote: Quote, question: string) {
     if (quote.step !== "confirm_code") return;
     setMode({ kind: "run", jobId: quote.jobId, question, paying: true, confirmError: null });
-    router.replace(`/ask?job=${quote.jobId}${stageQuery}`, { scroll: false });
+    router.replace(`/?job=${quote.jobId}${stageQuery}`, { scroll: false });
     try {
       const out = await confirmHire(quote.jobId, quote.code);
       setMode({ kind: "run", jobId: quote.jobId, question, paying: false, confirmError: out.ok ? null : out.code });
@@ -79,7 +79,7 @@ export function AskClient() {
 
   function reset() {
     setMode({ kind: "idle" });
-    router.replace(`/ask${stageQuery ? "?stage=1" : ""}`, { scroll: false });
+    router.replace(`/${stageQuery ? "?stage=1" : ""}`, { scroll: false });
   }
 
   // While the payment is in flight the job can still read "quoted"; show it as paying, not as unpaid.
@@ -96,9 +96,9 @@ export function AskClient() {
 
         <div className="mt-10 grid gap-12 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-16">
           <div className="min-w-0">
-            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Ask Agon{config ? ` · ${config.network}` : ""}</p>
+            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Hire{config ? ` · ${config.network}` : ""}</p>
             <h1 className={`mt-4 font-display uppercase tracking-[-.04em] text-ink ${question ? "max-w-[22ch] text-[clamp(1.9rem,3.6vw,3.25rem)] leading-[1.02]" : "max-w-[10ch] text-[clamp(3rem,7vw,6.5rem)] leading-[.86]"}`}>
-              {question ?? "Ask Agon"}
+              {question ?? "Describe it"}
             </h1>
             {mode.kind === "idle" || mode.kind === "quoting" ? (
               <div className="mt-10"><Composer disabled={mode.kind === "quoting"} signedIn={canAct} onSubmit={ask} /></div>
@@ -109,7 +109,7 @@ export function AskClient() {
             {mode.kind === "refused" ? (
               <div role="alert" className="stage-print mt-8 border-y border-[color:var(--hairline-strong)] py-6">
                 <p className="text-base leading-7 text-ink">{askRefusalText(mode.code, mode.amount)}</p>
-                <button type="button" onClick={reset} className="mt-4 min-h-11 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 underline underline-offset-4 hover:text-accent">Ask something else</button>
+                <button type="button" onClick={reset} className="mt-4 min-h-11 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 underline underline-offset-4 hover:text-accent">Describe something else</button>
               </div>
             ) : null}
             {mode.kind === "run" && mode.confirmError ? (
@@ -129,7 +129,7 @@ export function AskClient() {
                   ].map(([n, text]) => <li key={n} className="grid grid-cols-[2.5rem_1fr] py-3 text-sm leading-6 text-ink-2"><span className="font-mono text-[11px] text-accent">{n}</span>{text}</li>)}
                 </ol>
                 {best ? (
-                  <a href="/playground/season-1" className="group mt-6 block border border-[color:var(--hairline)] p-4 hover:border-accent">
+                  <a href="/arena/season-1" className="group mt-6 block border border-[color:var(--hairline)] p-4 hover:border-accent">
                     <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">Top of Season 1 right now</p>
                     <p className="mt-2 font-display text-2xl uppercase leading-tight text-ink">{best.displayName}</p>
                     <p className="mt-1 text-sm text-ink-2">{beatsMarketText(best)}</p>
@@ -148,8 +148,8 @@ export function AskClient() {
             {live ? (
               <div className="mt-12 flex flex-wrap gap-4 border-t border-[color:var(--hairline-strong)] pt-6">
                 <a href={`/r/${live.jobId}`} className="inline-flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.14em] text-ink hover:text-accent">Open the receipt →</a>
-                <a href="/playground/season-1" className="inline-flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 hover:text-accent">Season 1 leaderboard →</a>
-                <button type="button" onClick={reset} className="inline-flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 hover:text-accent">Ask another question</button>
+                <a href="/arena/season-1" className="inline-flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 hover:text-accent">Season 1 leaderboard →</a>
+                <button type="button" onClick={reset} className="inline-flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 hover:text-accent">Hire again</button>
               </div>
             ) : null}
           </div>
@@ -157,7 +157,7 @@ export function AskClient() {
 
         {canAct && history.length > 0 && mode.kind !== "run" ? (
           <section aria-labelledby="history-heading" className="mt-20">
-            <h2 id="history-heading" className="border-b border-[color:var(--hairline-strong)] pb-3 font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Your recent asks</h2>
+            <h2 id="history-heading" className="border-b border-[color:var(--hairline-strong)] pb-3 font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Your recent hires</h2>
             <ul className="divide-y divide-[color:var(--hairline)]">
               {history.slice(0, 6).map((h) => (
                 <li key={h.jobId}>

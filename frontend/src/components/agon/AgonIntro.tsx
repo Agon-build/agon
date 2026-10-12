@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { AgonMark } from "@/components/redesign/AgonMark";
+import { INTRO_CARDS, INTRO_CARD_MS, formatCount, introKeyAction, introStep } from "@/lib/agon/intro-cards";
+import { getIntroCounts, type IntroCounts } from "@/lib/agon/intro-counts";
 
 const STARTUP_HOLD_MS = 3000;
 const STARTUP_EXIT_MS = 680;
@@ -62,37 +64,6 @@ export function AgonIntro({ phase, ready, onEnter }: { phase: "visible" | "exiti
           place-items: center;
           width: 180px;
           height: 120px;
-        }
-        .agon-startup-preview {
-          position: absolute;
-          z-index: 1;
-          left: 50%;
-          top: 54%;
-          width: min(420px, calc(100vw - 48px));
-          opacity: 0;
-          transform: translate(-50%, calc(-50% + 12px));
-          transition: opacity 360ms cubic-bezier(.16,1,.3,1), transform 360ms cubic-bezier(.16,1,.3,1);
-          pointer-events: none;
-          will-change: opacity, transform;
-        }
-        .agon-startup-preview-ready {
-          opacity: 1;
-          transform: translate(-50%, -50%);
-        }
-        .agon-startup-preview-card {
-          transform-origin: 50% 100%;
-          animation-duration: 620ms;
-          animation-timing-function: cubic-bezier(.16,1,.3,1);
-          animation-fill-mode: both;
-        }
-        .agon-startup-preview-card-0 {
-          animation-name: agon-preview-from-right;
-        }
-        .agon-startup-preview-card-1 {
-          animation-name: agon-preview-from-left;
-        }
-        .agon-startup-preview-card-2 {
-          animation-name: agon-preview-from-top;
         }
         .agon-startup-preview-inner {
           min-height: 142px;
@@ -256,18 +227,48 @@ export function AgonIntro({ phase, ready, onEnter }: { phase: "visible" | "exiti
           60%, 82% { opacity: 1; transform: scale(1); }
           100% { opacity: 0; transform: scale(1.03); }
         }
-        @keyframes agon-preview-from-right {
-          from { opacity: 0; transform: perspective(700px) rotateX(-16deg) rotateY(12deg) translateY(12px); }
-          to { opacity: 1; transform: perspective(700px) rotateX(0) rotateY(0) translateY(0); }
+        .agon-intro-region {
+          position: absolute;
+          z-index: 1;
+          left: 50%;
+          top: 52%;
+          width: min(460px, calc(100vw - 32px));
+          opacity: 0;
+          transform: translate(-50%, calc(-50% + 12px));
+          transition: opacity 360ms cubic-bezier(.16,1,.3,1), transform 360ms cubic-bezier(.16,1,.3,1);
+          touch-action: pan-y;
         }
-        @keyframes agon-preview-from-left {
-          from { opacity: 0; transform: perspective(700px) rotateX(-10deg) rotateY(-14deg) translate(-18px, 8px); }
-          to { opacity: 1; transform: perspective(700px) rotateX(0) rotateY(0) translate(0, 0); }
+        .agon-intro-region-ready { opacity: 1; transform: translate(-50%, -50%); }
+        .agon-intro-card {
+          min-height: 220px;
+          padding: 18px;
+          border: 1px solid #2a3142;
+          background: #151b29;
+          box-shadow: 10px 10px 0 rgba(0, 0, 0, .24);
+          animation: agon-intro-in 450ms cubic-bezier(.16,1,.3,1) both;
         }
-        @keyframes agon-preview-from-top {
-          from { opacity: 0; transform: perspective(700px) rotateX(14deg) rotateY(0) translateY(-20px); }
-          to { opacity: 1; transform: perspective(700px) rotateX(0) rotateY(0) translateY(0); }
-        }
+        .agon-intro-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        .agon-intro-chip { padding: 4px 6px; border: 1px solid #374151; color: #9ca3af; font: 9px/1 var(--font-mono); letter-spacing: .14em; }
+        .agon-intro-count { display: flex; flex-wrap: wrap; gap: 24px; margin-top: 14px; animation: agon-intro-rise 600ms cubic-bezier(.16,1,.3,1) both; }
+        .agon-intro-count b { display: block; color: #f5f5f5; font: 34px/1 var(--font-mono); font-weight: 400; }
+        .agon-intro-count small { display: block; margin-top: 6px; color: #6b7280; font: 10px/1.3 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; }
+        .agon-intro-lines { display: grid; gap: 8px; margin: 14px 0 0; padding: 0; list-style: none; color: #c3c8d2; font: 12px/1.45 var(--font-mono); }
+        .agon-intro-lines li { padding-top: 8px; border-top: 1px solid #263044; overflow-wrap: anywhere; }
+        .agon-intro-controls { display: flex; align-items: center; gap: 6px; margin-top: 12px; }
+        .agon-intro-tick { display: flex; flex: 1; align-items: center; min-height: 44px; padding: 0; border: 0; background: none; cursor: pointer; }
+        .agon-intro-track { display: block; width: 100%; height: 3px; overflow: hidden; background: #263044; }
+        .agon-intro-tick:hover .agon-intro-track, .agon-intro-tick:focus-visible .agon-intro-track { background: #4b5563; }
+        .agon-intro-tick:focus-visible { outline: 1px solid #00e5ff; outline-offset: 2px; }
+        .agon-intro-tick-fill { display: block; height: 100%; background: #ff4081; transform-origin: left; animation: agon-intro-fill ${INTRO_CARD_MS}ms linear both; }
+        .agon-intro-tick-past { display: block; height: 100%; background: #6b7280; }
+        .agon-intro-paused .agon-intro-tick-fill { animation-play-state: paused; }
+        .agon-intro-manual .agon-intro-tick-fill { animation: none; transform: none; }
+        .agon-intro-pause { min-height: 44px; padding: 0 10px; border: 1px solid #4b5563; color: #f5f5f5; background: transparent; font: 10px/1 var(--font-mono); letter-spacing: .14em; text-transform: uppercase; cursor: pointer; }
+        .agon-intro-pause:hover, .agon-intro-pause:focus-visible { border-color: #ff4081; outline: none; }
+        @keyframes agon-intro-in { from { opacity: 0; transform: translateX(32px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes agon-intro-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+        @keyframes agon-intro-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+        @keyframes agon-intro-fade { from { opacity: 0; } to { opacity: 1; } }
 
         .agon-startup-skip {
           position: absolute;
@@ -290,14 +291,17 @@ export function AgonIntro({ phase, ready, onEnter }: { phase: "visible" | "exiti
         }
         @media (prefers-reduced-motion: reduce) {
           .agon-startup { transition: none; }
-          .agon-startup-smoke, .agon-startup-mark, .agon-startup-preview-card { animation: none; }
+          .agon-startup-smoke, .agon-startup-mark { animation: none; }
+          .agon-intro-card { animation: agon-intro-fade 200ms linear both; }
+          .agon-intro-tick-fill, .agon-intro-count { animation: none; transform: none; }
+          .agon-intro-region { transition: none; }
           .agon-startup-mark-small, .agon-startup-mark-large { opacity: 0; }
           .agon-startup-mark-final { opacity: 1; }
-          .agon-startup-preview { transition: none; }
         }
         @media (max-width: 640px) {
           .agon-startup-smoke { width: 72vw; height: 72vw; filter: blur(64px); }
-          .agon-startup-preview { top: 54%; width: calc(100vw - 32px); }
+          .agon-intro-region { top: 50%; width: calc(100vw - 32px); }
+          .agon-intro-card { min-height: 200px; padding: 14px; }
           .agon-startup-preview-inner { min-height: 126px; padding: 14px; }
           .agon-startup-preview-title { font-size: 17px; }
           .agon-startup-enter { bottom: 9%; min-height: 44px; padding: 0 16px; }
@@ -308,16 +312,50 @@ export function AgonIntro({ phase, ready, onEnter }: { phase: "visible" | "exiti
 }
 
 function StartupIntro({ phase, ready, onEnter }: { phase: "visible" | "exiting"; ready: boolean; onEnter: () => void }) {
-  const [preview, setPreview] = useState(0);
+  const [state, dispatch] = useReducer(introStep, { index: 0, paused: false, manual: false });
+  const [counts, setCounts] = useState<IntroCounts>({ circle: null, discover: null });
+  const [userPaused, setUserPaused] = useState(false);
+  const startX = useRef<number | null>(null);
 
   useEffect(() => {
     if (!ready) return;
-    const timer = window.setInterval(() => setPreview((current) => (current + 1) % 3), 3200);
+    let stopped = false;
+    void getIntroCounts().then((c) => { if (!stopped) setCounts(c); });
+    return () => { stopped = true; };
+  }, [ready]);
+
+  useEffect(() => {
+    if (!ready) return;
+    const timer = window.setInterval(() => dispatch({ type: "tick" }), INTRO_CARD_MS);
     return () => window.clearInterval(timer);
   }, [ready]);
 
+  useEffect(() => {
+    if (!ready) return;
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      const action = introKeyAction(event.key, Boolean(target?.closest("button, a, input, textarea, select")));
+      if (!action) return;
+      event.preventDefault();
+      if (action === "enter") onEnter();
+      else dispatch({ type: action });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [ready, onEnter]);
+
+  const card = INTRO_CARDS[state.index]!;
+  const figures: [string | null, string][] = card.count === "circle"
+    ? [[formatCount(counts.circle?.arcMainnet ?? null), "services checked"]]
+    : card.count === "discover"
+      ? [[formatCount(counts.discover?.arcTestnet ?? null), "Arc Testnet"], [formatCount(counts.discover?.arcMainnet ?? null), "Arc mainnet"]]
+      : [];
+  const shown = figures.filter((f): f is [string, string] => f[0] !== null);
+  const hold = () => dispatch({ type: "pause" });
+  const release = () => { if (!userPaused) dispatch({ type: "resume" }); };
+
   return (
-    <div className={`agon-startup ${phase === "exiting" ? "agon-startup-exiting" : ""}`} role="presentation">
+    <div className={`agon-startup ${phase === "exiting" ? "agon-startup-exiting" : ""}`} role="region" aria-label="Agon intro">
       <div className="agon-startup-smoke agon-startup-smoke-pink" aria-hidden="true" />
       <div className="agon-startup-smoke agon-startup-smoke-cyan" aria-hidden="true" />
       <div className="agon-startup-noise" aria-hidden="true" />
@@ -326,33 +364,49 @@ function StartupIntro({ phase, ready, onEnter }: { phase: "visible" | "exiting";
         <span className="agon-startup-mark agon-startup-mark-large"><AgonMark size={72} showWordmark={false} /></span>
         <span className="agon-startup-mark agon-startup-mark-final"><AgonMark size={62} /></span>
       </div>
-      <div className={`agon-startup-preview ${ready ? "agon-startup-preview-ready" : ""}`} aria-hidden="true">
-        <div key={preview} className={`agon-startup-preview-card agon-startup-preview-card-${preview}`}>
-          {preview === 0 ? <MarketPreview /> : null}
-          {preview === 1 ? <PlaygroundPreview /> : null}
-          {preview === 2 ? <ServicePreview /> : null}
-        </div>
-      </div>
-      <button type="button" className="agon-startup-skip" onClick={onEnter}>SKIP INTRO</button>
       {ready ? <button type="button" className="agon-startup-enter" onClick={onEnter}>ENTER AGON <span aria-hidden="true">→</span></button> : null}
-      <div className="agon-startup-caption">AGENT SERVICES / REAL PROOF</div>
+      <button type="button" className="agon-startup-skip" onClick={onEnter}>SKIP INTRO</button>
+      <section
+        aria-roledescription="carousel"
+        aria-label="What Agon does"
+        aria-hidden={!ready}
+        className={`agon-intro-region ${ready ? "agon-intro-region-ready" : ""} ${state.paused ? "agon-intro-paused" : ""} ${state.manual ? "agon-intro-manual" : ""}`}
+        onMouseEnter={hold}
+        onMouseLeave={release}
+        onFocus={hold}
+        onBlur={release}
+        onPointerDown={(event) => { startX.current = event.clientX; }}
+        onPointerUp={(event) => {
+          if (startX.current === null) return;
+          const dx = event.clientX - startX.current;
+          startX.current = null;
+          if (dx <= -40) dispatch({ type: "next" });
+          else if (dx >= 40) dispatch({ type: "prev" });
+        }}
+      >
+        <div key={card.id} className="agon-intro-card" role="group" aria-roledescription="slide" aria-label={`${state.index + 1} of ${INTRO_CARDS.length}`}>
+          <div className="agon-intro-head">
+            <span className="agon-startup-preview-label">{card.eyebrow.toUpperCase()}</span>
+            {card.example ? <span className="agon-intro-chip">EXAMPLE</span> : null}
+          </div>
+          <div className="agon-startup-preview-title">{card.title}</div>
+          {shown.length > 0 ? (
+            <div className="agon-intro-count">{shown.map(([value, label]) => <span key={label}><b>{value}</b><small>{label}</small></span>)}</div>
+          ) : null}
+          <ul className="agon-intro-lines">{card.lines.map((line) => <li key={line}>{line}</li>)}</ul>
+        </div>
+        <div className="agon-intro-controls">
+          {INTRO_CARDS.map((c, i) => (
+            <button key={c.id} type="button" className="agon-intro-tick" aria-label={`Show card ${i + 1}: ${c.title}`} aria-current={i === state.index ? "true" : undefined} onClick={() => dispatch({ type: "goto", index: i })}>
+              <span className="agon-intro-track">
+                {i === state.index ? <span key={state.index} className="agon-intro-tick-fill" /> : i < state.index ? <span className="agon-intro-tick-past" /> : null}
+              </span>
+            </button>
+          ))}
+          <button type="button" className="agon-intro-pause" onClick={() => { const next = !userPaused; setUserPaused(next); dispatch({ type: next ? "pause" : "resume" }); }}>{userPaused ? "Play" : "Pause"}</button>
+        </div>
+      </section>
+      <div className="agon-startup-caption">DESCRIBE IT. AGON ROUTES IT.</div>
     </div>
   );
 }
-
-function StartupPreviewFrame({ eyebrow, title, children }: { eyebrow: string; title: string; children: ReactNode }) {
-  return <div className="agon-startup-preview-inner"><div className="agon-startup-preview-label">{eyebrow}</div><div className="agon-startup-preview-title">{title}</div>{children}</div>;
-}
-
-function MarketPreview() {
-  return <StartupPreviewFrame eyebrow="MARKET / SERVICE PREVIEW" title="FIND A SERVICE"><div className="agon-startup-preview-meta"><span className="agon-startup-avatar agon-startup-avatar-pink">N</span><span><b>0.01 USDC</b><small>pay per use</small></span><span className="agon-startup-status">REVIEW TERMS</span></div><div className="agon-startup-preview-line" /></StartupPreviewFrame>;
-}
-
-function PlaygroundPreview() {
-  return <StartupPreviewFrame eyebrow="PLAYGROUND / EXAMPLE" title="TEST A SERVICE"><div className="agon-startup-result"><span className="agon-startup-avatar agon-startup-avatar-cyan">A</span><span><b>REVIEW THE RESULT</b><small>check the exact version</small></span></div><div className="agon-startup-preview-line" /></StartupPreviewFrame>;
-}
-
-function ServicePreview() {
-  return <StartupPreviewFrame eyebrow="AGENT SERVICES / MACHINE TO MACHINE" title="WORK THAT CAN BE USED"><div className="agon-startup-service-row"><span className="agon-startup-avatar agon-startup-avatar-pink">N</span><span>memory for agents</span><i>USE</i></div><div className="agon-startup-service-row"><span className="agon-startup-avatar agon-startup-avatar-cyan">A</span><span>runtime QA checks</span><i>USE</i></div></StartupPreviewFrame>;
-}
-

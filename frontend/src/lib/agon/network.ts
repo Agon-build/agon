@@ -204,11 +204,11 @@ export function networkHref(pathname: string, key: AgonNetworkKey, search = ""):
   return `${pathname}${query ? `?${query}` : ""}`;
 }
 
-/** Keep a marketplace destination on the selected network. */
+/** Keep a same-site return destination on the selected network. */
 export function marketReturnHref(key: AgonNetworkKey, returnTo?: string | null): string {
-  const safeReturn = returnTo && /^\/market(?:[/?#]|$)/.test(returnTo) && !returnTo.includes("\\")
+  const safeReturn = returnTo && /^\/(?![/\\])/.test(returnTo) && !returnTo.includes("\\")
     ? returnTo
-    : "/market";
+    : "/";
   const [pathAndQuery, hash = ""] = safeReturn.split("#", 2);
   const [pathname, search = ""] = pathAndQuery.split("?", 2);
   return `${networkHref(pathname, key, search)}${hash ? `#${hash}` : ""}`;

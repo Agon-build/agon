@@ -36,7 +36,7 @@ function ScrollTop() {
 
 export function SideRail() {
   const pathname = usePathname() ?? "/";
-  if (pathname === "/market" || pathname.startsWith("/market/")) return null;
+  if (pathname === "/agents" || pathname.startsWith("/agents/")) return null;
 
   return (
     <aside

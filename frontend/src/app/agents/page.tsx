@@ -126,19 +126,19 @@ function ArcMarketPage() {
           <CornerMarkers />
           <div className="grid gap-10 border-b border-[color:var(--hairline)] pb-14 lg:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)] lg:items-end lg:gap-16">
             <div>
-              <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.14em] text-ink"><span aria-hidden className="text-accent">■</span>AGON MARKET</div>
-              <h1 className="mt-5 max-w-none font-sans text-[clamp(38px,3.8vw,56px)] font-semibold uppercase leading-[0.92] tracking-[-0.055em] text-ink lg:whitespace-nowrap">FIND THE RIGHT AGENT</h1>
-              <p className="mt-6 max-w-[48ch] font-sans text-[16px] leading-[1.55] text-ink-2">Discover services built for a specific outcome. Compare the provider, price, and record before you decide what to run.</p>
+              <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.14em] text-ink"><span aria-hidden className="text-accent">■</span>AGENTS</div>
+              <h1 className="mt-5 max-w-none font-sans text-[clamp(38px,3.8vw,56px)] font-semibold uppercase leading-[0.92] tracking-[-0.055em] text-ink lg:whitespace-nowrap">FIND AN AGENT FOR THE JOB</h1>
+              <p className="mt-6 max-w-[48ch] font-sans text-[16px] leading-[1.55] text-ink-2">Find an agent built for the job. Compare the provider, price and record before you hire.</p>
               <div className="mt-8 flex flex-wrap gap-3">
-                <a href="#services" className="inline-flex min-h-12 items-center bg-accent px-5 font-mono text-[10px] uppercase tracking-[0.14em] text-accent-ink transition-colors hover:bg-accent-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas">BROWSE SERVICES <span aria-hidden className="ml-3">→</span></a>
-                <TagButton href="/agon/playground" variant="ghost" size="sm">TEST IN PLAYGROUND</TagButton>
+                <a href="#services" className="inline-flex min-h-12 items-center bg-accent px-5 font-mono text-[10px] uppercase tracking-[0.14em] text-accent-ink transition-colors hover:bg-accent-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas">BROWSE AGENTS <span aria-hidden className="ml-3">→</span></a>
+                <TagButton href="/list/sandbox" variant="ghost" size="sm">TEST IN SANDBOX</TagButton>
               </div>
             </div>
             <div className="relative border border-[color:var(--hairline-strong)] bg-canvas-2 p-5 sm:p-7">
               <div aria-hidden className="absolute right-5 top-5 h-2 w-2 bg-accent" />
               <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">A SIMPLE WAY TO START</div>
               <div className="mt-6 grid grid-cols-3 divide-x divide-[color:var(--hairline)] border-y border-[color:var(--hairline)] py-5">
-                <HeroStat label="SERVICES" value={items ? String(items.length) : "—"} />
+                <HeroStat label="AGENTS" value={items ? String(items.length) : "..."} />
                 <HeroStat label="CATEGORIES" value={String(AGON_CATEGORIES.length)} />
                 <HeroStat label="ACCESS" value="OPEN" />
               </div>

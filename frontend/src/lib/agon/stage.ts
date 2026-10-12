@@ -1,10 +1,13 @@
 import { AGON_PREVIEW_MODE } from "./client";
 import {
-  PREVIEW_JOB_ID, previewApproval, previewAsk, previewConfig, previewEntries, previewLeaderboard, previewLive, previewRounds, previewSeason, previewWallet,
+  PREVIEW_JOB_ID, previewApproval, previewAsk, previewConfig, previewEntries, previewLeaderboard, previewLive, previewRatings, previewRounds, previewSeason, previewWallet,
 } from "./stage-fixtures.ts";
 import type {
-  ApprovalResult, ApprovalView, AskResponse, ConfirmResponse, HistoryItem, LeaderboardResponse, LiveView, SeasonEntry, SeasonInfo, SeasonRoundSummary, StageConfig, StageWallet,
+  ApprovalResult, ApprovalView, AskResponse, ConfirmResponse, HistoryItem, LeaderboardResponse, LiveView, RatingsResponse, SeasonEntry, SeasonInfo, SeasonRoundSummary, StageConfig, StageWallet,
 } from "./stage-types.ts";
+
+/// Which Season the site shows: 9001 for the testnet dry run, 1 from the mainnet start.
+export const AGON_SEASON_ID = (process.env.NEXT_PUBLIC_AGON_SEASON_ID ?? "").trim() || "1";
 
 export const STAGE_API_URL = (process.env.NEXT_PUBLIC_AGON_API_URL ?? process.env.NEXT_PUBLIC_AUTH_URL ?? "http://localhost:8082").replace(/\/+$/, "");
 
@@ -101,15 +104,19 @@ export async function approve(token: string): Promise<ApprovalResult> {
   }
   return call(`/agon/approvals/${encodeURIComponent(token)}`, { body: {}, timeoutMs: 200_000 });
 }
-export async function getSeason(seasonId = "1"): Promise<SeasonInfo> {
+export async function getSeason(seasonId = AGON_SEASON_ID): Promise<SeasonInfo> {
   return AGON_PREVIEW_MODE ? previewSeason : call(`/agon/seasons/${seasonId}`);
 }
-export async function getLeaderboard(seasonId = "1"): Promise<LeaderboardResponse> {
-  return AGON_PREVIEW_MODE ? previewLeaderboard : call(`/agon/seasons/${seasonId}/leaderboard`);
+export async function getLeaderboard(seasonId = AGON_SEASON_ID, category?: string): Promise<LeaderboardResponse> {
+  const query = category && category !== "overall" ? `?category=${encodeURIComponent(category)}` : "";
+  return AGON_PREVIEW_MODE ? previewLeaderboard : call(`/agon/seasons/${seasonId}/leaderboard${query}`);
 }
-export async function getEntries(seasonId = "1"): Promise<{ entries: SeasonEntry[] }> {
+export async function getRatings(seasonId = AGON_SEASON_ID): Promise<RatingsResponse> {
+  return AGON_PREVIEW_MODE ? previewRatings : call(`/agon/seasons/${seasonId}/ratings`);
+}
+export async function getEntries(seasonId = AGON_SEASON_ID): Promise<{ entries: SeasonEntry[] }> {
   return AGON_PREVIEW_MODE ? { entries: previewEntries } : call(`/agon/seasons/${seasonId}/entries`);
 }
-export async function getRounds(seasonId = "1", limit = 8): Promise<{ rounds: SeasonRoundSummary[] }> {
+export async function getRounds(seasonId = AGON_SEASON_ID, limit = 8): Promise<{ rounds: SeasonRoundSummary[] }> {
   return AGON_PREVIEW_MODE ? { rounds: previewRounds } : call(`/agon/seasons/${seasonId}/rounds?limit=${limit}`);
 }

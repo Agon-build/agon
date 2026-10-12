@@ -111,7 +111,7 @@ export function X402CallIntentPanel({ listing, defaultAmount, endpointUrl }: Pro
     <div className="mt-7 border-t border-current pt-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="font-mono text-[10px] uppercase tracking-[0.14em]">RUN THIS SERVICE</div>
+          <div className="font-mono text-[10px] uppercase tracking-[0.14em]">HIRE THIS AGENT</div>
           <p className="mt-2 max-w-[42ch] font-mono text-[10px] leading-relaxed opacity-70">
             Enter the task and set the most you are willing to pay. Nothing is charged until you review and sign.
           </p>

@@ -70,9 +70,9 @@ export async function runPreflight(deps: PreflightDeps): Promise<{ checks: Prefl
     const name = `Model ${m.model}`;
     checks.push(await guard(name, async () => ((await m.ping()) ? pass(name, "answered") : fail(name, "no answer"))));
   }
-  checks.push(await guard("Site /ask", async () => {
+  checks.push(await guard("Site home", async () => {
     const status = await deps.site();
-    return status === 200 ? pass("Site /ask", "200") : fail("Site /ask", String(status));
+    return status === 200 ? pass("Site home", "200") : fail("Site home", String(status));
   }));
   checks.push(deps.offSwitches.length > 0 ? { name: "Off switches", status: "warn", detail: deps.offSwitches.join(", ") } : pass("Off switches", "none on"));
   return { checks, ready: checks.every((c) => c.status !== "fail") };

@@ -33,7 +33,18 @@ export type LeaderboardRow = {
   agentAddress: string; displayName: string; house: boolean; slateResolved: number; forecastsResolved: number; meanSkill: number; meanBrier: number | null;
   rating: number; ranked: boolean; rank: number | null;
 };
-export type LeaderboardResponse = { seasonId: string; network: string; commitsAddress: string; updatedAt: string; lastCommitAt: string | null; rows: LeaderboardRow[]; preview?: boolean };
+export type LeaderboardResponse = { seasonId: string; network: string; commitsAddress: string; updatedAt: string; lastCommitAt: string | null; rows: LeaderboardRow[]; category?: string; minRanked?: number; preview?: boolean };
 export type SeasonInfo = { seasonId: string; network: string; commitsAddress: string; commitsUrl: string; startsAt: string; endsAt: string; roundHours: number; currentRound: string | null };
 export type SeasonEntry = { agentAddress: string; erc8004AgentId: string | null; displayName: string; house: boolean; forecastEndpoint: string | null; enteredRound: string };
 export type SeasonRoundSummary = { round: string; state: "open" | "committing" | "committed" | "skipped"; openedAt: string; commitTx: string | null };
+export type RatingCell = { rating: number; meanSkill: number; forecastsResolved: number; ranked: boolean; rank: number | null };
+export type SeasonCategoryKey = "sports" | "crypto" | "economics" | "politics" | "world" | "culture";
+export type RatingsResponse = {
+  seasonId: string; updatedAt: string; categories: SeasonCategoryKey[]; minRanked: { overall: number; category: number };
+  agents: { agentAddress: string; displayName: string; house: boolean; overall: RatingCell; categories: Record<SeasonCategoryKey, RatingCell> }[];
+  preview?: boolean;
+};
+export const SEASON_CATEGORY_TABS: readonly { key: "overall" | SeasonCategoryKey; label: string }[] = [
+  { key: "overall", label: "Overall" }, { key: "crypto", label: "Crypto" }, { key: "politics", label: "Politics" }, { key: "sports", label: "Sports" },
+  { key: "economics", label: "Economics" }, { key: "world", label: "World" }, { key: "culture", label: "Culture" },
+];

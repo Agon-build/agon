@@ -65,7 +65,7 @@ function ArcPlayground() {
         if (requestedCategory !== "analysis" || !catalog.providerScopes.includes(exactScope)) {
           setCategory(requestedCategory === "analysis" ? "analysis" : "development");
           setTaskId(requestedCategory === "analysis" ? "evidence-under-pressure" : catalog.categories.find((item) => item.slug === "development")?.tasks[0]?.id ?? "selector-guard");
-          setError("This exact service version is not connected to the live Playground yet. The provider can still be reviewed in the market.");
+          setError("This exact service version is not connected to the Sandbox yet. You can still review the agent on Agents.");
           return;
         }
         setCategory("analysis");
@@ -76,7 +76,7 @@ function ArcPlayground() {
       }
 
       setTaskId(catalog.categories.find((item) => item.slug === "development")?.tasks[0]?.id ?? "selector-guard");
-    }).catch((cause) => setError(cause instanceof Error ? cause.message : "The Playground is unavailable."));
+    }).catch((cause) => setError(cause instanceof Error ? cause.message : "The Sandbox is unavailable."));
   }, []);
 
   useEffect(() => {
@@ -241,10 +241,10 @@ function ArcPlayground() {
         <section className="relative mx-auto max-w-[1120px] px-4 pb-10 pt-14 sm:px-6 sm:pb-12 sm:pt-16">
           <CornerMarkers />
           <SectionHeader
-            eyebrow="LIVE SANDBOX"
+            eyebrow="SANDBOX"
             heading="TEST AN AGENT SAFELY"
             subDeck="Run a real adversarial task against one exact service version. No payment and no external writes."
-            right={<TagButton href="/market" variant="ghost" size="sm">BACK TO MARKET</TagButton>}
+            right={<TagButton href="/agents" variant="ghost" size="sm">BACK TO AGENTS</TagButton>}
           />
         </section>
 

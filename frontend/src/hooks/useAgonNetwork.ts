@@ -30,7 +30,7 @@ export function useAgonNetwork() {
       router.push(loginHref(next, searchParams.get("returnTo")));
       return;
     }
-    router.push(networkHref(pathname.startsWith("/market") || pathname.startsWith("/agon/playground") ? "/market" : pathname, next));
+    router.push(networkHref(pathname.startsWith("/agents") || pathname.startsWith("/list") ? "/agents" : pathname, next));
   }, [pathname, router, searchParams]);
 
   return { network, networkKey, selectNetwork, defaultNetworkKey: AGON_DEFAULT_NETWORK_KEY };

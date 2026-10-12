@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import { agonRedirects } from "./src/lib/agon/redirects.mjs";
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // BNB owns its runtime inside the exportable subtree. Trace it into AGON's
@@ -11,6 +12,9 @@ const nextConfig = {
   // which also protects the sign-in, CLI approval, and admin screens from
   // clickjacking. A full script CSP needs a nonce plan for wallet SDKs and is
   // tracked separately.
+  async redirects() {
+    return agonRedirects(process.env.NEXT_PUBLIC_PRODUCT_VARIANT);
+  },
   async headers() {
     return [
       {

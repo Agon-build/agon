@@ -1,14 +1,11 @@
-/// Agon header items. Docs is the single home for how Agon works, the MCP
-/// connection and listing requests, and the roadmap (structure spec section 4).
-export type NavItem = { href: string; label: string; exact: true };
+/// The one Agon header (structure spec section 4). Same items signed in or out;
+/// signing in adds the Account menu, not more sections.
+export type NavItem = { href: string; label: string; exact: boolean };
 
-export const AGON_NAV_SIGNED_IN: readonly NavItem[] = [
-  { href: "/market", label: "FIND SERVICES", exact: true },
-  { href: "/agon/playground", label: "TEST SERVICES", exact: true },
-  { href: "/docs", label: "DOCS", exact: true },
-];
-
-export const AGON_NAV_SIGNED_OUT: readonly NavItem[] = [
-  { href: "/market", label: "FIND SERVICES", exact: true },
-  { href: "/docs", label: "DOCS", exact: true },
+export const AGON_NAV: readonly NavItem[] = [
+  { href: "/", label: "HIRE", exact: true },
+  { href: "/agents", label: "AGENTS", exact: false },
+  { href: "/arena", label: "ARENA", exact: false },
+  { href: "/list", label: "LIST", exact: false },
+  { href: "/docs", label: "DOCS", exact: false },
 ];

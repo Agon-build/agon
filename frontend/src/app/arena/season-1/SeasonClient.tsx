@@ -1,17 +1,22 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { StageShell } from "@/components/stage/StageShell";
 import { useNow } from "@/components/stage/useNow";
-import { getLeaderboard, getRounds, getSeason, StageApiError } from "@/lib/agon/stage";
-import type { LeaderboardResponse, SeasonInfo, SeasonRoundSummary } from "@/lib/agon/stage-types";
-import { beatsMarketText, explorerBase, shortHash, timeAgo } from "@/lib/agon/stage-view";
+import { AGON_SEASON_ID, getLeaderboard, getRounds, getSeason, StageApiError } from "@/lib/agon/stage";
+import { SEASON_CATEGORY_TABS, type LeaderboardResponse, type SeasonCategoryKey, type SeasonInfo, type SeasonRoundSummary } from "@/lib/agon/stage-types";
+import { beatsMarketText, boardNotice, categoryHref, explorerBase, shortHash, timeAgo } from "@/lib/agon/stage-view";
 
 const isBenchmark = (name: string) => name.toLowerCase().includes("market copy");
 const signed = (n: number) => `${n > 0 ? "+" : n < 0 ? "−" : ""}${Math.abs(n).toFixed(3)}`;
 
 export function SeasonClient() {
   const now = useNow(30_000);
+  const router = useRouter();
+  const params = useSearchParams();
+  const initial = params?.get("category");
+  const [tab, setTab] = useState<"overall" | SeasonCategoryKey>(SEASON_CATEGORY_TABS.find((t) => t.key === initial)?.key ?? "overall");
   const [board, setBoard] = useState<LeaderboardResponse | null>(null);
   const [season, setSeason] = useState<SeasonInfo | null>(null);
   const [rounds, setRounds] = useState<SeasonRoundSummary[]>([]);
@@ -20,25 +25,26 @@ export function SeasonClient() {
   useEffect(() => {
     let stopped = false;
     const load = () => {
-      Promise.all([getLeaderboard(), getSeason(), getRounds()])
+      Promise.all([getLeaderboard(AGON_SEASON_ID, tab), getSeason(AGON_SEASON_ID), getRounds(AGON_SEASON_ID)])
         .then(([b, s, r]) => { if (!stopped) { setBoard(b); setSeason(s); setRounds(r.rounds); setError(null); } })
         .catch((e) => { if (!stopped) setError(e instanceof StageApiError ? e.code : "network_unavailable"); });
     };
     load();
     const t = window.setInterval(load, 60_000);
     return () => { stopped = true; window.clearInterval(t); };
-  }, []);
+  }, [tab]);
 
   const explorer = season ? explorerBase(season.commitsUrl) : null;
   const stale = board?.lastCommitAt ? now - Date.parse(board.lastCommitAt) > 6 * 3_600_000 : false;
   const ranked = board?.rows.filter((r) => r.ranked).length ?? 0;
+  const notice = board ? boardNotice(board) : null;
 
   return (
     <StageShell network={board?.network ?? null} preview={board?.preview}>
       <div className="mx-auto max-w-[1536px] px-4 pb-24 pt-8 sm:px-6">
         <header className="grid gap-8 border-b border-[color:var(--hairline-strong)] pb-10 lg:grid-cols-[1.1fr_.9fr] lg:items-end">
           <div>
-            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Playground · Season 1 · Polymarket forecasting</p>
+            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Arena · Season 1 · Polymarket forecasting</p>
             <h1 className="mt-4 max-w-[12ch] font-display text-[clamp(3rem,7vw,6.5rem)] uppercase leading-[.86] tracking-[-.05em] text-ink">Who beats the market.</h1>
           </div>
           <p className="max-w-[52ch] text-sm leading-6 text-ink-2">
@@ -46,7 +52,7 @@ export function SeasonClient() {
           </p>
         </header>
 
-        {error && !board ? <p role="alert" className="py-8 text-sm text-ink">The leaderboard is unavailable right now. This page retries every minute.</p> : null}
+        {error ? <p role="alert" className="py-8 text-sm text-ink">The leaderboard is unavailable right now. This page retries every minute.</p> : null}
         {!board && !error ? <p className="py-8 text-sm text-ink-3">Loading the leaderboard.</p> : null}
 
         {board ? (
@@ -64,6 +70,13 @@ export function SeasonClient() {
                 </div>
               ))}
             </dl>
+            <div role="tablist" aria-label="Category" className="mt-8 flex flex-wrap gap-2">
+              {SEASON_CATEGORY_TABS.map((t) => (
+                <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} onClick={() => { if (t.key === tab) return; setBoard(null); setError(null); setTab(t.key); router.replace(categoryHref(window.location.search, t.key), { scroll: false }); }}
+                  className={`min-h-11 border px-3 font-mono text-[10px] uppercase tracking-[0.14em] ${tab === t.key ? "border-ink bg-ink text-canvas" : "border-[color:var(--hairline-strong)] text-ink-2 hover:text-ink"}`}>{t.label}</button>
+              ))}
+            </div>
+            {notice ? <p role="status" className="mt-4 border-l-2 border-[color:var(--warn)] pl-3 text-sm text-ink">{notice}</p> : null}
             {stale ? <p role="status" className="mt-4 border-l-2 border-[color:var(--warn)] pl-3 text-sm text-ink">No commit in the last 6 hours. Scores shown are from the last committed round.</p> : null}
 
             <section aria-labelledby="board-heading" className="mt-10">
@@ -105,7 +118,7 @@ export function SeasonClient() {
                   </tbody>
                 </table>
               </div>
-              <p className="mt-3 text-xs leading-5 text-ink-3">House agents are run by Agon and cannot win prizes. Ranking starts after 20 scored forecasts. Rating = beats-market score × n / (n + 20).</p>
+              <p className="mt-3 text-xs leading-5 text-ink-3">House agents are run by Agon and cannot win prizes. Ranking starts after {board.minRanked ?? 20} scored forecasts{tab === "overall" ? "" : " in this category"}. Rating is the beats-market score, weighted by how many forecasts are scored.</p>
             </section>
 
             <section aria-labelledby="proof-heading" className="mt-16 grid gap-10 lg:grid-cols-[.8fr_1.2fr]">

@@ -1,5 +1,7 @@
 "use client";
 
+import { IS_AGON_DEPLOYMENT } from "@/lib/product";
+
 import { useCallback, useEffect, useState } from "react";
 import { BracketedCell, CornerMarkers } from "@/components/redesign";
 import { EXPLORER } from "@/lib/arc";
@@ -46,6 +48,8 @@ function txUrl(chain: string, hash: string): string {
 // The console grouped into tabs instead of one long scroll. `admin` tabs carry
 // write actions and are hidden from a support-tier token.
 type TabId = "overview" | "members" | "settlements" | "missions" | "events" | "treasury" | "agon" | "activity";
+/// ArcRun contest and treasury tools stay with the ArcRun deployment.
+const ARCRUN_TABS: ReadonlySet<TabId> = new Set(["missions", "events", "treasury", "settlements"]);
 const TABS: Array<{ id: TabId; label: string; admin?: boolean }> = [
   { id: "overview", label: "OVERVIEW" },
   { id: "members", label: "MEMBERS" },
@@ -130,7 +134,7 @@ export default function AdminPage() {
     );
   }
 
-  const visibleTabs = TABS.filter((t) => level === "admin" || !t.admin);
+  const visibleTabs = TABS.filter((t) => (level === "admin" || !t.admin) && !(IS_AGON_DEPLOYMENT && ARCRUN_TABS.has(t.id)));
   const activeTab: TabId = visibleTabs.some((t) => t.id === tab) ? tab : "overview";
 
   return (

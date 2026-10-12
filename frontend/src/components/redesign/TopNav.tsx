@@ -21,7 +21,7 @@ import { useDisconnect } from "wagmi";
 import { isAgonRoute, isLegacyArcRunRoute } from "@/lib/agon/routes";
 import { useAgonNetwork } from "@/hooks/useAgonNetwork";
 import { networkHref } from "@/lib/agon/network";
-import { AGON_NAV_SIGNED_IN, AGON_NAV_SIGNED_OUT } from "@/lib/agon/nav";
+import { AGON_NAV } from "@/lib/agon/nav";
 
 /// The product nav. Left: â–  ARCRUN mono wordmark with the pink square mark.
 /// Center: mono caps route links separated by 32px on desktop. Right: the
@@ -36,7 +36,7 @@ import { AGON_NAV_SIGNED_IN, AGON_NAV_SIGNED_OUT } from "@/lib/agon/nav";
 // not a bridge. The bridge is reached from the withdraw flow (and direct
 // /bridge links), where moving USDC omnichain actually matters to the user.
 const LEGACY_ROUTES = [
-  { href: "/market", label: "AGON MARKET" },
+  { href: "/agents", label: "AGON AGENTS" },
   { href: "/dashboard", label: "DASHBOARD" },
   { href: "/contests", label: "CONTESTS" },
   { href: "/challenges", label: "CHALLENGES" },
@@ -54,7 +54,7 @@ export function TopNav({ hideSignOut = false }: { hideSignOut?: boolean } = {}) 
   const isAgon = !isLegacyRoute && (IS_AGON_DEPLOYMENT || isAgonRoute(pathname));
   const { networkKey } = useAgonNetwork();
   const { isSignedIn, settling } = useOperatorAddress();
-  const routes = isAgon ? [...(isSignedIn ? AGON_NAV_SIGNED_IN : AGON_NAV_SIGNED_OUT)] : LEGACY_ROUTES;
+  const routes: { href: string; label: string; exact?: boolean }[] = isAgon ? [...AGON_NAV] : LEGACY_ROUTES;
   const [open, setOpen] = useState(false);
   const { signOut } = useAuth();
   const { disconnect } = useDisconnect();
@@ -77,7 +77,7 @@ export function TopNav({ hideSignOut = false }: { hideSignOut?: boolean } = {}) 
         {showRoutes ? (
         <nav className="hidden items-center gap-5 xl:flex">
           {routes.map((r) => {
-            const active = pathname === r.href || (!("exact" in r) || !r.exact) && pathname.startsWith(`${r.href}/`);
+            const active = r.exact ? pathname === r.href : pathname === r.href || pathname.startsWith(`${r.href}/`);
             return (
               <Link
                 key={r.href}
@@ -113,7 +113,7 @@ export function TopNav({ hideSignOut = false }: { hideSignOut?: boolean } = {}) 
             </>
           ) : null}
           {isAgon ? <AgonNetworkSelector /> : null}
-          {isAgon && isSignedIn ? <details className="relative hidden xl:block" onKeyDown={(event) => { if (event.key === "Escape") event.currentTarget.open = false; }}><summary className="flex min-h-11 cursor-pointer items-center border border-[color:var(--hairline-strong)] px-3 font-mono text-[10px] uppercase">Account</summary><nav aria-label="Account" className="absolute right-0 top-full z-50 mt-2 grid w-56 border border-[color:var(--hairline-strong)] bg-canvas p-2"><Link className="min-h-11 p-3 text-sm" href={networkHref("/market/activity", networkKey)}>My activity</Link><Link className="min-h-11 p-3 text-sm" href={networkHref("/market/provider", networkKey)}>Provider dashboard</Link><button className="min-h-11 p-3 text-left text-sm" onClick={async () => { await signOut(); disconnect(); }}>Sign out</button></nav></details> : null}
+          {isAgon && isSignedIn ? <details className="relative hidden xl:block" onKeyDown={(event) => { if (event.key === "Escape") event.currentTarget.open = false; }}><summary className="flex min-h-11 cursor-pointer items-center border border-[color:var(--hairline-strong)] px-3 font-mono text-[10px] uppercase">Account</summary><nav aria-label="Account" className="absolute right-0 top-full z-50 mt-2 grid w-56 border border-[color:var(--hairline-strong)] bg-canvas p-2"><Link className="min-h-11 p-3 text-sm" href={networkHref("/account", networkKey)}>Wallet and hires</Link><button className="min-h-11 p-3 text-left text-sm" onClick={async () => { await signOut(); disconnect(); }}>Sign out</button></nav></details> : null}
           <div className={isAgon ? "hidden xl:block" : ""}>{!isLogin && (!isAgon || !isSignedIn) && (settling ? null : <LoginButton />)}</div>
           {!isAgon ? <ThemeToggle /> : null}
           {!isLogin && (isAgon || isSignedIn) ? (
@@ -138,10 +138,9 @@ export function TopNav({ hideSignOut = false }: { hideSignOut?: boolean } = {}) 
                 see the selected network's payment-token state. */}
             {isSignedIn && !isAgon ? <WalletBalanceChip variant="row" /> : null}
             {isAgon ? <div className="flex flex-wrap items-center gap-3 border-b border-[color:var(--hairline)] py-3">{!isSignedIn ? <LoginButton /> : <NotificationBell />}</div> : null}
-            {isAgon && isSignedIn ? <Link className="inline-flex min-h-11 items-center py-3 text-sm" href={networkHref("/market/activity", networkKey)}>My activity</Link> : null}
-            {isAgon && isSignedIn ? <Link className="inline-flex min-h-11 items-center py-3 text-sm" href={networkHref("/market/provider", networkKey)}>Provider dashboard</Link> : null}
+            {isAgon && isSignedIn ? <Link className="inline-flex min-h-11 items-center py-3 text-sm" href={networkHref("/account", networkKey)}>Wallet and hires</Link> : null}
             {routes.map((r) => {
-              const active = pathname === r.href || (!("exact" in r) || !r.exact) && pathname.startsWith(`${r.href}/`);
+              const active = r.exact ? pathname === r.href : pathname === r.href || pathname.startsWith(`${r.href}/`);
               return (
                 <Link
                   key={r.href}

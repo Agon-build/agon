@@ -56,7 +56,7 @@ export function AgonOperatorProfile({ address }: { address: string }) {
               </div>
             </div>
             <div className="flex flex-wrap gap-3">
-              <TagButton href="/app">OPEN PLAYGROUND</TagButton>
+              <TagButton href="/list/sandbox">TEST IN SANDBOX</TagButton>
               <TagButton href={`https://testnet.arcscan.app/address/${address}`} target="_blank" rel="noreferrer" variant="ghost" size="sm">VIEW ON ARCSCAN</TagButton>
             </div>
           </div>
@@ -82,8 +82,8 @@ export function AgonOperatorProfile({ address }: { address: string }) {
           ) : agents.length === 0 ? (
             <BracketedCell className="mt-10" tone="canvas-alt">
               <StatusChip tone="warn">NO AGENTS FOUND</StatusChip>
-              <p className="mt-4 max-w-[54ch] font-mono text-sm leading-[1.65] text-ink-2">This operator has not exposed an agent roster yet. Browse the market to inspect available services.</p>
-              <TagButton href="/market" variant="ghost" size="sm" className="mt-6">BROWSE MARKET</TagButton>
+              <p className="mt-4 max-w-[54ch] font-mono text-sm leading-[1.65] text-ink-2">This operator has not exposed an agent roster yet. Browse Agents to see what can be hired.</p>
+              <TagButton href="/agents" variant="ghost" size="sm" className="mt-6">BROWSE AGENTS</TagButton>
             </BracketedCell>
           ) : (
             <div className="mt-10 grid gap-4 md:grid-cols-2">
@@ -104,7 +104,7 @@ export function AgonOperatorProfile({ address }: { address: string }) {
                   </div>
                   <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
                     <span className="font-mono text-[10px] uppercase tracking-[0.13em] opacity-70">REPUTATION {agent.reputation.toString()}</span>
-                    <TagButton href="/market" variant="ghost" size="sm">INSPECT SERVICES</TagButton>
+                    <TagButton href="/agents" variant="ghost" size="sm">INSPECT SERVICES</TagButton>
                   </div>
                 </BracketedCell>
               ))}
@@ -128,7 +128,7 @@ export function AgonOperatorProfile({ address }: { address: string }) {
             <h2 className="mt-4 font-stencil text-3xl uppercase leading-none">BUY THE CAPABILITY. VERIFY THE WORK.</h2>
             <p className="mt-5 max-w-[38ch] font-mono text-sm leading-[1.65] opacity-80">Agon keeps provider identity, manifest version, endpoint, payment rail, and trust state legible before a buyer connects.</p>
             <div className="mt-7 flex flex-wrap gap-3">
-              <TagButton href="/market">EXPLORE MARKET</TagButton>
+              <TagButton href="/agents">EXPLORE AGENTS</TagButton>
               <TagButton href="/docs" variant="ghost" size="sm">READ STANDARD</TagButton>
             </div>
           </BracketedCell>

@@ -24,8 +24,11 @@ test("sign-in keeps the selected network in both login and return URLs", () => {
   );
   assert.equal(
     loginHref("bnb-mainnet", "https://hostile.example"),
-    "/login?returnTo=%2Fmarket%3Fnetwork%3Dbnb-mainnet&network=bnb-mainnet",
+    "/login?returnTo=%2F%3Fnetwork%3Dbnb-mainnet&network=bnb-mainnet",
   );
+  assert.equal(loginHref("arc-testnet", "/account"), "/login?returnTo=%2Faccount%3Fnetwork%3Darc-testnet&network=arc-testnet");
+  assert.equal(loginHref("arc-testnet", "//hostile.example/x"), "/login?returnTo=%2F%3Fnetwork%3Darc-testnet&network=arc-testnet");
+  assert.equal(loginHref("arc-testnet", "/\\hostile"), "/login?returnTo=%2F%3Fnetwork%3Darc-testnet&network=arc-testnet");
 });
 
 test("the supported network registry keeps all three chain identities distinct", () => {

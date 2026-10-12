@@ -228,8 +228,8 @@ export default function ListingVersionPage() {
               <p className="font-mono text-xs leading-6 text-[color:var(--ok)]">Version confirmed on {network.name}. This action is closed. Publish another version only after changing the manifest.</p>
               <div className="mt-4 flex flex-wrap gap-3">
                 {publishedTxHash ? <TagButton href={`${network.explorerUrl.replace(/\/$/, "")}/tx/${publishedTxHash}`} target="_blank" rel="noreferrer" variant="ghost" size="sm">VIEW TRANSACTION</TagButton> : null}
-                <TagButton href="/market" variant="ghost" size="sm">VIEW MARKET</TagButton>
-                <TagButton href={`/market/version?listingId=${encodeURIComponent(listingId)}`} variant="ghost" size="sm">START ANOTHER VERSION</TagButton>
+                <TagButton href="/agents" variant="ghost" size="sm">VIEW AGENTS</TagButton>
+                <TagButton href={`/list/version?listingId=${encodeURIComponent(listingId)}`} variant="ghost" size="sm">START ANOTHER VERSION</TagButton>
               </div>
             </div>
           ) : null}

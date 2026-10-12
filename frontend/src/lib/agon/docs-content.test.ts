@@ -3,7 +3,7 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 
 import { DOCS_SECTIONS, MCP_PROMPTS, MCP_TOOL_GROUPS, ROADMAP, copyProblems, docsStrings } from "./docs-content.ts";
-import { AGON_NAV_SIGNED_IN, AGON_NAV_SIGNED_OUT } from "./nav.ts";
+import { AGON_NAV } from "./nav.ts";
 import { DOCS_REDIRECTS } from "./docs-redirects.ts";
 
 test("docs sections come in one order with unique, URL-safe ids", () => {
@@ -39,6 +39,8 @@ test("copy rules catch em dashes, plus used as a word and retired names", () => 
   assert.ok(copyProblems("Open the Playground").length > 0);
   assert.ok(copyProblems("Read the MCP guide").length > 0);
   assert.ok(copyProblems("Provider listed").length > 0);
+  for (const retired of ["Find services", "Test services", "Live sandbox", "Use Agon with an agent", "Agon market", "Learn", "Browse services", "Browse the market", "reviewed in the market"]) assert.ok(copyProblems(retired).length > 0, retired);
+  assert.deepEqual(copyProblems("Learn how the Arena scores agents"), [], "Learn is retired only as a whole label");
 });
 
 test("every docs string follows the copy rules", () => {
@@ -46,12 +48,8 @@ test("every docs string follows the copy rules", () => {
   assert.deepEqual(problems, []);
 });
 
-test("the Agon header has one Docs item and no separate guide, learn or roadmap items", () => {
-  for (const nav of [AGON_NAV_SIGNED_IN, AGON_NAV_SIGNED_OUT]) {
-    assert.deepEqual(nav.filter((i) => i.href.startsWith("/docs")).map((i) => [i.href, i.label]), [["/docs", "DOCS"]]);
-    for (const banned of ["MCP GUIDE", "LEARN", "ROADMAP"]) assert.ok(!nav.some((i) => i.label === banned), banned);
-    assert.ok(!nav.some((i) => i.href === "/market/new"));
-  }
+test("the Agon header is Hire, Agents, Arena, List, Docs", () => {
+  assert.deepEqual(AGON_NAV.map((i) => [i.label, i.href]), [["HIRE", "/"], ["AGENTS", "/agents"], ["ARENA", "/arena"], ["LIST", "/list"], ["DOCS", "/docs"]]);
 });
 
 test("old docs paths send people to the matching Docs section", () => {
@@ -62,8 +60,8 @@ test("old docs paths send people to the matching Docs section", () => {
 
 test("no Agon surface links to the retired docs pages or uses their names", () => {
   const files = [
-    "src/components/redesign/TopNav.tsx", "src/components/AgonLandingPage.tsx", "src/components/redesign/Footer.tsx",
-    "src/components/agon/AgonHomeSurface.tsx", "src/components/agon/AgonAccountSurface.tsx", "src/app/market/page.tsx", "src/lib/agon/market-empty.ts",
+    "src/components/redesign/TopNav.tsx", "src/components/redesign/Footer.tsx",
+    "src/app/agents/page.tsx", "src/lib/agon/market-empty.ts",
   ];
   for (const f of files) {
     const src = readFileSync(new URL(`../../../${f}`, import.meta.url), "utf8");

@@ -78,7 +78,7 @@ function ArcListingDetailPage() {
             eyebrow={service?.category.label ?? `AGON MARKET / ${network.brand} SERVICE`}
             heading={service?.name ?? "SERVICE DETAILS"}
             subDeck={service?.description ?? "Reading this service from the Agon catalog."}
-            right={<><TagButton variant="ghost" href="/market">BACK TO MARKET</TagButton>{listing?.verification.status !== "Verified" && listing ? <TagButton href={`/agon/playground?listing=${encodeURIComponent(listing.id)}`}>TEST IN PLAYGROUND</TagButton> : null}</>}
+            right={<><TagButton variant="ghost" href="/agents">BACK TO AGENTS</TagButton>{listing?.verification.status !== "Verified" && listing ? <TagButton href={`/list/sandbox?listing=${encodeURIComponent(listing.id)}`}>TEST IN SANDBOX</TagButton> : null}</>}
           />
         </section>
 
@@ -150,7 +150,7 @@ function ArcListingDetailPage() {
                     </div>
                     <ServiceProof listing={listing} proof={proof} assurance={assurance} identityRegistry={null} currentOwner={null} />
                     <div className="border-t border-[color:var(--hairline)] px-5 py-5 sm:px-6">
-                      <TagButton variant="ghost" href={`/market/version?listingId=${encodeURIComponent(listing.listingId)}&manifestUri=${encodeURIComponent(listing.manifest.uri)}`}>UPDATE THIS SERVICE</TagButton>
+                      <TagButton variant="ghost" href={`/list/version?listingId=${encodeURIComponent(listing.listingId)}&manifestUri=${encodeURIComponent(listing.manifest.uri)}`}>UPDATE THIS SERVICE</TagButton>
                     </div>
                   </details>
                 </div>

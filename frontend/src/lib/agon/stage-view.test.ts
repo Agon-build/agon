@@ -122,3 +122,53 @@ test("an agent page finds its Season 1 row through its ERC-8004 id", () => {
   assert.equal(ratingForAgent("42", entries, rows)!.rank, 2);
   assert.equal(ratingForAgent("7", entries, rows), null);
 });
+
+import { SEASON_CATEGORY_TABS, type RatingsResponse } from "./stage-types.ts";
+import { categoryCells } from "./stage-view.ts";
+
+const cell = (n: number, ranked: boolean, rank: number | null, rating = 0.02) => ({ rating, meanSkill: rating, forecastsResolved: n, ranked, rank });
+const ratings: RatingsResponse = {
+  seasonId: "9001", updatedAt: new Date().toISOString(), categories: ["sports", "crypto", "economics", "politics", "world", "culture"],
+  minRanked: { overall: 20, category: 10 },
+  agents: [{ agentAddress: "0xabc", displayName: "Atlas (house)", house: true, overall: cell(24, true, 1),
+    categories: { sports: cell(12, true, 2), crypto: cell(4, false, null), economics: cell(0, false, null), politics: cell(10, true, 1), world: cell(0, false, null), culture: cell(3, false, null) } }],
+};
+
+test("category cells say rank, provisional count or no forecasts yet, in tab order", () => {
+  assert.deepEqual(SEASON_CATEGORY_TABS.map((t) => t.key), ["overall", "crypto", "politics", "sports", "economics", "world", "culture"]);
+  const cells = categoryCells(ratings, "0xABC");
+  assert.deepEqual(cells.map((c) => [c.key, c.text]), [
+    ["overall", "#1 of ranked · 24 scored"],
+    ["crypto", "Provisional · 4 of 10"],
+    ["politics", "#1 · 10 scored"],
+    ["sports", "#2 · 12 scored"],
+    ["economics", "No forecasts yet"],
+    ["world", "No forecasts yet"],
+    ["culture", "Provisional · 3 of 10"],
+  ]);
+  assert.deepEqual(categoryCells(ratings, "0xnot-there"), []);
+});
+
+import { boardNotice } from "./stage-view.ts";
+
+test("a category board with nothing scored yet says so instead of showing an empty table", () => {
+  const base = { seasonId: "9001", network: "Arc Testnet", commitsAddress: "0x1", updatedAt: "", lastCommitAt: null };
+  assert.equal(boardNotice({ ...base, category: "world", minRanked: 10, rows: [] }), "No World forecasts have been scored yet. Rankings appear after 10 scored forecasts.");
+  const row = { agentAddress: "0xa", displayName: "Atlas (house)", house: true, slateResolved: 3, forecastsResolved: 0, meanSkill: 0, meanBrier: null, rating: 0, ranked: false, rank: null };
+  assert.equal(boardNotice({ ...base, category: "world", minRanked: 10, rows: [row] }), "No World forecasts have been scored yet. Rankings appear after 10 scored forecasts.");
+  assert.equal(boardNotice({ ...base, category: "overall", minRanked: 20, rows: [{ ...row, forecastsResolved: 4 }] }), "Rankings appear after 20 scored forecasts. Agents below that are shown as provisional.");
+  assert.equal(boardNotice({ ...base, category: "crypto", minRanked: 10, rows: [{ ...row, forecastsResolved: 12, ranked: true, rank: 1 }] }), null);
+});
+
+import { historyRows } from "./stage-view.ts";
+
+test("hires list newest first with a receipt link each", () => {
+  const rows = historyRows([
+    { jobId: "0b9e0b4c-3c2f-4b0e-9d1a-2f5a6b7c8d9e", question: "Will BTC close above 120k?", price: "0.30", state: "delivered", createdAt: "2026-10-12T10:00:00Z", receiptUrl: "https://agon.surf/r/0b9e0b4c-3c2f-4b0e-9d1a-2f5a6b7c8d9e" },
+    { jobId: "1b9e0b4c-3c2f-4b0e-9d1a-2f5a6b7c8d9e", question: null, price: "0.30", state: "refunded", createdAt: "2026-10-12T12:00:00Z", receiptUrl: "https://agon.surf/r/1b9e0b4c-3c2f-4b0e-9d1a-2f5a6b7c8d9e" },
+  ], Date.parse("2026-10-12T13:00:00Z"));
+  assert.deepEqual(rows.map((r) => [r.label, r.state, r.amount, r.href]), [
+    ["Agent job", "Refunded", "0.30", "/r/1b9e0b4c-3c2f-4b0e-9d1a-2f5a6b7c8d9e"],
+    ["Will BTC close above 120k?", "Delivered", "0.30", "/r/0b9e0b4c-3c2f-4b0e-9d1a-2f5a6b7c8d9e"],
+  ]);
+});

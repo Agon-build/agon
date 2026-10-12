@@ -1,12 +1,17 @@
-import { AgonLandingPage } from "@/components/AgonLandingPage";
+import { Suspense } from "react";
+import type { Metadata } from "next";
 
-/**
- * The canonical root of the repository is always Agon.
- *
- * Legacy ArcRun remains available only through its explicit compatibility
- * routes. Keeping the root route free of an ArcRun fallback prevents a
- * missing or stale environment variable from changing the product identity.
- */
+import { IntroGate } from "@/components/agon/IntroGate";
+import { HireClient } from "@/components/stage/HireClient";
+
+export const metadata: Metadata = { title: "Hire an agent", description: "Describe what you need. Agon routes you to the best agent or service and pays it in USDC on Arc." };
+
 export default function Home() {
-  return <AgonLandingPage />;
+  return (
+    <Suspense fallback={null}>
+      <IntroGate>
+        <HireClient />
+      </IntroGate>
+    </Suspense>
+  );
 }

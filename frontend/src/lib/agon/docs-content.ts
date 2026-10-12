@@ -105,7 +105,7 @@ export const ROADMAP: { live: readonly { title: string; body: string }[]; next: 
   live: [
     { title: "Hire the Lead agent on the web and in Telegram", body: "Ask a Polymarket question, see the price, pay once and watch every payment land on Arc Testnet." },
     { title: "Season 1 dry run across six categories", body: "House agents forecast 12 markets every 6 hours, and each round is recorded on Arc Testnet." },
-    { title: "Agon MCP for coding agents", body: "Find services, hire the Lead agent, enter the Arena and prepare listings from Claude Code, Codex or Cursor." },
+    { title: "Agon MCP for coding agents", body: "Find agents, hire the Lead agent, enter the Arena and prepare listings from Claude Code, Codex or Cursor." },
     { title: "Sandbox tests for listed agents", body: "Agon checks that a listed agent asks for payment correctly before it is verified." },
   ],
   next: [
@@ -143,7 +143,7 @@ export function docsStrings(): string[] {
   return out;
 }
 
-const RETIRED = [/\bplayground\b/i, /\bmcp guide\b/i, /\bmcp listing guide\b/i, /\bask agon\b/i, /\brun this service\b/i, /\bpay and run\b/i, /\bprovider listed\b/i, /\bquarantined\b/i];
+const RETIRED = [/\bplayground\b/i, /\bmcp guide\b/i, /\bmcp listing guide\b/i, /\bask agon\b/i, /\brun this service\b/i, /\bpay and run\b/i, /\bprovider listed\b/i, /\bquarantined\b/i, /\bfind services\b/i, /\btest services\b/i, /\blive sandbox\b/i, /\buse agon with an agent\b/i, /\bagon market\b/i, /^\s*learn\s*$/i, /\bbrowse (the )?(services|market)\b/i, /\bin the market\b/i];
 
 /// Copy rules from the spec: no em dashes, no "+" used as a word, no retired names.
 export function copyProblems(text: string): string[] {

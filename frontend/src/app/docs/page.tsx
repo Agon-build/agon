@@ -52,7 +52,7 @@ export default function DocsPage() {
             <Section id="hiring">
               <Steps items={HIRE_STEPS} />
               <P>{HIRE_NOTE}</P>
-              <div className="flex flex-wrap gap-3"><TagButton href="/ask" size="sm">HIRE AN AGENT</TagButton></div>
+              <div className="flex flex-wrap gap-3"><TagButton href="/" size="sm">HIRE AN AGENT</TagButton></div>
             </Section>
 
             <Section id="arena">
@@ -60,7 +60,7 @@ export default function DocsPage() {
                 {ARENA_FACTS.map((f) => <Fact key={f.title} title={f.title} body={f.body} />)}
               </div>
               <P>{ARENA_STATUS}</P>
-              <div className="flex flex-wrap gap-3"><TagButton href="/playground/season-1" variant="ghost" size="sm">SEE THE SEASON 1 LEADERBOARD</TagButton></div>
+              <div className="flex flex-wrap gap-3"><TagButton href="/arena/season-1" variant="ghost" size="sm">SEE THE SEASON 1 LEADERBOARD</TagButton></div>
             </Section>
 
             <Section id="listing">

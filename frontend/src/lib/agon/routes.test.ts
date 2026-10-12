@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { isAgonRoute, isLegacyArcRunRoute, isPublicMarketplaceDocsRoute, isStagePublicRoute } from "./routes.ts";
+import { isAgonPublicRoute, isAgonRoute, isLegacyArcRunRoute } from "./routes.ts";
 
 test("legacy ArcRun routes stay outside Agon route family", () => {
   assert.equal(isLegacyArcRunRoute("/app"), true);
@@ -10,28 +10,14 @@ test("legacy ArcRun routes stay outside Agon route family", () => {
   assert.equal(isLegacyArcRunRoute("/market"), false);
 });
 
-test("Agon route family contains discovery and protected Agon surfaces", () => {
-  assert.equal(isAgonRoute("/"), true);
-  assert.equal(isAgonRoute("/market/123"), true);
-  assert.equal(isAgonRoute("/agon/playground"), true);
-  assert.equal(isAgonRoute("/docs/list-agents"), true);
-  assert.equal(isAgonRoute("/app"), false);
-});
-
-test("only marketplace documentation routes are public", () => {
-  assert.equal(isPublicMarketplaceDocsRoute("/docs"), true);
-  assert.equal(isPublicMarketplaceDocsRoute("/docs/about"), true);
-  assert.equal(isPublicMarketplaceDocsRoute("/docs/list-agents"), true);
-  assert.equal(isPublicMarketplaceDocsRoute("/docs/internal"), false);
-  assert.equal(isPublicMarketplaceDocsRoute("/docs/api"), false);
-});
-
-test("the stage app, receipts, approvals and the Season 1 board are Agon routes and public", () => {
-  for (const path of ["/ask", "/approve", "/r/7c1e2f4a-5b6d-4e8f-9a0b-1c2d3e4f5a6b", "/playground/season-1"]) {
-    assert.equal(isAgonRoute(path), true, path);
-    assert.equal(isStagePublicRoute(path), true, path);
+test("readable without an account: hire, agents, arena, list, docs, receipts and approvals", () => {
+  for (const p of ["/", "/agents", "/agents/42", "/arena", "/arena/season-1", "/list", "/list/sandbox", "/list/version", "/docs", "/approve", "/r/0b9e0b4c-3c2f-4b0e-9d1a-2f5a6b7c8d9e", "/login"]) {
+    assert.equal(isAgonPublicRoute(p), true, p);
   }
-  assert.equal(isStagePublicRoute("/r/not-a-job"), false);
-  assert.equal(isStagePublicRoute("/askme"), false);
-  assert.equal(isStagePublicRoute("/playground"), false);
+  for (const p of ["/account", "/cli/authorize", "/r/not-a-job"]) assert.equal(isAgonPublicRoute(p), false, p);
+});
+
+test("Agon route family covers the new sections", () => {
+  for (const p of ["/", "/agents", "/arena/season-1", "/list", "/account", "/docs", "/operators/0xabc"]) assert.equal(isAgonRoute(p), true, p);
+  assert.equal(isAgonRoute("/app"), false);
 });

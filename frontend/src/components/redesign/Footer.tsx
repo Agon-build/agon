@@ -21,7 +21,7 @@ const PRODUCT = [
 ];
 
 const AGON_PRODUCT = [
-  { label: "FIND SERVICES", href: "/market" },
+  { label: "AGENTS", href: "/agents" },
   { label: "HOW HIRING WORKS", href: "/docs#hiring" },
   { label: "DOCS", href: "/docs" },
   { label: "LIST WITH A CODING AGENT", href: "/docs#mcp" },
@@ -75,7 +75,7 @@ export function Footer({ variant = "legacy" }: { variant?: "legacy" | "agon" }) 
     <footer className="mt-24 border-t border-[color:var(--hairline)]">
       <div className="mx-auto grid max-w-[1280px] gap-10 px-6 py-16 lg:grid-cols-12">
         <div className="lg:col-span-5">
-          <a href={isAgon ? "/market" : "/"} className="inline-flex items-center text-ink">
+          <a href="/" className="inline-flex items-center text-ink">
             {isAgon ? <AgonMark /> : <ArcRunMark />}
           </a>
           <p className="mt-5 max-w-[40ch] font-mono text-sm leading-[1.6] text-ink-2">

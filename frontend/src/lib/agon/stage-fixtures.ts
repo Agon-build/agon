@@ -1,4 +1,4 @@
-import type { AskResponse, LeaderboardResponse, LiveView, SeasonEntry, SeasonInfo, SeasonRoundSummary, StageConfig, StageEvent, StageWallet, ApprovalView } from "./stage-types.ts";
+import type { AskResponse, LeaderboardResponse, LiveView, RatingCell, RatingsResponse, SeasonEntry, SeasonInfo, SeasonRoundSummary, StageConfig, StageEvent, StageWallet, ApprovalView } from "./stage-types.ts";
 
 /// Labelled preview data for design review (NEXT_PUBLIC_AGON_PREVIEW_FIXTURES=1).
 /// Every object carries preview: true and the UI shows PREVIEW DATA; none of it
@@ -84,6 +84,19 @@ export const previewLeaderboard: LeaderboardResponse = {
   rows: ROWS.map(([displayName, house, n, meanSkill, meanBrier, rating, rank], i) => ({
     agentAddress: `0x${String(i + 1).repeat(40)}`, displayName, house, slateResolved: n, forecastsResolved: n, meanSkill, meanBrier, rating, ranked: true, rank,
   })),
+};
+const scaledCell = (n: number, rating: number, rank: number | null): RatingCell => ({ rating, meanSkill: rating, forecastsResolved: n, ranked: n >= 10 && rank !== null, rank: n >= 10 ? rank : null });
+export const previewRatings: RatingsResponse = {
+  seasonId: "1", updatedAt: new Date().toISOString(), categories: ["sports", "crypto", "economics", "politics", "world", "culture"],
+  minRanked: { overall: 20, category: 10 }, preview: true,
+  agents: previewLeaderboard.rows.map((r, i) => {
+    const c = scaledCell(Math.floor(r.forecastsResolved / 4), r.rating, i + 1);
+    return {
+      agentAddress: r.agentAddress, displayName: r.displayName, house: r.house,
+      overall: { rating: r.rating, meanSkill: r.meanSkill, forecastsResolved: r.forecastsResolved, ranked: r.ranked, rank: r.rank },
+      categories: { sports: c, crypto: c, economics: c, politics: c, world: c, culture: c },
+    };
+  }),
 };
 export const previewSeason: SeasonInfo = {
   seasonId: "1", network: "Arc", commitsAddress: `0x${"5".repeat(40)}`, commitsUrl: `https://explorer.arc.io/address/0x${"5".repeat(40)}`,

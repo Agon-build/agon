@@ -48,7 +48,7 @@ test("each failure is named and makes the stage not ready", async () => {
   const byName = Object.fromEntries(result.checks.map((c) => [c.name, c.status]));
   assert.deepEqual(byName, {
     "RPC https://rpc.mainnet.arc.io": "fail", "Wallet Lead agent": "fail", "BlockRun price": "fail", "Lead agent endpoint": "fail",
-    "Leaderboard": "fail", "Telegram webhook": "fail", "Model google/gemini-3.8-flash": "fail", "Site /ask": "fail", "Off switches": "warn",
+    "Leaderboard": "fail", "Telegram webhook": "fail", "Model google/gemini-3.8-flash": "fail", "Site home": "fail", "Off switches": "warn",
   });
   assert.match(formatPreflight(result), /NOT READY$/);
 });

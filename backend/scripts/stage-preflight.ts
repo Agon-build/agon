@@ -84,7 +84,7 @@ async function main(): Promise<void> {
         try { return (await callModel({ model, systemPrompt: "Reply with the word OK.", userPrompt: "OK?", maxTokens: 5, temperature: 0 })).text.length > 0; } catch { return false; }
       },
     })),
-    site: async () => (await fetch(`${stage.siteUrl}/ask`, { signal: AbortSignal.timeout(15_000) })).status,
+    site: async () => (await fetch(`${stage.siteUrl}/`, { signal: AbortSignal.timeout(15_000) })).status,
     offSwitches: off,
   };
   const result = await runPreflight(deps);
