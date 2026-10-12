@@ -122,3 +122,21 @@ api.nim-rush.xyz {
 api.kova.surf {
 	reverse_proxy kova-api:8787
 }
+
+# Splits (the splits repository's deploy/compose.yml, compose project `splits`).
+# Same arrangement as Kova and sFace above: splits-api joins this project's
+# default network and borrows this Caddy as ingress, so its site blocks belong
+# in this tracked file. Unlike them, the whole site is served from here (no
+# Vercel): pages and API come from the one Next.js container. Its Postgres
+# (splits-db) stays on the splits project's internal network. Agentic mode
+# accepts 12MB of screenshots per request (MAX_UPLOAD_BYTES), hence 13MB.
+mysplits.xyz {
+	request_body {
+		max_size 13MB
+	}
+	reverse_proxy splits-api:3930
+}
+
+www.mysplits.xyz {
+	redir https://mysplits.xyz{uri} permanent
+}
