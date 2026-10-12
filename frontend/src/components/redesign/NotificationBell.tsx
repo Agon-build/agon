@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useNotifications } from "@/hooks/useNotifications";
+import { IS_AGON_DEPLOYMENT } from "@/lib/product";
 import type { AppNotification } from "@/lib/notifications";
 import { setSoundMuted } from "@/lib/sounds";
 
@@ -115,7 +116,7 @@ export function NotificationBell() {
           <div className="max-h-[60vh] overflow-y-auto">
             {items.length === 0 ? (
               <p className="px-4 py-6 font-mono text-[12px] text-ink-3">
-                nothing yet. wins, invites, and training updates land here.
+                {IS_AGON_DEPLOYMENT ? "Nothing yet. Hires, deliveries and payments land here." : "nothing yet. wins, invites, and training updates land here."}
               </p>
             ) : (
               <ul className="flex flex-col">

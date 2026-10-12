@@ -81,7 +81,7 @@ export function startPaymentsRuntime(input: {
       ops: {
         createWallet: createAgonWallet,
         seedTestnet: seedTestnetUsdc,
-        transfer: (i: { walletId: string; destinationAddress: Address; amountBaseUnits: bigint; idempotencyKey: string; refId: string }) => createPlatformUsdcTransfer(i),
+        transfer: (i: { walletId: string; destinationAddress: Address; amountBaseUnits: bigint; idempotencyKey: string; refId: string }) => createPlatformUsdcTransfer({ ...i, blockchain: network.circleChain }),
       },
     };
     const hireDeps: HireDeps = {
@@ -110,7 +110,7 @@ export function startPaymentsRuntime(input: {
             createGuardedSigner({ address: s.lead.address, walletId: s.lead.walletId, signJson, context: () => ({ network, from: s.lead.address, payTo, maxValue, now: new Date() }), onSigned }),
           authorizationUsed: hireDeps.authorizationUsed,
           refund: async (to, amount, key) => {
-            const t = await createPlatformUsdcTransfer({ walletId: s.lead.walletId, destinationAddress: to, amountBaseUnits: amount, idempotencyKey: stableUuid(key), refId: key });
+            const t = await createPlatformUsdcTransfer({ walletId: s.lead.walletId, destinationAddress: to, amountBaseUnits: amount, idempotencyKey: stableUuid(key), refId: key, blockchain: network.circleChain });
             return waitForCircleTx({ id: t.id, label: key, getTxState });
           },
         },

@@ -135,3 +135,9 @@ test("the access gate sends people to sign in with a way back", () => {
   const src = readFileSync(new URL("../../components/AgonAccessGate.tsx", import.meta.url), "utf8");
   assert.match(src, /loginHref\(/);
 });
+
+test("the notification panel speaks Agon on the Agon deployment", () => {
+  const src = readFileSync(new URL("../../components/redesign/NotificationBell.tsx", import.meta.url), "utf8");
+  assert.match(src, /Hires, deliveries and payments land here\./);
+  assert.match(src, /IS_AGON_DEPLOYMENT/);
+});

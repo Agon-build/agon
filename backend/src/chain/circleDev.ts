@@ -4,6 +4,7 @@ import {
   type CreateTransferTransactionInput,
 } from "@circle-fin/developer-controlled-wallets";
 import { config } from "../config/index.js";
+import { platformTransferInput } from "./circle-transfer-input.ts";
 
 /// Backend integration with Circle Developer-Controlled Wallets. ArcRun email
 /// users sign in with an email, the backend mints a Circle wallet for them,
@@ -252,20 +253,10 @@ export async function createPlatformUsdcTransfer(params: {
   amountBaseUnits: bigint;
   idempotencyKey: string;
   refId?: string;
+  blockchain: "ARC-TESTNET" | "ARC";
 }): Promise<{ id: string; state: string }> {
-  if (params.amountBaseUnits <= 0n) throw new Error("agent transfer amount must be positive");
-  const whole = params.amountBaseUnits / 1_000_000n;
-  const fractional = (params.amountBaseUnits % 1_000_000n).toString().padStart(6, "0").replace(/0+$/, "");
-  const amount = fractional ? `${whole.toString()}.${fractional}` : whole.toString();
-  const input: CreateTransferTransactionInput = {
-    walletId: params.walletId,
-    tokenAddress: "0x3600000000000000000000000000000000000000",
-    amount: [amount],
-    destinationAddress: params.destinationAddress,
-    fee: { type: "level", config: { feeLevel: "MEDIUM" } },
-    idempotencyKey: params.idempotencyKey,
-    ...(params.refId ? { refId: params.refId } : {}),
-  };
+  // The installed SDK types list only ARC-TESTNET; Circle's API accepts ARC too (see createAgonWallet).
+  const input = platformTransferInput(params) as unknown as CreateTransferTransactionInput;
   const response = await getClient().createTransaction(input);
   const data = response.data;
   if (!data?.id) throw new Error("Circle createTransaction returned no id");
