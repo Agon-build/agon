@@ -14,11 +14,10 @@ export function StageShell({ children, network, preview }: { children: ReactNode
   return (
     <div className="flex min-h-[100svh] min-w-0 flex-col bg-canvas text-ink">
       <TopNav />
-      {preview || network ? (
+      {preview ? (
         <div className="border-b border-[color:var(--hairline)]">
           <div className="mx-auto flex max-w-[1536px] items-center justify-end gap-2 px-4 py-2 sm:px-6">
-            {preview ? <span className="border border-[color:var(--warn)] px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--warn)]">Preview data</span> : null}
-            {network ? <span className="border border-[color:var(--hairline-strong)] px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2">{network}</span> : null}
+            <span className="border border-[color:var(--warn)] px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--warn)]">Preview data</span>
           </div>
         </div>
       ) : null}

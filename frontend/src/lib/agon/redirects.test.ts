@@ -228,3 +228,10 @@ test("Account shows one List your agent button, and hires are paged while the Hi
   assert.match(hire, /getHistory\(1, 3\)/);
   assert.doesNotMatch(hire, /slice\(0, 6\)/);
 });
+
+test("the network shows once, in the header selector, not again under it", () => {
+  const shell = readFileSync(new URL("../../components/stage/StageShell.tsx", import.meta.url), "utf8");
+  const bar = shell.slice(shell.indexOf("<TopNav />"), shell.indexOf("<main"));
+  assert.doesNotMatch(bar, /\{network\}/, "no second network chip under the header");
+  assert.match(bar, /Preview data/);
+});
