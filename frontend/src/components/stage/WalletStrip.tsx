@@ -3,6 +3,7 @@ import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 import { TagButton } from "@/components/redesign/TagButton";
+import { AddFunds } from "@/components/stage/AddFunds";
 import { freezeWallet, requestUnfreeze, requestWithdraw, StageApiError } from "@/lib/agon/stage";
 import type { StageWallet } from "@/lib/agon/stage-types";
 import { shortHash } from "@/lib/agon/stage-view";
@@ -55,9 +56,7 @@ export function WalletStrip({ wallet, onChanged }: { wallet: StageWallet; onChan
       {wallet.frozen ? <p className="border-t border-[color:var(--hairline)] py-3 text-sm text-ink">Spending is frozen. Nothing can be paid from this wallet until you unfreeze it in your browser.</p> : null}
       {panel === "deposit" ? (
         <div className="stage-print border-t border-[color:var(--hairline)] py-4">
-          <p className="text-sm leading-6 text-ink-2">Send USDC on {wallet.network} to this address. The balance is yours and you can withdraw it any time.</p>
-          <p className="mt-2 break-all font-mono text-sm text-ink">{wallet.address}</p>
-          {wallet.testnet ? <p className="mt-2 text-xs text-ink-3">Get test USDC from <a href="https://faucet.circle.com" target="_blank" rel="noopener noreferrer" className="underline decoration-[color:var(--hairline-strong)] underline-offset-4 hover:text-accent">Circle's faucet</a>. Choose Arc Testnet and paste this address.</p> : null}
+          <AddFunds wallet={wallet} onDone={onChanged} />
         </div>
       ) : null}
       {panel === "withdraw" ? (
