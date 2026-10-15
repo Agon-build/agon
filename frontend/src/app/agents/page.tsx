@@ -11,6 +11,8 @@ import { TagButton } from "@/components/redesign/TagButton";
 import { AGON_CATEGORIES, listingSearchMatch } from "@/lib/agon/catalog";
 import { AGON_PREVIEW_MODE, inspectManifest, listListings } from "@/lib/agon/client";
 import { marketEmptyState } from "@/lib/agon/market-empty";
+import { arenaTextByAgentId, sortForCards } from "@/lib/agon/card-facts";
+import { getEntries, getRatings } from "@/lib/agon/stage";
 import type { AgonListing } from "@/lib/agon/types";
 import { useAgonNetwork } from "@/hooks/useAgonNetwork";
 
@@ -35,6 +37,16 @@ function ArcMarketPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [searchDetailsState, setSearchDetailsState] = useState<"idle" | "loading" | "ready">("idle");
   const inspectedListingIds = useRef(new Set<string>());
+  const [arena, setArena] = useState<Map<string, string>>(new Map());
+
+  useEffect(() => {
+    let active = true;
+    // The Arena line is extra: if the Season is unreachable the cards simply go without it.
+    void Promise.all([getEntries(), getRatings()])
+      .then(([{ entries }, ratings]) => { if (active) setArena(arenaTextByAgentId(entries, ratings)); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     setQuery(new URLSearchParams(window.location.search).get("q")?.trim() ?? "");
@@ -89,7 +101,7 @@ function ArcMarketPage() {
     return () => { active = false; };
   }, [items, networkKey, query]);
 
-  const filteredItems = useMemo(() => (items ?? []).flatMap((item) => {
+  const filteredItems = useMemo(() => sortForCards(items ?? []).flatMap((item) => {
     const searchMatch = listingSearchMatch(item, query);
     if (!searchMatch.matches || item.status !== "Listed" || item.risk.quarantineReason || (view === "tested" && item.verification.status !== "Verified")) return [];
     return [{ item, matchedTerms: searchMatch.matchedTerms }];
@@ -138,7 +150,7 @@ function ArcMarketPage() {
               <div aria-hidden className="absolute right-5 top-5 h-2 w-2 bg-accent" />
               <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">A SIMPLE WAY TO START</div>
               <div className="mt-6 grid grid-cols-3 divide-x divide-[color:var(--hairline)] border-y border-[color:var(--hairline)] py-5">
-                <HeroStat label="AGENTS" value={items ? String(items.length) : "..."} />
+                <HeroStat label="AGENTS" value={items ? String(items.filter((item) => item.status === "Listed" && !item.risk.quarantineReason).length) : "..."} />
                 <HeroStat label="CATEGORIES" value={String(AGON_CATEGORIES.length)} />
                 <HeroStat label="ACCESS" value="OPEN" />
               </div>
@@ -147,7 +159,7 @@ function ArcMarketPage() {
               </ol>
               <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-[color:var(--hairline)] pt-5">
                 <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">{network.name}</span>
-                <TagButton href="/docs#mcp" variant="ghost" size="sm">LIST AN AGENT</TagButton>
+                <TagButton href="/list" variant="ghost" size="sm">LIST YOUR AGENT</TagButton>
               </div>
             </div>
           </div>
@@ -213,8 +225,8 @@ function ArcMarketPage() {
               </div>
             </BracketedCell>
           ) : (
-            <div className="grid gap-3 lg:grid-cols-2">
-              {filteredItems.map(({ item, matchedTerms }) => <ListingCard key={item.id} listing={item} searchMatchTerms={matchedTerms} />)}
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {filteredItems.map(({ item, matchedTerms }) => <ListingCard key={item.id} listing={item} arena={arena.has(item.agentId) ? { agentId: item.agentId, text: arena.get(item.agentId)! } : null} searchMatchTerms={matchedTerms} />)}
             </div>
           )}
 
@@ -261,7 +273,7 @@ function ViewButton({ active, label, onClick }: { active: boolean; label: string
 
 function MarketLoading() {
   return (
-    <div aria-label="Loading services" className="grid gap-3 lg:grid-cols-2">
+    <div aria-label="Loading services" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {["one", "two", "three", "four"].map((key) => <div key={key} className="min-h-[210px] border border-[color:var(--hairline)] bg-canvas-2 p-5"><div className="flex gap-5"><div className="h-[88px] w-[88px] animate-pulse bg-canvas-3" /><div className="min-w-0 flex-1"><div className="h-3 w-24 animate-pulse bg-canvas-3" /><div className="mt-4 h-6 w-2/3 animate-pulse bg-canvas-3" /><div className="mt-3 h-3 w-full animate-pulse bg-canvas-3" /></div></div><div className="mt-5 h-px w-full bg-[color:var(--hairline)]" /></div>)}
     </div>
   );

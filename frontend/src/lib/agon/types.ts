@@ -138,6 +138,8 @@ export type AgonListing = {
     sourceTxHash: string;
     sourceLogIndex: number;
   };
+  /** Built by Agon. Optional so an API without the field still renders. */
+  firstParty?: boolean;
 };
 
 export type AgonListingPage = {

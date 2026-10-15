@@ -5,21 +5,22 @@ import { useEffect, useMemo, useState } from "react";
 
 import { BracketedCell } from "@/components/redesign/BracketedCell";
 import { inspectManifest } from "@/lib/agon/client";
-import { presentListing } from "@/lib/agon/catalog";
+import { cardFacts, type CardBadge } from "@/lib/agon/card-facts";
 import type { AgonListing } from "@/lib/agon/types";
 import { useAgonNetwork } from "@/hooks/useAgonNetwork";
-import { VerificationBadge } from "./VerificationBadge";
 
-function priceLabel(amountUSDC: string | null) {
-  return amountUSDC ? `${amountUSDC} USDC / use` : "Price in service file";
-}
+const BADGE_TONE: Record<CardBadge, string> = {
+  "Built by Agon": "bg-accent text-accent-ink",
+  Verified: "border border-[color:var(--ok)] text-ink",
+  Listed: "border border-[color:var(--hairline-strong)] text-ink-3",
+};
 
-export function ListingCard({ listing, searchMatchTerms = [] }: { listing: AgonListing; searchMatchTerms?: string[] }) {
+export function ListingCard({ listing, arena = null, searchMatchTerms = [] }: { listing: AgonListing; arena?: { agentId: string; text: string } | null; searchMatchTerms?: string[] }) {
   const { networkKey } = useAgonNetwork();
   const [manifestBody, setManifestBody] = useState(listing.manifest.body);
   const [metadataState, setMetadataState] = useState<"idle" | "loading" | "ready" | "mismatch" | "error">(listing.manifest.body === undefined ? "idle" : "ready");
   const hydratedListing = useMemo(() => ({ ...listing, manifest: { ...listing.manifest, body: manifestBody } }), [listing, manifestBody]);
-  const service = presentListing(hydratedListing);
+  const facts = cardFacts(hydratedListing, arena);
   const quarantined = Boolean(listing.risk.quarantineReason);
   const metadataBlocked = metadataState === "mismatch" || metadataState === "error";
   const unavailable = listing.status !== "Listed" || quarantined || metadataBlocked;
@@ -56,45 +57,49 @@ export function ListingCard({ listing, searchMatchTerms = [] }: { listing: AgonL
 
   return (
     <article className="min-w-0">
-      <Link href={`/agents/${encodeURIComponent(listing.id)}`} aria-label={`Open ${service.name}`} className="group block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas">
-        <BracketedCell hover className="h-full" pad="md">
-          <div className="flex min-w-0 gap-4 sm:gap-5">
-            <AgentLogo logoUrl={service.logoUrl} name={service.name} cacheKey={`${listing.version}-${listing.manifest.hash}`} />
+      <Link href={`/agents/${encodeURIComponent(listing.id)}`} aria-label={`Open ${facts.name}`} className="group block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas">
+        <BracketedCell hover className="flex h-full flex-col" pad="md">
+          <div className="flex min-w-0 items-start gap-4">
+            <CardLogo logoUrl={facts.logoUrl} initials={facts.initials} name={facts.name} cacheKey={`${listing.version}-${listing.manifest.hash}`} />
             <div className="min-w-0 flex-1">
-              <div className="flex min-w-0 items-center justify-between gap-3">
-                <span className="truncate font-mono text-[9px] uppercase tracking-[0.15em] text-accent">{service.category.label}</span>
-                <VerificationBadge status={listing.verification.status} quarantined={quarantined} />
+              <div className="flex min-w-0 items-start justify-between gap-3">
+                <h2 className="min-w-0 truncate font-sans text-[18px] font-semibold leading-tight tracking-[-0.02em] text-ink">{facts.name}</h2>
+                <span className={`shrink-0 px-2 py-1 font-mono text-[9px] uppercase tracking-[0.12em] ${quarantined ? "border border-[color:var(--err)] text-[color:var(--err)]" : BADGE_TONE[facts.badge]}`}>{quarantined ? "Held" : facts.badge}</span>
               </div>
-              <h2 className="mt-2 truncate font-sans text-[20px] font-semibold leading-tight tracking-[-0.03em] text-ink sm:text-[22px]">{service.name}</h2>
-              <p className="mt-2 line-clamp-2 font-sans text-[13px] leading-[1.45] text-ink-2">{service.description}</p>
+              <p className="mt-1.5 line-clamp-2 font-sans text-[13px] leading-[1.45] text-ink-2">{facts.line}</p>
             </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-1.5">
-            {service.tags.slice(0, 3).map((tag) => <span key={tag} className="bg-canvas-3 px-2 py-1 font-mono text-[8px] uppercase tracking-[0.1em] text-ink-3">{tag}</span>)}
+          {facts.arena ? <p className="mt-3 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.12em] text-ink"><span aria-hidden className="text-accent">■</span>{facts.arena}</p> : null}
+
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {facts.chips.map((chip) => <span key={chip} className="bg-canvas-3 px-2 py-1 font-mono text-[9px] uppercase tracking-[0.1em] text-ink-2">{chip}</span>)}
           </div>
 
-          {searchMatchTerms.length > 0 ? <p className="mt-3 font-mono text-[8px] uppercase tracking-[0.11em] text-accent">MATCHES: {searchMatchTerms.join(" / ")}</p> : null}
+          {searchMatchTerms.length > 0 ? <p className="mt-3 font-mono text-[9px] uppercase tracking-[0.11em] text-accent">MATCHES: {searchMatchTerms.join(" / ")}</p> : null}
 
-          <div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4 border-t border-[color:var(--hairline)] pt-3">
-            <div className="min-w-0">
-              <div className="font-mono text-[8px] uppercase tracking-[0.14em] text-ink-3">{listing.payment.rail === "Escrow" ? "PROTECTED PROJECT" : "PAY PER USE"}</div>
-              <div className="mt-1 truncate font-sans text-[16px] font-semibold text-ink">{priceLabel(service.amountUSDC)}</div>
-            </div>
-            <div className="text-right font-mono text-[8px] uppercase tracking-[0.11em] text-ink-3">
-              <div className={listing.endpointQa.status === "passed" ? "text-[color:var(--ok)]" : unavailable ? "text-[color:var(--err)]" : "text-[color:var(--warn)]"}>
-                {unavailable ? "CHECK REQUIRED" : listing.endpointQa.status === "passed" ? "RESPONDING" : "CHECKING"}
-              </div>
-              <div className="mt-1 text-ink transition-transform group-hover:translate-x-1">OPEN SERVICE →</div>
-            </div>
+          <div aria-hidden className="min-h-4 flex-1" />
+          <div className="flex items-end justify-between gap-4 border-t border-[color:var(--hairline)] pt-3">
+            <span className={`font-mono text-[10px] uppercase tracking-[0.12em] ${unavailable ? "text-[color:var(--err)]" : "text-ink-3"}`}>{unavailable ? "Check required" : facts.activity ?? ""}</span>
+            {facts.price ? <span className="font-mono text-[13px] text-ink">{facts.price}</span> : null}
           </div>
 
-          {metadataState === "loading" ? <p className="mt-2 font-mono text-[8px] uppercase tracking-[0.1em] text-ink-3">Loading verified service identity</p> : null}
-          {metadataState === "mismatch" ? <p className="mt-2 font-mono text-[8px] uppercase tracking-[0.1em] text-[color:var(--err)]">Service file changed · new version required</p> : null}
-          {metadataState === "error" ? <p className="mt-2 font-mono text-[8px] uppercase tracking-[0.1em] text-[color:var(--err)]">Service identity unavailable</p> : null}
+          {metadataState === "loading" ? <p className="mt-2 font-mono text-[9px] uppercase tracking-[0.1em] text-ink-3">Loading service details</p> : null}
+          {metadataState === "mismatch" ? <p className="mt-2 font-mono text-[9px] uppercase tracking-[0.1em] text-[color:var(--err)]">Service file changed · new version required</p> : null}
+          {metadataState === "error" ? <p className="mt-2 font-mono text-[9px] uppercase tracking-[0.1em] text-[color:var(--err)]">Service details unavailable</p> : null}
         </BracketedCell>
       </Link>
     </article>
+  );
+}
+
+function CardLogo({ logoUrl, initials, name, cacheKey }: { logoUrl: string | null; initials: string; name: string; cacheKey: string }) {
+  const [failed, setFailed] = useState(false);
+  const src = logoUrl ? `${logoUrl}${logoUrl.includes("?") ? "&" : "?"}v=${encodeURIComponent(cacheKey)}` : null;
+  return (
+    <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden border border-[color:var(--hairline-strong)] bg-accent font-stencil text-[18px] text-accent-ink" role="img" aria-label={src && !failed ? `${name} logo` : `${name} initials`}>
+      {src && !failed ? <img src={src} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setFailed(true)} /> : initials}
+    </div>
   );
 }
 

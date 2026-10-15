@@ -76,6 +76,7 @@ export const AGON_PREVIEW_LISTINGS: AgonListing[] = [
     },
     payment: { rail: "Escrow", directX402: false, escrowEligible: true },
     provenance: { sourceBlockNumber: "57530001", sourceTxHash: txHash("1"), sourceLogIndex: 0 },
+    firstParty: false,
   },
   {
     id: id("2"),
@@ -114,6 +115,7 @@ export const AGON_PREVIEW_LISTINGS: AgonListing[] = [
     },
     payment: { rail: "X402", directX402: true, escrowEligible: false },
     provenance: { sourceBlockNumber: "57530002", sourceTxHash: txHash("2"), sourceLogIndex: 1 },
+    firstParty: false,
   },
   {
     id: id("4"),
@@ -148,6 +150,7 @@ export const AGON_PREVIEW_LISTINGS: AgonListing[] = [
     },
     payment: { rail: "X402", directX402: true, escrowEligible: false },
     provenance: { sourceBlockNumber: "57530004", sourceTxHash: txHash("4"), sourceLogIndex: 3 },
+    firstParty: false,
   },
   {
     id: id("3"),
@@ -186,6 +189,7 @@ export const AGON_PREVIEW_LISTINGS: AgonListing[] = [
     },
     payment: { rail: "Escrow", directX402: false, escrowEligible: false },
     provenance: { sourceBlockNumber: "57530003", sourceTxHash: txHash("3"), sourceLogIndex: 2 },
+    firstParty: false,
   },
 ];
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 
 import { ServiceProof } from "@/components/agon/ServiceProof";
@@ -17,7 +18,10 @@ import { Footer } from "@/components/redesign/Footer";
 import { SectionHeader } from "@/components/redesign/SectionHeader";
 import { TagButton } from "@/components/redesign/TagButton";
 import { presentListing } from "@/lib/agon/catalog";
-import { getListing, inspectManifest } from "@/lib/agon/client";
+import { getListing, inspectManifest, listListings } from "@/lib/agon/client";
+import { providerLabel, servicesForAgent } from "@/lib/agon/agent-services";
+import { cardBadge } from "@/lib/agon/card-facts";
+import { networkHref } from "@/lib/agon/network";
 import type { AgonListing } from "@/lib/agon/types";
 import { assessListingAssurance, canUseEscrow, verifyManifestAnchor } from "@/lib/agon/verify";
 import { useAgonNetwork } from "@/hooks/useAgonNetwork";
@@ -35,6 +39,18 @@ function ArcListingDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [manifestBody, setManifestBody] = useState<unknown | undefined>(undefined);
+  const [agentListings, setAgentListings] = useState<AgonListing[]>([]);
+
+  useEffect(() => {
+    if (!listing) return;
+    let live = true;
+    setAgentListings([]);
+    // The agent's other services are extra; the current one always shows.
+    listListings({ agentId: listing.agentId, network: networkKey })
+      .then((page) => { if (live) setAgentListings(page.items); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [listing, networkKey]);
 
   useEffect(() => {
     let live = true;
@@ -110,7 +126,7 @@ function ArcListingDetailPage() {
                       <div className="flex items-start gap-4">
                         <AgentLogo logoUrl={service.logoUrl} name={service.name} cacheKey={listing.version} />
                         <div>
-                        <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">WHAT YOU GET</div>
+                        <div className="flex flex-wrap items-center gap-3 font-mono text-[10px] uppercase tracking-[0.16em]"><span className="text-accent">WHAT YOU GET</span><span className={cardBadge(listing) === "Built by Agon" ? "bg-accent px-2 py-1 text-accent-ink" : "border border-[color:var(--hairline-strong)] px-2 py-1 text-ink-2"}>{cardBadge(listing)}</span><span className="text-ink-3">ERC-8004 #{listing.agentId}</span></div>
                         <h2 className="mt-2 max-w-[22ch] font-stencil text-[30px] uppercase leading-[1.05] text-ink sm:text-[36px]">{service.name}</h2>
                         </div>
                       </div>
@@ -121,7 +137,7 @@ function ArcListingDetailPage() {
 
                     <dl className="mt-7 grid gap-px bg-[color:var(--hairline)] sm:grid-cols-2">
                       <OverviewFact label="CATEGORY" value={service.category.label} note={service.category.description} />
-                      <OverviewFact label="PROVIDER" value="Independent service" note="The provider owns and operates this service." />
+                      <OverviewFact label="PROVIDER" value={providerLabel(listing)} note={listing.firstParty ? "Agon builds and runs this agent." : "The provider owns and operates this agent."} />
                       <OverviewFact label="DELIVERY" value={service.endpoint ? "Public service endpoint" : "Delivery details loading"} note={service.endpoint ? "The provider receives requests through its public endpoint." : "Open the service file to inspect delivery details."} />
                       <OverviewFact label="DELIVERY TIME" value={service.timeoutMs ? `Up to ${Math.round(service.timeoutMs / 1000)} seconds` : "Provider terms"} note="The service declares its maximum response time." />
                     </dl>
@@ -142,6 +158,24 @@ function ArcListingDetailPage() {
                     ) : null}
                   </BracketedCell>
 
+                  <BracketedCell pad="lg">
+                    <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">SERVICES</div>
+                    <ul className="mt-4 divide-y divide-[color:var(--hairline)] border-y border-[color:var(--hairline)]">
+                      {servicesForAgent(agentListings, hydratedListing!).map((row) => (
+                        <li key={row.id} className="flex flex-wrap items-center gap-x-5 gap-y-3 py-4">
+                          <div className="min-w-0 flex-1 basis-[240px]">
+                            <div className="font-sans text-[15px] font-semibold text-ink">{row.name}</div>
+                            <p className="mt-1 line-clamp-2 font-sans text-[13px] leading-[1.45] text-ink-2">{row.line}</p>
+                          </div>
+                          {row.price ? <span className="font-mono text-[12px] text-ink">{row.price}</span> : null}
+                          {row.current
+                            ? <a href="#use" className="inline-flex min-h-11 items-center bg-accent px-4 font-mono text-[10px] uppercase tracking-[0.14em] text-accent-ink hover:bg-accent-press">{row.action}</a>
+                            : <Link href={networkHref(row.href, networkKey)} className="inline-flex min-h-11 items-center border border-ink px-4 font-mono text-[10px] uppercase tracking-[0.14em] text-ink hover:bg-ink hover:text-[color:var(--canvas)]">{row.action}</Link>}
+                        </li>
+                      ))}
+                    </ul>
+                  </BracketedCell>
+
                   <details className="border border-[color:var(--hairline-strong)] bg-canvas">
                     <summary className="cursor-pointer px-5 py-5 font-mono text-[11px] uppercase tracking-[0.14em] text-ink sm:px-6">VIEW TECHNICAL PROOF AND PROVENANCE</summary>
                     <div className="grid gap-px border-b border-[color:var(--hairline)] bg-[color:var(--hairline)] sm:grid-cols-2">
@@ -155,7 +189,7 @@ function ArcListingDetailPage() {
                   </details>
                 </div>
 
-                <aside className="lg:sticky lg:top-24">
+                <aside id="use" className="scroll-mt-24 lg:sticky lg:top-24">
                   <BracketedCell tone="ink" pad="lg">
                     <div className="font-mono text-[10px] uppercase tracking-[0.16em] opacity-60">PRICE AND USE</div>
                     <div className="mt-4 font-stencil text-[36px] uppercase leading-none sm:text-[42px]">{service.amountUSDC ? `${service.amountUSDC} USDC` : "PRICE NOT INDEXED"}</div>
