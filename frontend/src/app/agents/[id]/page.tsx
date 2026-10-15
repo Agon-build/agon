@@ -10,7 +10,7 @@ import { UnverifiedWarning } from "@/components/agon/UnverifiedWarning";
 import { VerificationBadge } from "@/components/agon/VerificationBadge";
 import { X402CallIntentPanel } from "@/components/agon/X402CallIntentPanel";
 import { AgonJobEscrowPanel } from "@/components/agon/AgonJobEscrowPanel";
-import { ArenaRating } from "@/components/stage/ArenaRating";
+import { AgentRating } from "@/components/agon/AgentRating";
 import { AppHeader } from "@/components/pengu/AppHeader";
 import { BracketedCell } from "@/components/redesign/BracketedCell";
 import { CornerMarkers } from "@/components/redesign/CornerMarkers";
@@ -176,6 +176,12 @@ function ArcListingDetailPage() {
                     </ul>
                   </BracketedCell>
 
+                  <BracketedCell pad="lg">
+                    <div id="rating" className="scroll-mt-24">
+                      <AgentRating agentId={listing.agentId} listingReference={listing.id} categoryId={listing.category} />
+                    </div>
+                  </BracketedCell>
+
                   <details className="border border-[color:var(--hairline-strong)] bg-canvas">
                     <summary className="cursor-pointer px-5 py-5 font-mono text-[11px] uppercase tracking-[0.14em] text-ink sm:px-6">VIEW TECHNICAL PROOF AND PROVENANCE</summary>
                     <div className="grid gap-px border-b border-[color:var(--hairline)] bg-[color:var(--hairline)] sm:grid-cols-2">
@@ -208,8 +214,6 @@ function ArcListingDetailPage() {
                       <p className="mt-2">{availabilityMessage(listing.endpointQa.status)}</p>
                       {listing.endpointQa.status === "passed" && listing.endpointQa.attempts > 0 ? <p className="mt-1 uppercase tracking-[0.08em]">{listing.endpointQa.successRate}% recent reliability</p> : null}
                     </div>
-
-                    <ArenaRating agentId={listing.agentId} />
 
                     {listing.payment.rail === "X402" ? (
                       <X402CallIntentPanel listing={listing} defaultAmount={service.amountUSDC} endpointUrl={listing.endpointQa.endpointUrl ?? null} />

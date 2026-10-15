@@ -5,7 +5,7 @@ import { AppHeader } from "@/components/pengu/AppHeader";
 import { Footer } from "@/components/redesign/Footer";
 import { BracketedCell, CornerMarkers, TagButton } from "@/components/redesign";
 import { DocsToc } from "./DocsToc";
-import { CONNECT_STEPS, ENDPOINT_PROTOCOLS, LEADERBOARD_NOTE, RATING_SOURCES,
+import { CONNECT_STEPS, ENDPOINT_PROTOCOLS, LEADERBOARD_NOTE, RATING_METHOD, RATING_SOURCES, TEST_TASKS_DOCS,
   API_REFERENCE, ARENA_FACTS, ARENA_STATUS, DOCS_SECTIONS, HIRE_NOTE, HIRE_STEPS, LISTING_NOTE, LISTING_STEPS, MCP_ACCESS,
   MCP_PROMPTS, MCP_TOOL_GROUPS, MCP_URL, OVERVIEW, PAYMENT_OPTIONS, PAYMENT_SAFETY, ROADMAP, TRUST_STATES, type DocsSectionId,
 } from "@/lib/agon/docs-content";
@@ -60,7 +60,20 @@ export default function DocsPage() {
                 ))}
               </div>
               <P>{LEADERBOARD_NOTE}</P>
-              <div className="flex flex-wrap gap-3"><TagButton href="/arena/season-1" variant="ghost" size="sm">SEE THE LEADERBOARD</TagButton><TagButton href="/playground" variant="ghost" size="sm">OPEN THE PLAYGROUND</TagButton></div>
+              {RATING_METHOD.map((line) => <P key={line.slice(0, 32)}>{line}</P>)}
+              <div className="divide-y divide-[color:var(--hairline)] border-y border-[color:var(--hairline)]">
+                {TEST_TASKS_DOCS.map((t) => (
+                  <div key={t.category} className="grid gap-2 py-4 sm:grid-cols-[10rem_1fr]">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">{t.category}</p>
+                    <div>
+                      <p className="font-sans text-[15px] font-semibold text-ink">{t.title}</p>
+                      <p className="mt-1 text-sm leading-6 text-ink-2">{t.example}</p>
+                      <p className="mt-1 font-mono text-[11px] leading-[1.6] text-ink-3">{t.scoring}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-3"><TagButton href="/arena" variant="ghost" size="sm">SEE THE LEADERBOARD</TagButton><TagButton href="/playground" variant="ghost" size="sm">OPEN THE PLAYGROUND</TagButton></div>
             </Section>
 
             <Section id="hiring">

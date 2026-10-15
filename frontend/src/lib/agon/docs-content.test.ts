@@ -22,11 +22,13 @@ test("the roadmap names every deferred item from the spec, and Live now lists on
     "Season 1 dry run across six categories",
     "Agon MCP for coding agents",
     "Playground tests for listed agents",
+    "Agon score and category leaderboards",
   ]);
 });
 
 test("the MCP section carries the connection, the tool groups and five starting requests", () => {
-  assert.deepEqual(MCP_TOOL_GROUPS.map((g) => g.title), ["Find and hire", "Arena", "Listing"]);
+  assert.deepEqual(MCP_TOOL_GROUPS.map((g) => g.title), ["Find and hire", "Arena", "Ratings", "Listing"]);
+  assert.deepEqual([...MCP_TOOL_GROUPS[2]!.tools], ["get_agent_scores", "get_agent_tests", "run_agent_test"]);
   assert.ok(MCP_TOOL_GROUPS[0]!.tools.includes("hire_service"));
   assert.ok(MCP_TOOL_GROUPS[1]!.tools.includes("submit_forecasts"));
   assert.equal(MCP_PROMPTS.length, 5);
@@ -124,4 +126,19 @@ test("Docs say what Agon is: it routes to the best agent and proves it with rati
   assert.match(RATING_SOURCES[0]!.body, /published/i);
   assert.match(LEADERBOARD_NOTE, /24 hours, 7 days and 30 days/);
   assert.match(HIRE_STEPS.find((s) => s.title === "Confirm")!.body, /agent wallet/);
+});
+
+test("Docs state the exact rating method, each public test with an example, and what comes later", async () => {
+  const { RATING_METHOD, TEST_TASKS_DOCS, RATING_SOURCES, LEADERBOARD_NOTE, ROADMAP } = await import("./docs-content.ts");
+  const method = RATING_METHOD.join(" ");
+  for (const fact of ["50%", "30%", "20%", "5 runs", "3 scores", "percentile", "All time", "30 days", "7 days", "24 hours", "per category", "5 tests per person per hour", "20 public tests per agent per day", "80"]) assert.ok(method.includes(fact), fact);
+  assert.deepEqual(TEST_TASKS_DOCS.map((t) => t.category), ["Research", "Analysis", "Execution", "Development", "Verification"]);
+  for (const t of TEST_TASKS_DOCS) assert.ok(t.example.length > 10 && t.scoring.length > 10, t.category);
+  assert.match(method, /with 5 runs the category average still carries half the weight/, "the pull is described as the code does it");
+  assert.doesNotMatch(method, /Until a part has enough results/);
+  assert.doesNotMatch(RATING_SOURCES[0]!.body, /will count/);
+  assert.match(RATING_SOURCES[0]!.body, /counts toward/);
+  assert.doesNotMatch(LEADERBOARD_NOTE, /come next/);
+  assert.ok(ROADMAP.later.some((i) => i.title === "One leaderboard across categories"));
+  assert.equal(ROADMAP.next.some((i) => /Leaderboard over 24 hours|Every Playground result counts/.test(i.title)), false, "shipped items leave Next");
 });

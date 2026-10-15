@@ -11,8 +11,10 @@ import { TagButton } from "@/components/redesign/TagButton";
 import { AGON_CATEGORIES, listingSearchMatch } from "@/lib/agon/catalog";
 import { AGON_PREVIEW_MODE, inspectManifest, listListings } from "@/lib/agon/client";
 import { marketEmptyState } from "@/lib/agon/market-empty";
-import { arenaTextByAgentId, sortForCards } from "@/lib/agon/card-facts";
-import { getAgentActivity, getEntries, getRatings, getSeason } from "@/lib/agon/stage";
+import { sortForCards } from "@/lib/agon/card-facts";
+import { getAgentActivity } from "@/lib/agon/stage";
+import { getCardScores } from "@/lib/agon/scores-api";
+import { ratingByAgentId } from "@/lib/agon/rating-view";
 import { cardExtras, type AgentActivity } from "@/lib/agon/card-facts";
 import type { AgonListing } from "@/lib/agon/types";
 import { useAgonNetwork } from "@/hooks/useAgonNetwork";
@@ -38,17 +40,12 @@ function ArcMarketPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [searchDetailsState, setSearchDetailsState] = useState<"idle" | "loading" | "ready">("idle");
   const inspectedListingIds = useRef(new Set<string>());
-  const [arena, setArena] = useState<{ network: string; byAgentId: Map<string, string> } | null>(null);
+  const [scores, setScores] = useState<{ network: string; byAgentId: Map<string, string> } | null>(null);
   const [activity, setActivity] = useState<{ network: string; agents: Record<string, AgentActivity> } | null>(null);
 
   useEffect(() => {
     let active = true;
-    // The Arena line is extra: if the Season is unreachable the cards simply go without it.
-    setArena(null);
     setActivity(null);
-    void Promise.all([getSeason(), getEntries(), getRatings()])
-      .then(([season, { entries }, ratings]) => { if (active) setArena({ network: season.network, byAgentId: arenaTextByAgentId(entries, ratings) }); })
-      .catch(() => {});
     // Job totals are extra too: without them cards show the endpoint state.
     void getAgentActivity().then((out) => { if (active) setActivity(out); }).catch(() => {});
     return () => { active = false; };
@@ -57,6 +54,23 @@ function ArcMarketPage() {
   useEffect(() => {
     setQuery(new URLSearchParams(window.location.search).get("q")?.trim() ?? "");
   }, []);
+
+  // The score line is extra: one request per page of cards; if it fails the cards go without it.
+  const agentIdsKey = (items ?? []).map((item) => item.agentId).join(",");
+  useEffect(() => {
+    if (!agentIdsKey) return;
+    let active = true;
+    const ids = [...new Set(agentIdsKey.split(","))];
+    void getCardScores(ids)
+      .then((rows) => {
+        if (!active) return;
+        const byAgentId = ratingByAgentId(rows);
+        for (const id of ids) if (!byAgentId.has(id)) byAgentId.set(id, "Not rated yet");
+        setScores({ network: networkKey, byAgentId });
+      })
+      .catch(() => { if (active) setScores(null); });
+    return () => { active = false; };
+  }, [agentIdsKey, networkKey]);
 
   const loadFirstPage = useCallback(async () => {
     setItems(null);
@@ -232,7 +246,7 @@ function ArcMarketPage() {
             </BracketedCell>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {filteredItems.map(({ item, matchedTerms }) => <ListingCard key={item.id} listing={item} {...cardExtras(item, networkKey, activity, arena)} searchMatchTerms={matchedTerms} />)}
+              {filteredItems.map(({ item, matchedTerms }) => <ListingCard key={item.id} listing={item} {...cardExtras(item, networkKey, activity, scores)} searchMatchTerms={matchedTerms} />)}
             </div>
           )}
 

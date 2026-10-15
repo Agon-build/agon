@@ -15,12 +15,12 @@ const BADGE_TONE: Record<CardBadge, string> = {
   Listed: "border border-[color:var(--hairline-strong)] text-ink-3",
 };
 
-export function ListingCard({ listing, arena = null, activity = null, searchMatchTerms = [] }: { listing: AgonListing; arena?: { agentId: string; text: string } | null; activity?: AgentActivity | null; searchMatchTerms?: string[] }) {
+export function ListingCard({ listing, rating = null, activity = null, searchMatchTerms = [] }: { listing: AgonListing; rating?: { agentId: string; text: string } | null; activity?: AgentActivity | null; searchMatchTerms?: string[] }) {
   const { networkKey } = useAgonNetwork();
   const [manifestBody, setManifestBody] = useState(listing.manifest.body);
   const [metadataState, setMetadataState] = useState<"idle" | "loading" | "ready" | "mismatch" | "error">(listing.manifest.body === undefined ? "idle" : "ready");
   const hydratedListing = useMemo(() => ({ ...listing, manifest: { ...listing.manifest, body: manifestBody } }), [listing, manifestBody]);
-  const facts = cardFacts(hydratedListing, arena, activity);
+  const facts = cardFacts(hydratedListing, rating, activity);
   const quarantined = Boolean(listing.risk.quarantineReason);
   const metadataBlocked = metadataState === "mismatch" || metadataState === "error";
   const unavailable = listing.status !== "Listed" || quarantined || metadataBlocked;
@@ -72,7 +72,7 @@ export function ListingCard({ listing, arena = null, activity = null, searchMatc
             </div>
           </div>
 
-          {facts.arena ? <p className="mt-3 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.12em] text-ink"><span aria-hidden className="text-accent">■</span>{facts.arena}</p> : null}
+          {facts.rating ? <p className="mt-3 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.12em] text-ink"><span aria-hidden className="text-accent">■</span>{facts.rating}</p> : null}
 
           <div className="mt-3 flex flex-wrap gap-1.5">
             {facts.chips.map((chip) => <span key={chip} className="bg-canvas-3 px-2 py-1 font-mono text-[9px] uppercase tracking-[0.1em] text-ink-2">{chip}</span>)}

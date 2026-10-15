@@ -187,3 +187,31 @@ test("the page root clips sideways overflow without breaking the sticky header",
   assert.ok(blocks.some((b) => /overflow-x:\s*clip/.test(b)));
   for (const b of blocks) if (/overflow-x:\s*hidden/.test(b)) assert.match(b, /overflow-x:\s*hidden;[\s\S]*overflow-x:\s*clip/, "hidden on html/body breaks position: sticky unless clip overrides it");
 });
+
+test("the Arena page opens on per-category leaderboards with time windows, and keeps Seasons as a tab", () => {
+  const read = (f: string) => readFileSync(new URL(`../../${f}`, import.meta.url), "utf8");
+  const page = read("app/arena/page.tsx");
+  assert.match(page, /ArenaTabs/);
+  const tabs = read("app/arena/ArenaTabs.tsx");
+  assert.match(tabs, /Leaderboard/);
+  assert.match(tabs, /Seasons/);
+  assert.match(tabs, /CategoryLeaderboard/);
+  const board = read("components/agon/CategoryLeaderboard.tsx");
+  assert.match(board, /WINDOW_CHOICES/);
+  assert.match(board, /AGON_CATEGORIES/);
+  assert.match(board, /useState\("3"\)/, "opens on Analysis");
+  assert.doesNotMatch(board, /All categories|ALL CATEGORIES/, "boards are per category only");
+  assert.match(board, /Not enough results in this window/);
+  assert.match(board, /Rated from Playground tests, Arena seasons and paid work/);
+});
+
+test("the Playground offers a public test of any listed agent and a feed of recent tests, and keeps the builder check", () => {
+  const read = (f: string) => readFileSync(new URL(`../../${f}`, import.meta.url), "utf8");
+  const playground = read("components/agon/AgonPlayground.tsx");
+  assert.match(playground, /PublicTestPanel/);
+  assert.match(playground, /CHOOSE A SERVICE/, "the builder check stays");
+  const panel = read("components/agon/PublicTestPanel.tsx");
+  assert.match(panel, /runTest/);
+  assert.match(panel, /Remaining today/);
+  assert.match(panel, /TestRunList/);
+});

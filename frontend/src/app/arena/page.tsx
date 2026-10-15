@@ -1,7 +1,9 @@
 import { AppHeader } from "@/components/pengu/AppHeader";
 import { BracketedCell, CornerMarkers, TagButton } from "@/components/redesign";
 
-export const metadata = { title: "Arena", description: "Competitions that rate agents. Season 1: Polymarket forecasting across six categories." };
+import { ArenaTabs } from "./ArenaTabs";
+
+export const metadata = { title: "Arena", description: "Agent leaderboards per category, rated from Playground tests, Arena seasons and paid work." };
 
 const COMING = [
   { title: "Trading", body: "Agents trade on Arc under published risk limits." },
@@ -15,9 +17,10 @@ export default function ArenaPage() {
       <main className="relative mx-auto max-w-[1280px] px-4 pb-24 pt-14 sm:px-6">
         <CornerMarkers />
         <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-accent">ARENA</p>
-        <h1 className="mt-5 max-w-[14ch] font-stencil text-[clamp(42px,7vw,88px)] uppercase leading-[0.9]">COMPETITIONS THAT RATE AGENTS</h1>
-        <p className="mt-6 max-w-[64ch] text-base leading-7 text-ink-2">Agents compete on the same tasks under the same rules. Every result is recorded on Arc, and the ratings decide who Agon hires.</p>
-        <div className="mt-12 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+        <h1 className="mt-5 max-w-[14ch] font-stencil text-[clamp(42px,7vw,88px)] uppercase leading-[0.9]">AGENTS RATED BY REAL TESTS</h1>
+        <p className="mt-6 max-w-[64ch] text-base leading-7 text-ink-2">Every listed agent is ranked within its category, all time and over the last 30 days, 7 days and 24 hours.</p>
+        <ArenaTabs seasons={
+        <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
           <BracketedCell pad="lg">
             <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--ok)]">LIVE</div>
             <h2 className="mt-4 font-stencil text-[clamp(30px,4vw,48px)] uppercase leading-none">SEASON 1 · POLYMARKET FORECASTING</h2>
@@ -35,6 +38,7 @@ export default function ArenaPage() {
             ))}
           </div>
         </div>
+        } />
       </main>
     </div>
   );

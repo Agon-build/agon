@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { arenaTextByAgentId, cardFacts, sortForCards } from "./card-facts.ts";
+import { cardFacts, sortForCards } from "./card-facts.ts";
 import type { AgonListing } from "./types.ts";
 
 const listing = (over: Partial<AgonListing> = {}, body: unknown = { service: { name: "Atlas", description: "Forecasts a Polymarket market and explains why.", logoUrl: "https://agon.surf/agents/atlas.svg" }, pricing: { rail: "x402", amountUSDC: "0.22" } }): AgonListing => ({
@@ -15,11 +15,11 @@ const listing = (over: Partial<AgonListing> = {}, body: unknown = { service: { n
 } as AgonListing);
 const unverified = { status: "Unverified", scope: { agentId: "41", listingId: "7", version: "1", category: "3" } } as const;
 
-test("a card shows the same facts every time, from the listing, the Arena and delivered jobs only", () => {
-  const facts = cardFacts(listing({ firstParty: true }), { agentId: "41", text: "#1 in Politics" }, { jobsCompleted: 128, earnedUSDC: "28.16" });
+test("a card shows the same facts every time, from the listing, the Agon score and delivered jobs only", () => {
+  const facts = cardFacts(listing({ firstParty: true }), { agentId: "41", text: "Agon score 78 · Analysis #1" }, { jobsCompleted: 128, earnedUSDC: "28.16" });
   assert.deepEqual(facts, {
     name: "Atlas", line: "Forecasts a Polymarket market and explains why.", logoUrl: "https://agon.surf/agents/atlas.svg", initials: "AT",
-    badges: ["Built by Agon", "Verified"], chips: ["Per call"], price: "0.22 USDC", arena: "#1 in Politics",
+    badges: ["Built by Agon", "Verified"], chips: ["Per call"], price: "0.22 USDC", rating: "Agon score 78 · Analysis #1",
     activity: "128 jobs done · 28.16 USDC paid",
   });
 });
@@ -52,31 +52,11 @@ test("a listing with no manifest details never gets an invented name or price", 
   assert.equal(facts.initials, "A4");
   assert.equal(facts.price, null);
   assert.equal(facts.logoUrl, null);
-  assert.equal(facts.arena, null);
+  assert.equal(facts.rating, null);
 });
 
-test("Arena text and activity for another agent are never shown on this card", () => {
-  assert.equal(cardFacts(listing(), { agentId: "99", text: "#1 in the Arena" }).arena, null);
-});
-
-test("Arena text is keyed by ERC-8004 id from the Season entries", () => {
-  const cell = (n: number, ranked: boolean, rank: number | null) => ({ rating: 0.02, meanSkill: 0.02, forecastsResolved: n, ranked, rank });
-  const empty = { sports: cell(0, false, null), crypto: cell(0, false, null), economics: cell(0, false, null), politics: cell(0, false, null), world: cell(0, false, null), culture: cell(0, false, null) };
-  const map = arenaTextByAgentId(
-    [
-      { agentAddress: "0xa", erc8004AgentId: "41", displayName: "Atlas", house: true, forecastEndpoint: null, enteredRound: "0" },
-      { agentAddress: "0xc", erc8004AgentId: "42", displayName: "Vesper", house: true, forecastEndpoint: null, enteredRound: "0" },
-      { agentAddress: "0xd", erc8004AgentId: "43", displayName: "Kestrel", house: true, forecastEndpoint: null, enteredRound: "0" },
-      { agentAddress: "0xb", erc8004AgentId: null, displayName: "X", house: false, forecastEndpoint: null, enteredRound: "0" },
-    ],
-    { seasonId: "1", updatedAt: "", categories: ["sports", "crypto", "economics", "politics", "world", "culture"], minRanked: { overall: 20, category: 10 },
-      agents: [
-        { agentAddress: "0xA", displayName: "Atlas", house: true, overall: cell(24, true, 2), categories: empty },
-        { agentAddress: "0xC", displayName: "Vesper", house: true, overall: cell(7, false, null), categories: empty },
-        { agentAddress: "0xD", displayName: "Kestrel", house: true, overall: cell(0, false, null), categories: empty },
-      ] },
-  );
-  assert.deepEqual([...map.entries()], [["41", "#2 in the Arena"], ["42", "7 Arena forecasts scored"], ["43", "In the Arena"]]);
+test("a score line for another agent is never shown on this card", () => {
+  assert.equal(cardFacts(listing(), { agentId: "99", text: "Agon score 90 · Analysis #1" }).rating, null);
 });
 
 test("cards list verified Agon agents, then verified, then other Agon listings, then the rest", () => {
@@ -84,15 +64,15 @@ test("cards list verified Agon agents, then verified, then other Agon listings, 
   assert.deepEqual(sortForCards(rows).map((l) => l.id), ["c", "b", "e", "d", "a"]);
 });
 
-test("job totals and Arena lines attach only on their own network, and job totals only to Agon's listings", async () => {
+test("job totals and score lines attach only on their own network, and job totals only to Agon's listings", async () => {
   const { cardExtras } = await import("./card-facts.ts");
   const activity = { network: "arc-testnet", agents: { "41": { jobsCompleted: 3, earnedUSDC: "0.90" } } };
-  const arena = { network: "arc-testnet", byAgentId: new Map([["41", "#2 in the Arena"]]) };
+  const scores = { network: "arc-testnet", byAgentId: new Map([["41", "Agon score 70 · Analysis #2"]]) };
   const own = listing({ firstParty: true });
-  assert.deepEqual(cardExtras(own, "arc-testnet", activity, arena), { activity: { jobsCompleted: 3, earnedUSDC: "0.90" }, arena: { agentId: "41", text: "#2 in the Arena" } });
-  assert.deepEqual(cardExtras(own, "arc", activity, arena), { activity: null, arena: null }, "same id on another network is another agent");
-  assert.deepEqual(cardExtras(listing({ firstParty: false }), "arc-testnet", activity, arena), { activity: null, arena: { agentId: "41", text: "#2 in the Arena" } }, "a transferred id keeps its Arena record but not Agon's receipts");
-  assert.deepEqual(cardExtras(own, "arc-testnet", null, null), { activity: null, arena: null });
+  assert.deepEqual(cardExtras(own, "arc-testnet", activity, scores), { activity: { jobsCompleted: 3, earnedUSDC: "0.90" }, rating: { agentId: "41", text: "Agon score 70 · Analysis #2" } });
+  assert.deepEqual(cardExtras(own, "arc", activity, scores), { activity: null, rating: null }, "same id on another network is another agent");
+  assert.deepEqual(cardExtras(listing({ firstParty: false }), "arc-testnet", activity, scores), { activity: null, rating: { agentId: "41", text: "Agon score 70 · Analysis #2" } }, "a transferred id keeps its score but not Agon's receipts");
+  assert.deepEqual(cardExtras(own, "arc-testnet", null, null), { activity: null, rating: null });
 });
 
 test("totals read as paid, the spec's wording", () => {

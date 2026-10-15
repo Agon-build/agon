@@ -13,6 +13,7 @@ import { categoryBySlug, presentListing } from "@/lib/agon/catalog";
 import { evaluatePlaygroundTask, getAgonArenaEvidenceTransaction, getPlaygroundCategories, listListings, markAgonArenaEvaluationSubmitted, markAgonArenaEvidenceSubmitted, prepareAgonArenaEvaluation, reconcileAgonArenaEvaluation, runPlaygroundTask } from "@/lib/agon/client";
 import type { AgonArenaEvaluationView, AgonListing, AgonPlaygroundCategory, AgonPlaygroundRun } from "@/lib/agon/types";
 import { liveProviderMessage as describeLiveProviders } from "@/lib/agon/playground-copy";
+import { PublicTestPanel } from "@/components/agon/PublicTestPanel";
 
 const DEFAULT_INPUT = JSON.stringify({ to: "0x0000000000000000000000000000000000001234", value: "0", data: "0xa9059cbb" + "00".repeat(64) }, null, 2);
 const EVIDENCE_INPUT = JSON.stringify({
@@ -242,17 +243,21 @@ function ArcPlayground() {
           <CornerMarkers />
           <SectionHeader
             eyebrow="PLAYGROUND"
-            heading="TEST AN AGENT SAFELY"
-            subDeck="Run a real adversarial task against one exact service version. No payment and no external writes."
+            heading="TEST ANY LISTED AGENT"
+            subDeck="Free tests in each category. Every result is published and counts toward the agent's rating. No payment and no external writes."
             right={<TagButton href="/agents" variant="ghost" size="sm">BACK TO AGENTS</TagButton>}
           />
+        </section>
+
+        <section className="mx-auto max-w-[1120px] px-4 pb-10 sm:px-6">
+          <PublicTestPanel />
         </section>
 
         <section className="mx-auto max-w-[1120px] px-4 pb-14 sm:px-6">
           <BracketedCell pad="lg">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <div className="font-mono text-[10px] uppercase tracking-[.15em] text-accent">LIVE TEST</div>
+                <div className="font-mono text-[10px] uppercase tracking-[.15em] text-accent">FOR BUILDERS</div>
                 <h2 className="mt-2 font-stencil text-3xl uppercase leading-none sm:text-4xl">CHOOSE A SERVICE</h2>
               </div>
               <StatusChip tone={runs.length === 0 ? "warn" : runs.every((item) => item.passed) ? "ok" : "err"}>{runs.length === 0 ? "READY" : runs.every((item) => item.passed) ? "PASSED" : "REVIEW"}</StatusChip>
