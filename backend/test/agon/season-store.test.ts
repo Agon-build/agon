@@ -115,3 +115,12 @@ test("round markets keep their category; a market without one is stored as other
   const stored = await store.listRoundMarkets(1n, 7n);
   assert.deepEqual(stored.map((m) => [m.marketId, m.category]), [[hex(70), "politics"], [hex(71), "other"]]);
 });
+
+test("upserting an entry without an id keeps the stored id", async () => {
+  const C = "0xcccccccccccccccccccccccccccccccccccccccc" as Address;
+  await store.upsertEntry({ seasonId: 1n, agentAddress: C, erc8004AgentId: 41n, displayName: "Vesper (house)", house: true, forecastEndpoint: null, enteredRound: 0n });
+  await store.upsertEntry({ seasonId: 1n, agentAddress: C, erc8004AgentId: null, displayName: "Vesper (house)", house: true, forecastEndpoint: null, enteredRound: 0n });
+  assert.equal((await store.getEntry(1n, C))!.erc8004AgentId, 41n);
+  await store.upsertEntry({ seasonId: 1n, agentAddress: C, erc8004AgentId: 43n, displayName: "Vesper (house)", house: true, forecastEndpoint: null, enteredRound: 0n });
+  assert.equal((await store.getEntry(1n, C))!.erc8004AgentId, 43n);
+});

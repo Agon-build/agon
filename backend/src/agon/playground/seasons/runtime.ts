@@ -61,6 +61,7 @@ export function startSeasonRuntime(env: Record<string, string | undefined> = pro
       seasonId: s.seasonId,
       domain,
       house: s.house,
+      houseAgentIds: s.houseAgentIds,
       callModel: async (p) => ({ text: (await callModel(p)).text }),
       signTypedData: signTypedDataJson,
       newSalt,

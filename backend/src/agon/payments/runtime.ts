@@ -23,6 +23,10 @@ import { createStandinRoutes } from "./standin-seller.ts";
 import { PostgresPaymentsStore } from "./store.ts";
 import type { BudgetWallet } from "./types.ts";
 
+/// The Lead has no model of its own; its listing certification answer uses the
+/// owner's model for the Lead (Sonnet 5.5, Bedrock profile id).
+const LEAD_CERTIFY_MODEL = "global.anthropic.claude-sonnet-5-5";
+
 const AUTHORIZATION_STATE_ABI = parseAbi(["function authorizationState(address authorizer, bytes32 nonce) view returns (bool)"]);
 const USDC_BALANCE_ABI = parseAbi(["function balanceOf(address owner) view returns (uint256)"]);
 
@@ -121,6 +125,10 @@ export function startPaymentsRuntime(input: {
       payments: createPaymentRoutes({
         store, network, log, off: () => s.off.all || s.off.lead,
         lead: { address: s.lead.address, price: s.leadPrice, settle: settler(s.lead), run: leadRun },
+        certify: {
+          model: LEAD_CERTIFY_MODEL,
+          callModel: async (p) => ({ text: (await callModel({ model: p.model, systemPrompt: p.system, userPrompt: p.prompt, maxTokens: p.maxTokens, temperature: 0.2 })).text }),
+        },
       }) as unknown as Hono,
       house: createHouseSellerRoutes({
         network, store, ask: s.houseAsk, floor: s.houseFloor,

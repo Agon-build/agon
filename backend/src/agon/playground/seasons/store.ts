@@ -93,7 +93,7 @@ export class PostgresSeasonStore implements SeasonStore {
       `insert into agon_season_entries (season_id, agent_address, erc8004_agent_id, display_name, house, forecast_endpoint, entered_round)
        values ($1, $2, $3, $4, $5, $6, $7)
        on conflict (season_id, agent_address) do update
-         set erc8004_agent_id = excluded.erc8004_agent_id, display_name = excluded.display_name,
+         set erc8004_agent_id = coalesce(excluded.erc8004_agent_id, agon_season_entries.erc8004_agent_id), display_name = excluded.display_name,
              forecast_endpoint = excluded.forecast_endpoint`,
       [e.seasonId.toString(), lower(e.agentAddress), e.erc8004AgentId?.toString() ?? null, e.displayName, e.house, e.forecastEndpoint, e.enteredRound.toString()],
     );

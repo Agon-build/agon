@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
 import type { Address, Hex } from "viem";
 
@@ -7,6 +8,7 @@ import type { AgonNetwork } from "../../network.ts";
 import { sellerRespond } from "../../payments/bargain.ts";
 import { exactPayment, type ExactSettler, type X402Paid } from "../../payments/exact-seller.ts";
 import type { PaymentsStore } from "../../payments/types.ts";
+import { LISTING_BODY_LIMIT_BYTES, answerListingCheck, createCertificationGate } from "../../payments/listing-protocols.ts";
 import { FORECAST_MAX_TOKENS, forecastPrompt, parseProbability, type HouseAgentSpec, type ModelCaller } from "./house-agents.ts";
 
 export type HouseSeller = { spec: HouseAgentSpec; payTo: Address; settle: ExactSettler };
@@ -63,9 +65,21 @@ export function createHouseSellerRoutes(deps: {
     return c.json({ kind: "accept", amount: decision.amount.toString(), quoteId, expiresAt: expiresAt.toISOString() });
   });
 
+  const certifyGate = createCertificationGate();
+  app.use("/:key/forecast", bodyLimit({ maxSize: LISTING_BODY_LIMIT_BYTES, onError: (c) => c.json({ error: "body_too_large" }, 413) }));
   app.use("/:key/forecast", async (c, next) => {
-    if (!seller(c.req.param("key"))) return c.json({ error: "not_for_sale" }, 404);
-    const body = forecastBody.safeParse(await c.req.raw.clone().json().catch(() => null));
+    const s = seller(c.req.param("key"));
+    if (!s) return c.json({ error: "not_for_sale" }, 404);
+    const raw = await c.req.raw.clone().json().catch(() => null);
+    const check = await answerListingCheck(c, raw, {
+      agent: { name: s.spec.displayName.replace(/\s*\(house[^)]*\)$/, ""), capabilities: ["analysis"] },
+      model: s.spec.model!,
+      callModel: async (p) => deps.callModel({ model: p.model, systemPrompt: p.system, userPrompt: p.prompt, maxTokens: p.maxTokens, temperature: 0.2 }),
+      gate: certifyGate,
+    });
+    if (check === "preflight") return next();
+    if (check) return check;
+    const body = forecastBody.safeParse(raw);
     if (!body.success) return c.json({ error: "invalid_forecast_request" }, 400);
     return next();
   });

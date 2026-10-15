@@ -150,6 +150,8 @@ export type AgonWriteAdapter = {
 
 export type PostgresAgonMarketServiceOptions = {
   writer?: AgonWriteAdapter;
+  /** ERC-8004 ids of Agon's own agents; their listings are marked firstParty. */
+  firstPartyAgentIds?: ReadonlySet<string>;
   /** Active catalog registry. Older registry rows remain available by exact reference for reconciliation. */
   activeServiceRegistryAddress?: `0x${string}`;
   /** Test seam for the public hosted-file check before any publication. */
@@ -347,7 +349,7 @@ async function readValidatedManifest(listing: StoredListing): Promise<unknown | 
   return request;
 }
 
-function listingView(listing: StoredListing, evidence?: StoredVerificationEvidence, manifestBody?: unknown): AgonListingView {
+function listingView(listing: StoredListing, firstParty: ReadonlySet<string>, evidence?: StoredVerificationEvidence, manifestBody?: unknown): AgonListingView {
   const unverified = listing.verification !== "Verified";
   const warning = listing.quarantineReason
     ? `This listing is quarantined because its indexed anchor failed validation: ${listing.quarantineReason}.`
@@ -399,6 +401,7 @@ function listingView(listing: StoredListing, evidence?: StoredVerificationEviden
       sourceTxHash: listing.sourceTxHash,
       sourceLogIndex: listing.sourceLogIndex,
     },
+    firstParty: firstParty.has(listing.agentId.toString()),
   };
 }
 
@@ -797,6 +800,7 @@ function executionApprovalView(
 }
 
 export class PostgresAgonMarketService implements AgonMarketService {
+  private readonly firstParty: ReadonlySet<string>;
   private readonly repository: PostgresAgonRepository;
   private readonly options: PostgresAgonMarketServiceOptions;
   private readonly escrowExecutionAdapter: AgonEscrowAdapter;
@@ -805,6 +809,7 @@ export class PostgresAgonMarketService implements AgonMarketService {
   constructor(repository: PostgresAgonRepository, options: PostgresAgonMarketServiceOptions = {}) {
     this.repository = repository;
     this.options = options;
+    this.firstParty = options.firstPartyAgentIds ?? new Set();
     const transactionAdapter = options.escrowTransactionWriter && options.escrowWritePreflightAdapter
       ? createApprovalBoundAgonEscrowTransactionAdapter({
           store: repository,
@@ -840,7 +845,7 @@ export class PostgresAgonMarketService implements AgonMarketService {
       return {
         ok: true,
         value: {
-          items: pageRows.map((listing, index) => listingView(listing, evidence.get(`${listing.listingId}:${listing.agentId}`), manifestBodies[index])),
+          items: pageRows.map((listing, index) => listingView(listing, this.firstParty, evidence.get(`${listing.listingId}:${listing.agentId}`), manifestBodies[index])),
           nextCursor: hasMore && last ? encodeCursor(last) : null,
         },
       };
@@ -862,6 +867,7 @@ export class PostgresAgonMarketService implements AgonMarketService {
             ok: true,
             value: listingView(
               listing,
+              this.firstParty,
               (await this.repository.getLatestVerificationEvidence([listing])).get(`${listing.listingId}:${listing.agentId}`),
             ),
           }

@@ -159,6 +159,8 @@ export type AgonListingView = {
     sourceTxHash: string;
     sourceLogIndex: number;
   };
+  /** True when the listing belongs to one of Agon's own agents (Built by Agon). */
+  firstParty: boolean;
 };
 
 export type ListingPage = {

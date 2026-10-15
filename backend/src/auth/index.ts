@@ -45,6 +45,7 @@ import { PostgresX402AgentWalletPolicyStore } from "../agon/store/x402-agent-pol
 import { createViemAgonPrizeEscrowReadAdapter, type AgonPrizeEscrowReadClient } from "../agon/execution/escrow-reconciliation.js";
 import { evaluateAgonEscrowProductionReadiness } from "../agon/execution/escrow-production-readiness.js";
 import { AGON_ESCROW_TRANSACTION_APPROVAL_PHRASES } from "../agon/execution/escrow-transaction-approval.js";
+import { parseFirstPartyIds } from "../agon/first-party.js";
 import { PostgresAgonMarketService } from "../agon/http/service.js";
 import { createPostgresProviderDraftStore } from "../agon/mcp/provider-draft-store.ts";
 import { createMcpAccessAdapter } from "../agon/mcp/adapter.ts";
@@ -618,6 +619,7 @@ function explainJobEscrowExecutionReadiness(): string | null {
 
 const agonService = new PostgresAgonMarketService(agonRepository, {
   writer: agonWriter,
+  firstPartyAgentIds: parseFirstPartyIds(process.env.AGON_FIRST_PARTY_AGENT_IDS),
   activeServiceRegistryAddress: configuredServiceRegistry,
   inspectProviderManifest: agonHostedManifestStore?.inspect,
   x402ExecutionEnabled: config.agon.x402.executionEnabled,

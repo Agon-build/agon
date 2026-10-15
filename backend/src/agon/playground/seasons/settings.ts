@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { Address } from "viem";
 
 import { agonNetwork, type AgonNetwork } from "../../network.ts";
-import { houseAgentsFromEnv } from "./house-agents.ts";
+import { DEFAULT_HOUSE_AGENTS, houseAgentsFromEnv } from "./house-agents.ts";
 import type { HouseRunner } from "./worker.ts";
 
 export type SeasonSettings = {
@@ -14,6 +14,8 @@ export type SeasonSettings = {
   endsAt: Date;
   tickMs: number;
   house: HouseRunner[];
+  /// House key to its listing's ERC-8004 id (env AGON_SEASON_HOUSE_AGENT_IDS).
+  houseAgentIds: Record<string, bigint>;
 };
 
 export type SeasonSettingsResult =
@@ -80,6 +82,15 @@ export function resolveSeasonSettings(env: Record<string, string | undefined>): 
     problems.push('AGON_SEASON_HOUSE_WALLETS must be JSON like {"atlas":{"walletId":"...","address":"0x..."}}');
   }
 
+  const houseAgentIds: Record<string, bigint> = {};
+  try {
+    const ids = z.record(z.string().regex(/^[1-9]\d{0,30}$/)).parse(JSON.parse(env.AGON_SEASON_HOUSE_AGENT_IDS ?? "{}"));
+    const keys = new Set(DEFAULT_HOUSE_AGENTS.map((a) => a.key));
+    for (const [key, id] of Object.entries(ids)) if (keys.has(key)) houseAgentIds[key] = BigInt(id);
+  } catch {
+    problems.push('AGON_SEASON_HOUSE_AGENT_IDS must be JSON like {"atlas":"41"}');
+  }
+
   if (problems.length > 0 || seasonId === null || network === null) return { enabled: true, ok: false, problems };
   return {
     enabled: true,
@@ -93,6 +104,7 @@ export function resolveSeasonSettings(env: Record<string, string | undefined>): 
       endsAt,
       tickMs,
       house,
+      houseAgentIds,
     },
   };
 }

@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
 import type { Address, Hex } from "viem";
 
@@ -6,6 +7,7 @@ import type { AgonNetwork } from "../network.ts";
 import { LEAD_PROVIDER_REF, type LeadAnswer } from "../lead-agent/lead-agent.ts";
 import { exactPayment, type ExactSettler, type X402Paid } from "./exact-seller.ts";
 import { receiptTree } from "./jobs.ts";
+import { LISTING_BODY_LIMIT_BYTES, answerListingCheck, createCertificationGate, type CertifyModelCaller } from "./listing-protocols.ts";
 import type { PaymentsStore } from "./types.ts";
 
 const leadBody = z.object({ question: z.string().trim().min(8).max(300) });
@@ -16,12 +18,20 @@ export function createPaymentRoutes(deps: {
   lead: { address: Address; price: bigint; settle: ExactSettler; run: (input: { parentJobId: string | null; payer: Address; question: string; payment?: { txHash: Hex; amount: bigint } }) => Promise<LeadAnswer> };
   off?: () => boolean;
   log?: (m: string) => void;
+  /// The model that answers the listing certification call for the Lead.
+  certify?: { model: string; callModel: CertifyModelCaller };
 }): Hono {
   const app = new Hono<{ Variables: { x402: X402Paid } }>();
 
+  const certifyGate = createCertificationGate();
+  app.use("/agents/lead/forecast", bodyLimit({ maxSize: LISTING_BODY_LIMIT_BYTES, onError: (c) => c.json({ error: "body_too_large" }, 413) }));
   app.use("/agents/lead/forecast", async (c, next) => {
     if (deps.off?.()) return c.json({ error: "lead_agent_off" }, 503);
-    const body = leadBody.safeParse(await c.req.raw.clone().json().catch(() => null));
+    const raw = await c.req.raw.clone().json().catch(() => null);
+    const check = await answerListingCheck(c, raw, deps.certify ? { agent: { name: "Agon Lead Agent", capabilities: ["analysis"] }, ...deps.certify, gate: certifyGate } : null);
+    if (check === "preflight") return next();
+    if (check) return check;
+    const body = leadBody.safeParse(raw);
     if (!body.success) return c.json({ error: "invalid_question" }, 400);
     return next();
   });

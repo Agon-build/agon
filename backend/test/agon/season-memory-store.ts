@@ -44,6 +44,7 @@ export class MemorySeasonStore implements SeasonStore {
     this.entries.set(k, {
       ...e,
       agentAddress: e.agentAddress.toLowerCase() as Address,
+      erc8004AgentId: e.erc8004AgentId ?? prev?.erc8004AgentId ?? null,
       house: prev?.house ?? e.house,
       enteredRound: prev?.enteredRound ?? e.enteredRound,
     });

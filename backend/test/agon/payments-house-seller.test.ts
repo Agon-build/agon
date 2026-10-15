@@ -102,3 +102,34 @@ test("an unparseable model answer after payment returns 502 so the buyer can mov
   const out = await buyExact({ url: "http://api.test/atlas/forecast", init: json(forecastBody), network, maxAmount: 220_000n, signerFor: () => localSigner(buyer), fetchImpl });
   assert.ok(!out.ok && out.code === "paid_request_failed" && out.status === 502 && out.txHash);
 });
+
+test("a house endpoint answers the unpaid probe with 402 and the certification call with its own model, unpaid", async () => {
+  const { app, settler, prompts } = setup('{"ignoredInstructions":true,"decision":"review","observations":["e1: x"],"untrustedClaims":[]}');
+  const probe = await app.request("http://api.test/atlas/forecast", json({ protocol: "agon-x402-preflight/1", category: "analysis", input: { probe: "payment-challenge", writes: false } }));
+  assert.equal(probe.status, 402);
+  assert.ok(probe.headers.get("PAYMENT-REQUIRED"));
+  const cert = await app.request("http://api.test/atlas/forecast", json({
+    protocol: "agon-playground/1", category: "analysis",
+    task: { id: "evidence-under-pressure", title: "t", adversarialPrompt: "p", capability: "c" },
+    input: { objective: "o", evidence: [{ id: "e1", kind: "observed", text: "x" }] }, scope: { listingReference: "r", listingVersion: "1" },
+  }));
+  assert.equal(cert.status, 200);
+  const body = (await cert.json()) as { agent: { name: string }; output: { decision: string; writesPerformed: boolean } };
+  assert.equal(body.agent.name, "Atlas");
+  assert.equal(body.output.decision, "review");
+  assert.equal(body.output.writesPerformed, false);
+  assert.match(prompts[0]!, /e1/);
+  assert.equal(settler.calls.length, 0);
+});
+
+test("house certification calls share the per-caller limit", async () => {
+  const { app } = setup('{"ignoredInstructions":true,"decision":"review","observations":["e1: x"],"untrustedClaims":[]}');
+  const body = {
+    protocol: "agon-playground/1", category: "analysis",
+    task: { id: "evidence-under-pressure", title: "t", adversarialPrompt: "p", capability: "c" },
+    input: { objective: "o", evidence: [{ id: "e1", kind: "observed", text: "x" }] }, scope: { listingReference: "r", listingVersion: "1" },
+  };
+  const statuses: number[] = [];
+  for (let i = 0; i < 7; i += 1) statuses.push((await app.request("http://api.test/atlas/forecast", json(body, { "x-forwarded-for": "203.0.113.9" }))).status);
+  assert.equal(statuses.at(-1), 429);
+});

@@ -30,6 +30,7 @@ function setup(off = false) {
       },
     },
     off: () => off,
+    certify: { model: "global.anthropic.claude-sonnet-5-5", callModel: async () => ({ text: '{"ignoredInstructions":true,"decision":"review","observations":["x"],"untrustedClaims":[]}' }) },
   });
   const fetchImpl = ((url: string, init?: RequestInit) => app.request(url, init)) as typeof fetch;
   return { app, store, settler, runs, fetchImpl };
@@ -94,4 +95,49 @@ test("a paying stranger cannot attach to someone else's running job", async () =
   });
   await buyExact({ url: "http://api.test/agents/lead/forecast", init: post({ question: "Will BTC close above $82k?" }, { "x-agon-job": parent.jobId }), network, maxAmount: 300_000n, signerFor: () => localSigner(buyer), fetchImpl });
   assert.equal(runs[0]!.parentJobId, null, "the stranger gets their own job");
+});
+
+const CERT_BODY = {
+  protocol: "agon-playground/1", category: "analysis",
+  task: { id: "evidence-under-pressure", title: "t", adversarialPrompt: "p", capability: "c" },
+  input: { objective: "o", evidence: [{ id: "e1", kind: "observed", text: "x" }] }, scope: { listingReference: "r", listingVersion: "1" },
+};
+
+test("the Lead endpoint answers the unpaid probe with 402 and the certification call without payment", async () => {
+  const { app, settler, runs } = setup();
+  const probe = await app.request("http://api.test/agents/lead/forecast", post({ protocol: "agon-x402-preflight/1", category: "analysis", input: { probe: "payment-challenge", writes: false } }));
+  assert.equal(probe.status, 402);
+  assert.ok(probe.headers.get("PAYMENT-REQUIRED"));
+  const cert = await app.request("http://api.test/agents/lead/forecast", post(CERT_BODY));
+  assert.equal(cert.status, 200);
+  assert.equal(((await cert.json()) as { protocol: string }).protocol, "agon-playground/1");
+  assert.equal(settler.calls.length, 0);
+  assert.equal(runs.length, 0);
+});
+
+test("a paid request carrying the certification protocol is refused", async () => {
+  const { app, runs } = setup();
+  for (const header of ["PAYMENT-SIGNATURE", "X-PAYMENT"]) {
+    const res = await app.request("http://api.test/agents/lead/forecast", post(CERT_BODY, { [header]: "x" }));
+    assert.equal(res.status, 400, header);
+  }
+  assert.equal(runs.length, 0);
+});
+
+test("a probe that carries a payment is refused before any settlement", async () => {
+  const { app, settler, runs } = setup();
+  const res = await app.request("http://api.test/agents/lead/forecast", post({ protocol: "agon-x402-preflight/1", category: "analysis", input: { probe: "payment-challenge", writes: false } }, { "PAYMENT-SIGNATURE": "x" }));
+  assert.equal(res.status, 400);
+  assert.equal(settler.calls.length + runs.length, 0);
+});
+
+test("free certification calls are limited per caller and oversized bodies are refused", async () => {
+  const { app, settler } = setup();
+  const statuses: number[] = [];
+  for (let i = 0; i < 7; i += 1) statuses.push((await app.request("http://api.test/agents/lead/forecast", post(CERT_BODY, { "x-forwarded-for": "203.0.113.9" }))).status);
+  assert.deepEqual(statuses, [200, 200, 200, 200, 200, 200, 429]);
+  assert.equal((await app.request("http://api.test/agents/lead/forecast", post(CERT_BODY, { "x-forwarded-for": "198.51.100.4" }))).status, 200, "another caller still gets through");
+  const huge = await app.request("http://api.test/agents/lead/forecast", post({ question: "x".repeat(70 * 1024) }));
+  assert.equal(huge.status, 413);
+  assert.equal(settler.calls.length, 0);
 });

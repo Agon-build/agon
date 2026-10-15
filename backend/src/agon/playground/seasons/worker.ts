@@ -22,6 +22,8 @@ export type SeasonWorkerDeps = RoundDeps & {
   signTypedData: (walletId: string, json: string) => Promise<Hex>;
   newSalt: () => Hex;
   commitsOff?: () => boolean;
+  /// House key to its listing's ERC-8004 id, so agent pages find the house's Arena rating.
+  houseAgentIds?: Record<string, bigint>;
 };
 
 export async function bootstrapSeason(deps: SeasonWorkerDeps, season: Season): Promise<void> {
@@ -31,7 +33,7 @@ export async function bootstrapSeason(deps: SeasonWorkerDeps, season: Season): P
     await deps.store.upsertEntry({
       seasonId: stored.seasonId,
       agentAddress: h.address,
-      erc8004AgentId: null,
+      erc8004AgentId: deps.houseAgentIds?.[h.spec.key] ?? null,
       displayName: h.spec.displayName,
       house: true,
       forecastEndpoint: null,

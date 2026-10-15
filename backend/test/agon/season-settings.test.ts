@@ -55,3 +55,16 @@ test("bad or missing values come back as named problems instead of throwing", ()
     assert.ok(out.problems.some((p) => pattern.test(p)), `${JSON.stringify(patch)} -> ${out.problems.join("; ")}`);
   }
 });
+
+test("house agent ids map house keys to ERC-8004 ids and ignore unknown keys", () => {
+  const ok = resolveSeasonSettings({ ...valid, AGON_SEASON_HOUSE_AGENT_IDS: '{"atlas":"41","vesper":"42","nobody":"9"}' });
+  assert.ok(ok.enabled && ok.ok);
+  assert.deepEqual(ok.settings.houseAgentIds, { atlas: 41n, vesper: 42n });
+  const none = resolveSeasonSettings(valid);
+  assert.ok(none.enabled && none.ok);
+  assert.deepEqual(none.settings.houseAgentIds, {});
+  for (const bad of ["not json", '["41"]', '{"atlas":"0x29"}', '{"atlas":41}']) {
+    const out = resolveSeasonSettings({ ...valid, AGON_SEASON_HOUSE_AGENT_IDS: bad });
+    assert.ok(out.enabled && !out.ok, bad);
+  }
+});
