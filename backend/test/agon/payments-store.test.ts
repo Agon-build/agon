@@ -133,3 +133,18 @@ test("root jobs list by buyer, newest first, and daily spend sums reserved and s
   assert.equal(await store.dailySpent(wallet, "arc", new Date("2026-10-28T12:00:00Z")), 0n);
   assert.equal(await store.dailySpent(wallet, "arc-testnet", now), 0n);
 });
+
+test("delivered job totals per provider, on one network, count only delivered work", async () => {
+  const mk = (provider: string, state: Job["state"], network: Job["network"], price: bigint): Job => {
+    const id = randomUUID();
+    return {
+      jobId: id, parentId: null, rootId: id, depth: 0, buyerRef: "budget:op:stats", providerRef: provider, providerLabel: provider,
+      network, priceAtomic: price, budgetAtomic: 0n, state, traceId: "t", request: {}, result: null, createdAt: now, updatedAt: now,
+    };
+  };
+  for (const j of [mk("house:stat-a", "delivered", "arc-testnet", 174_240n), mk("house:stat-a", "delivered", "arc-testnet", 200_000n), mk("house:stat-a", "refunded", "arc-testnet", 220_000n), mk("house:stat-a", "delivered", "arc", 220_000n), mk("agent:stat-b", "failed", "arc-testnet", 300_000n)]) await store.insertJob(j);
+  assert.deepEqual(await store.deliveredJobStats("arc-testnet", ["house:stat-a", "agent:stat-b", "agent:stat-none"]), {
+    "house:stat-a": { jobs: 2, earnedAtomic: 374_240n },
+  });
+  assert.deepEqual(await store.deliveredJobStats("arc-testnet", []), {});
+});

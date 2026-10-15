@@ -193,7 +193,11 @@ test("reports endpoint QA only when its runtime dependency is available", async 
 });
 
 test("listings of Agon's own agents are marked first party, others are not", async () => {
-  const marked = new PostgresAgonMarketService(repository, { activeServiceRegistryAddress: SERVICE_REGISTRY, firstPartyAgentIds: new Set(["42"]) });
+  const marked = new PostgresAgonMarketService(repository, { activeServiceRegistryAddress: SERVICE_REGISTRY, firstPartyAgents: [{ key: "lead", agentId: "42", owner: PROVIDER }] });
+  const wrongOwner = new PostgresAgonMarketService(repository, { activeServiceRegistryAddress: SERVICE_REGISTRY, firstPartyAgents: [{ key: "lead", agentId: "42", owner: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" }] });
+  const moved = await wrongOwner.getListing(`${CHAIN_ID}:${SERVICE_REGISTRY}:2`);
+  assert.ok(moved.ok);
+  assert.equal(moved.value.firstParty, false, "same id, different publishing wallet");
   const own = await marked.getListing(`${CHAIN_ID}:${SERVICE_REGISTRY}:2`);
   const other = await marked.getListing(`${CHAIN_ID}:${SERVICE_REGISTRY}:3`);
   assert.ok(own.ok && other.ok);

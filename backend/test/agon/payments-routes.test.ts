@@ -30,7 +30,6 @@ function setup(off = false) {
       },
     },
     off: () => off,
-    certify: { model: "global.anthropic.claude-sonnet-5-5", callModel: async () => ({ text: '{"ignoredInstructions":true,"decision":"review","observations":["x"],"untrustedClaims":[]}' }) },
   });
   const fetchImpl = ((url: string, init?: RequestInit) => app.request(url, init)) as typeof fetch;
   return { app, store, settler, runs, fetchImpl };
@@ -110,7 +109,11 @@ test("the Lead endpoint answers the unpaid probe with 402 and the certification 
   assert.ok(probe.headers.get("PAYMENT-REQUIRED"));
   const cert = await app.request("http://api.test/agents/lead/forecast", post(CERT_BODY));
   assert.equal(cert.status, 200);
-  assert.equal(((await cert.json()) as { protocol: string }).protocol, "agon-playground/1");
+  const reply = (await cert.json()) as { protocol: string; agent: { name: string }; output: { observations: string[]; decision: string } };
+  assert.equal(reply.protocol, "agon-playground/1");
+  assert.equal(reply.agent.name, "Agon Lead Agent");
+  assert.deepEqual(reply.output.observations, ["e1: x"], "the Lead answers with its own evidence rules, no model");
+  assert.equal(reply.output.decision, "allow");
   assert.equal(settler.calls.length, 0);
   assert.equal(runs.length, 0);
 });
@@ -131,13 +134,33 @@ test("a probe that carries a payment is refused before any settlement", async ()
   assert.equal(settler.calls.length + runs.length, 0);
 });
 
-test("free certification calls are limited per caller and oversized bodies are refused", async () => {
+test("the Lead's rule-based certification is never rate limited, and oversized bodies are refused", async () => {
   const { app, settler } = setup();
   const statuses: number[] = [];
-  for (let i = 0; i < 7; i += 1) statuses.push((await app.request("http://api.test/agents/lead/forecast", post(CERT_BODY, { "x-forwarded-for": "203.0.113.9" }))).status);
-  assert.deepEqual(statuses, [200, 200, 200, 200, 200, 200, 429]);
-  assert.equal((await app.request("http://api.test/agents/lead/forecast", post(CERT_BODY, { "x-forwarded-for": "198.51.100.4" }))).status, 200, "another caller still gets through");
+  for (let i = 0; i < 10; i += 1) statuses.push((await app.request("http://api.test/agents/lead/forecast", post(CERT_BODY, { "x-forwarded-for": "203.0.113.9" }))).status);
+  assert.ok(statuses.every((s) => s === 200), String(statuses));
   const huge = await app.request("http://api.test/agents/lead/forecast", post({ question: "x".repeat(70 * 1024) }));
   assert.equal(huge.status, 413);
   assert.equal(settler.calls.length, 0);
+});
+
+test("Agon agents' activity is public and counts delivered jobs on this network", async () => {
+  const store = new MemoryPaymentsStore();
+  const settler = fakeSettler();
+  const app = createPaymentRoutes({
+    store, network,
+    lead: { address: LEAD, price: 300_000n, settle: settler.settle, run: async () => { throw new Error("unused"); } },
+    activity: [{ agentId: "41", providerRef: "agent:lead" }, { agentId: "42", providerRef: "house:atlas" }],
+  });
+  const job = (provider: string, state: "delivered" | "refunded", price: bigint) => {
+    const j = newJob({ parent: null, buyerRef: "budget:wa:abc", providerRef: provider, providerLabel: provider, network: "arc-testnet", price, request: {}, now: new Date() });
+    j.state = state;
+    return j;
+  };
+  for (const j of [job("agent:lead", "delivered", 300_000n), job("agent:lead", "delivered", 300_000n), job("agent:lead", "refunded", 300_000n)]) await store.insertJob(j);
+  const res = await app.request("http://api.test/agents/activity");
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { network: "arc-testnet", agents: { "41": { jobsCompleted: 2, earnedUSDC: "0.60" } } });
+  const empty = createPaymentRoutes({ store, network, lead: { address: LEAD, price: 300_000n, settle: settler.settle, run: async () => { throw new Error("unused"); } } });
+  assert.deepEqual(await (await empty.request("http://api.test/agents/activity")).json(), { network: "arc-testnet", agents: {} });
 });

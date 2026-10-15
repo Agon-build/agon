@@ -124,6 +124,8 @@ export interface PaymentsStore {
   listStuckJobs(state: JobState, updatedBefore: Date): Promise<Job[]>;
   /** Root jobs this buyer started, newest first. */
   listJobsByBuyer(buyerRef: string, limit: number): Promise<Job[]>;
+  /// Delivered jobs and their total price per provider on one network (providers with none are left out).
+  deliveredJobStats(network: AgonNetworkId, providerRefs: string[]): Promise<Record<string, { jobs: number; earnedAtomic: bigint }>>;
   /** Reserved plus settled spend for the wallet on the UTC day of `now`. */
   dailySpent(walletRef: string, network: AgonNetworkId, now: Date): Promise<bigint>;
   /** Insert or update by idempotency key; a recorded nonce is never erased. */

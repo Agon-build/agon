@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Address } from "viem";
 
 import { agonNetwork, type AgonNetwork } from "../../network.ts";
+import { houseAgentIdsFrom, parseFirstPartyAgents } from "../../first-party.ts";
 import { DEFAULT_HOUSE_AGENTS, houseAgentsFromEnv } from "./house-agents.ts";
 import type { HouseRunner } from "./worker.ts";
 
@@ -14,8 +15,9 @@ export type SeasonSettings = {
   endsAt: Date;
   tickMs: number;
   house: HouseRunner[];
-  /// House key to its listing's ERC-8004 id (env AGON_SEASON_HOUSE_AGENT_IDS).
-  houseAgentIds: Record<string, bigint>;
+  /// House key to its listing's ERC-8004 id, from AGON_FIRST_PARTY_AGENTS.
+  /// Null when that value is unset or invalid: stored ids are then left alone.
+  houseAgentIds: Record<string, bigint> | null;
 };
 
 export type SeasonSettingsResult =
@@ -82,14 +84,9 @@ export function resolveSeasonSettings(env: Record<string, string | undefined>): 
     problems.push('AGON_SEASON_HOUSE_WALLETS must be JSON like {"atlas":{"walletId":"...","address":"0x..."}}');
   }
 
-  const houseAgentIds: Record<string, bigint> = {};
-  try {
-    const ids = z.record(z.string().regex(/^[1-9]\d{0,30}$/)).parse(JSON.parse(env.AGON_SEASON_HOUSE_AGENT_IDS ?? "{}"));
-    const keys = new Set(DEFAULT_HOUSE_AGENTS.map((a) => a.key));
-    for (const [key, id] of Object.entries(ids)) if (keys.has(key)) houseAgentIds[key] = BigInt(id);
-  } catch {
-    problems.push('AGON_SEASON_HOUSE_AGENT_IDS must be JSON like {"atlas":"41"}');
-  }
+  // A badge setting never stops the Season: an invalid value only leaves ids as stored.
+  const firstParty = env.AGON_FIRST_PARTY_AGENTS?.trim() ? parseFirstPartyAgents(env.AGON_FIRST_PARTY_AGENTS) : null;
+  const houseAgentIds = firstParty?.ok ? houseAgentIdsFrom(firstParty.agents, DEFAULT_HOUSE_AGENTS.map((a) => a.key)) : null;
 
   if (problems.length > 0 || seasonId === null || network === null) return { enabled: true, ok: false, problems };
   return {

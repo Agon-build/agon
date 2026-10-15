@@ -23,7 +23,8 @@ export type SeasonWorkerDeps = RoundDeps & {
   newSalt: () => Hex;
   commitsOff?: () => boolean;
   /// House key to its listing's ERC-8004 id, so agent pages find the house's Arena rating.
-  houseAgentIds?: Record<string, bigint>;
+  /// Null or absent leaves stored ids alone; a value is authoritative (a missing key clears).
+  houseAgentIds?: Record<string, bigint> | null;
 };
 
 export async function bootstrapSeason(deps: SeasonWorkerDeps, season: Season): Promise<void> {
@@ -33,12 +34,13 @@ export async function bootstrapSeason(deps: SeasonWorkerDeps, season: Season): P
     await deps.store.upsertEntry({
       seasonId: stored.seasonId,
       agentAddress: h.address,
-      erc8004AgentId: deps.houseAgentIds?.[h.spec.key] ?? null,
+      erc8004AgentId: null,
       displayName: h.spec.displayName,
       house: true,
       forecastEndpoint: null,
       enteredRound,
     });
+    if (deps.houseAgentIds) await deps.store.setEntryAgentId(stored.seasonId, h.address, deps.houseAgentIds[h.spec.key] ?? null);
   }
 }
 

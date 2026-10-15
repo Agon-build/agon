@@ -232,6 +232,17 @@ export class PostgresPaymentsStore implements PaymentsStore {
     return rows.map(toJob);
   }
 
+  async deliveredJobStats(network: AgonNetworkId, providerRefs: string[]): Promise<Record<string, { jobs: number; earnedAtomic: bigint }>> {
+    if (providerRefs.length === 0) return {};
+    const { rows } = await this.pool.query<{ provider_ref: string; jobs: string; earned: string }>(
+      `select provider_ref, count(*)::text as jobs, coalesce(sum(price_atomic), 0)::text as earned
+         from agon_jobs where network = $1 and state = 'delivered' and provider_ref = any($2::text[])
+        group by provider_ref`,
+      [network, providerRefs],
+    );
+    return Object.fromEntries(rows.map((r) => [r.provider_ref, { jobs: Number(r.jobs), earnedAtomic: BigInt(r.earned) }]));
+  }
+
   async dailySpent(walletRef: string, network: AgonNetworkId, now: Date): Promise<bigint> {
     const { rows } = await this.pool.query<{ total: string }>(
       `select coalesce(sum(amount), 0)::text as total from agon_wallet_spends

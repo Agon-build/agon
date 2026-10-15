@@ -115,6 +115,15 @@ export class MemoryPaymentsStore implements PaymentsStore {
   async listStuckJobs(state: JobState, updatedBefore: Date) {
     return [...this.jobs.values()].filter((j) => j.state === state && j.updatedAt < updatedBefore);
   }
+  async deliveredJobStats(network: AgonNetworkId, providerRefs: string[]) {
+    const out: Record<string, { jobs: number; earnedAtomic: bigint }> = {};
+    for (const j of this.jobs.values()) {
+      if (j.network !== network || j.state !== "delivered" || !providerRefs.includes(j.providerRef)) continue;
+      const prev = out[j.providerRef] ?? { jobs: 0, earnedAtomic: 0n };
+      out[j.providerRef] = { jobs: prev.jobs + 1, earnedAtomic: prev.earnedAtomic + j.priceAtomic };
+    }
+    return out;
+  }
   async listJobsByBuyer(buyerRef: string, limit: number) {
     return [...this.jobs.values()]
       .filter((j) => j.buyerRef === buyerRef && j.parentId === null)

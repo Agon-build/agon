@@ -65,7 +65,9 @@ export function createHouseSellerRoutes(deps: {
     return c.json({ kind: "accept", amount: decision.amount.toString(), quoteId, expiresAt: expiresAt.toISOString() });
   });
 
-  const certifyGate = createCertificationGate();
+  // One budget per house agent, so a busy one never blocks the others.
+  const gates = new Map<string, ReturnType<typeof createCertificationGate>>();
+  const gateFor = (key: string) => gates.get(key) ?? gates.set(key, createCertificationGate()).get(key)!;
   app.use("/:key/forecast", bodyLimit({ maxSize: LISTING_BODY_LIMIT_BYTES, onError: (c) => c.json({ error: "body_too_large" }, 413) }));
   app.use("/:key/forecast", async (c, next) => {
     const s = seller(c.req.param("key"));
@@ -75,7 +77,7 @@ export function createHouseSellerRoutes(deps: {
       agent: { name: s.spec.displayName.replace(/\s*\(house[^)]*\)$/, ""), capabilities: ["analysis"] },
       model: s.spec.model!,
       callModel: async (p) => deps.callModel({ model: p.model, systemPrompt: p.system, userPrompt: p.prompt, maxTokens: p.maxTokens, temperature: 0.2 }),
-      gate: certifyGate,
+      gate: gateFor(c.req.param("key")),
     });
     if (check === "preflight") return next();
     if (check) return check;

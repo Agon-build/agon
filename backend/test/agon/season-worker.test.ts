@@ -186,12 +186,14 @@ test("an answer that never parses is retried at most MAX_FORECAST_ATTEMPTS times
   assert.equal(calls, 2 * MAX_FORECAST_ATTEMPTS, "two markets, atlas only (mirror never calls a model)");
 });
 
-test("bootstrap gives house entries their listing ids and a restart without ids keeps them", async () => {
+test("bootstrap gives house entries their listing ids; unset keeps them, a set value without the key clears it", async () => {
   const { store, deps } = setup();
   const key = deps.house[0]!.spec.key;
-  await bootstrapSeason({ ...deps, houseAgentIds: { [key]: 41n } }, season);
   const id = async () => (await store.listEntries(1n)).find((e) => e.agentAddress === deps.house[0]!.address.toLowerCase())!.erc8004AgentId;
+  await bootstrapSeason({ ...deps, houseAgentIds: { [key]: 41n } }, season);
   assert.equal(await id(), 41n);
-  await bootstrapSeason(deps, season);
-  assert.equal(await id(), 41n);
+  await bootstrapSeason({ ...deps, houseAgentIds: null }, season);
+  assert.equal(await id(), 41n, "env unset keeps the stored id");
+  await bootstrapSeason({ ...deps, houseAgentIds: {} }, season);
+  assert.equal(await id(), null, "env set without this house clears it");
 });

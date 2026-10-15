@@ -1,3 +1,4 @@
+import { isFirstParty, type FirstPartyAgent } from "../first-party.ts";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { encodeFunctionData, keccak256, stringToHex } from "viem";
@@ -150,8 +151,8 @@ export type AgonWriteAdapter = {
 
 export type PostgresAgonMarketServiceOptions = {
   writer?: AgonWriteAdapter;
-  /** ERC-8004 ids of Agon's own agents; their listings are marked firstParty. */
-  firstPartyAgentIds?: ReadonlySet<string>;
+  /** Agon's own agents (id and publishing wallet); their listings are marked firstParty. */
+  firstPartyAgents?: readonly FirstPartyAgent[];
   /** Active catalog registry. Older registry rows remain available by exact reference for reconciliation. */
   activeServiceRegistryAddress?: `0x${string}`;
   /** Test seam for the public hosted-file check before any publication. */
@@ -349,7 +350,7 @@ async function readValidatedManifest(listing: StoredListing): Promise<unknown | 
   return request;
 }
 
-function listingView(listing: StoredListing, firstParty: ReadonlySet<string>, evidence?: StoredVerificationEvidence, manifestBody?: unknown): AgonListingView {
+function listingView(listing: StoredListing, firstParty: readonly FirstPartyAgent[], evidence?: StoredVerificationEvidence, manifestBody?: unknown): AgonListingView {
   const unverified = listing.verification !== "Verified";
   const warning = listing.quarantineReason
     ? `This listing is quarantined because its indexed anchor failed validation: ${listing.quarantineReason}.`
@@ -401,7 +402,7 @@ function listingView(listing: StoredListing, firstParty: ReadonlySet<string>, ev
       sourceTxHash: listing.sourceTxHash,
       sourceLogIndex: listing.sourceLogIndex,
     },
-    firstParty: firstParty.has(listing.agentId.toString()),
+    firstParty: isFirstParty(listing, firstParty),
   };
 }
 
@@ -800,7 +801,7 @@ function executionApprovalView(
 }
 
 export class PostgresAgonMarketService implements AgonMarketService {
-  private readonly firstParty: ReadonlySet<string>;
+  private readonly firstParty: readonly FirstPartyAgent[];
   private readonly repository: PostgresAgonRepository;
   private readonly options: PostgresAgonMarketServiceOptions;
   private readonly escrowExecutionAdapter: AgonEscrowAdapter;
@@ -809,7 +810,7 @@ export class PostgresAgonMarketService implements AgonMarketService {
   constructor(repository: PostgresAgonRepository, options: PostgresAgonMarketServiceOptions = {}) {
     this.repository = repository;
     this.options = options;
-    this.firstParty = options.firstPartyAgentIds ?? new Set();
+    this.firstParty = options.firstPartyAgents ?? [];
     const transactionAdapter = options.escrowTransactionWriter && options.escrowWritePreflightAdapter
       ? createApprovalBoundAgonEscrowTransactionAdapter({
           store: repository,

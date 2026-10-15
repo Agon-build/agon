@@ -38,6 +38,13 @@ export class MemorySeasonStore implements SeasonStore {
     return this.seasons.get(seasonId.toString()) ?? null;
   }
 
+  async setEntryAgentId(seasonId: bigint, agent: Address, agentId: bigint | null): Promise<void> {
+    const k = `${seasonId}:${agent.toLowerCase()}`;
+    const prev = this.entries.get(k);
+    const taken = agentId !== null && [...this.entries.entries()].some(([key, e]) => key !== k && e.seasonId === seasonId && e.erc8004AgentId === agentId);
+    if (prev && !taken) this.entries.set(k, { ...prev, erc8004AgentId: agentId });
+  }
+
   async upsertEntry(e: SeasonEntry): Promise<void> {
     const k = `${e.seasonId}:${e.agentAddress.toLowerCase()}`;
     const prev = this.entries.get(k);

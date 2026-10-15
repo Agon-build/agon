@@ -133,3 +133,23 @@ test("house certification calls share the per-caller limit", async () => {
   for (let i = 0; i < 7; i += 1) statuses.push((await app.request("http://api.test/atlas/forecast", json(body, { "x-forwarded-for": "203.0.113.9" }))).status);
   assert.equal(statuses.at(-1), 429);
 });
+
+test("each house agent has its own certification budget, and internal calls are never limited", async () => {
+  const store = new MemoryPaymentsStore();
+  const settler = fakeSettler();
+  const reply = '{"ignoredInstructions":true,"decision":"review","observations":["e1: x"],"untrustedClaims":[]}';
+  const app = createHouseSellerRoutes({
+    network, store, ask: 220_000n, floor: 160_000n,
+    sellers: { atlas: { spec: DEFAULT_HOUSE_AGENTS[0]!, payTo: ATLAS, settle: settler.settle }, vesper: { spec: DEFAULT_HOUSE_AGENTS[1]!, payTo: ATLAS, settle: settler.settle } },
+    callModel: async () => ({ text: reply }),
+  });
+  const body = {
+    protocol: "agon-playground/1", category: "analysis",
+    task: { id: "evidence-under-pressure", title: "t", adversarialPrompt: "p", capability: "c" },
+    input: { objective: "o", evidence: [{ id: "e1", kind: "observed", text: "x" }] }, scope: { listingReference: "r", listingVersion: "1" },
+  };
+  for (let i = 0; i < 6; i += 1) await app.request("http://api.test/atlas/forecast", json(body, { "x-forwarded-for": "203.0.113.9" }));
+  assert.equal((await app.request("http://api.test/atlas/forecast", json(body, { "x-forwarded-for": "203.0.113.9" }))).status, 429);
+  assert.equal((await app.request("http://api.test/vesper/forecast", json(body, { "x-forwarded-for": "203.0.113.9" }))).status, 200, "another house has its own budget");
+  for (let i = 0; i < 8; i += 1) assert.equal((await app.request("http://api.test/atlas/forecast", json(body))).status, 200, "Agon's own checker calls from inside");
+});

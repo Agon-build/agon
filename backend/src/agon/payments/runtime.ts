@@ -6,6 +6,7 @@ import { callModel } from "../../runners/llm/client.js";
 import { createAgonWallet, createPlatformUsdcTransfer, executeContractCall, getTxState, seedTestnetUsdc, signTypedDataJson } from "../../chain/circleDev.ts";
 import { runLeadForecast } from "../lead-agent/lead-agent.ts";
 import { DEFAULT_HOUSE_AGENTS } from "../playground/seasons/house-agents.ts";
+import { parseFirstPartyAgents, providerRefFor } from "../first-party.ts";
 import { createHouseSellerRoutes } from "../playground/seasons/house-seller.ts";
 import { stableUuid } from "../playground/seasons/committer.ts";
 import { computeLeaderboard } from "../playground/seasons/scoring.ts";
@@ -23,9 +24,12 @@ import { createStandinRoutes } from "./standin-seller.ts";
 import { PostgresPaymentsStore } from "./store.ts";
 import type { BudgetWallet } from "./types.ts";
 
-/// The Lead has no model of its own; its listing certification answer uses the
-/// owner's model for the Lead (Sonnet 5.5, Bedrock profile id).
-const LEAD_CERTIFY_MODEL = "global.anthropic.claude-sonnet-5-5";
+/// Agon's own agents and the job provider ref their cards count.
+function firstPartyActivity(env: Record<string, string | undefined>): { agentId: string; providerRef: string }[] {
+  const parsed = parseFirstPartyAgents(env.AGON_FIRST_PARTY_AGENTS);
+  const houseKeys = DEFAULT_HOUSE_AGENTS.map((a) => a.key);
+  return parsed.ok ? parsed.agents.map((a) => ({ agentId: a.agentId, providerRef: providerRefFor(a.key, houseKeys) })) : [];
+}
 
 const AUTHORIZATION_STATE_ABI = parseAbi(["function authorizationState(address authorizer, bytes32 nonce) view returns (bool)"]);
 const USDC_BALANCE_ABI = parseAbi(["function balanceOf(address owner) view returns (uint256)"]);
@@ -124,11 +128,8 @@ export function startPaymentsRuntime(input: {
     const routes = {
       payments: createPaymentRoutes({
         store, network, log, off: () => s.off.all || s.off.lead,
+        activity: firstPartyActivity(input.env ?? process.env),
         lead: { address: s.lead.address, price: s.leadPrice, settle: settler(s.lead), run: leadRun },
-        certify: {
-          model: LEAD_CERTIFY_MODEL,
-          callModel: async (p) => ({ text: (await callModel({ model: p.model, systemPrompt: p.system, userPrompt: p.prompt, maxTokens: p.maxTokens, temperature: 0.2 })).text }),
-        },
       }) as unknown as Hono,
       house: createHouseSellerRoutes({
         network, store, ask: s.houseAsk, floor: s.houseFloor,

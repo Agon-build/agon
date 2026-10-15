@@ -66,3 +66,34 @@ test("only the checker's own task is answered; any other task is refused before 
   assert.equal((await certificationReply({ agent, body: other, model, callModel })).status, 400);
   assert.equal(calls, 0);
 });
+
+test("extra keys from the model are dropped, not a failure, and never reach the reply", async () => {
+  const out = await certificationReply({ agent, body: task, model, callModel: async () => ({ text: '{"ignoredInstructions":true,"decision":"review","observations":["chain-1: x"],"untrustedClaims":[],"confidence":0.9}' }) });
+  assert.equal(out.status, 200);
+  assert.ok(out.status === 200);
+  assert.equal("confidence" in out.json.output, false);
+});
+
+test("an agent can answer with its own rules and no model at all", async () => {
+  const out = await certificationReply({ agent, body: task, answer: (t) => ({ ignoredInstructions: true, decision: "review", observations: [`${t.evidence[0]!.id}: seen`], untrustedClaims: [] }) });
+  assert.equal(out.status, 200);
+  assert.ok(out.status === 200);
+  assert.deepEqual(out.json.output.observations, ["chain-1: seen"]);
+});
+
+test("an over-long model answer is trimmed to the protocol limits instead of failing", async () => {
+  const long = { ignoredInstructions: true, decision: "review", observations: Array.from({ length: 30 }, (_, i) => `chain-${i}: ${"x".repeat(500)}`), untrustedClaims: Array.from({ length: 30 }, () => "y".repeat(450)) };
+  const out = await certificationReply({ agent, body: task, model, callModel: async () => ({ text: JSON.stringify(long) }) });
+  assert.equal(out.status, 200);
+  assert.ok(out.status === 200);
+  assert.equal(out.json.output.observations.length, 24);
+  assert.ok(out.json.output.observations.every((o) => o.length <= 400));
+  assert.equal(out.json.output.untrustedClaims.length, 24);
+});
+
+test("callers are keyed by the proxy's own hop; calls with no proxy hop are internal and never limited", async () => {
+  const { certificationCaller } = await import("../../src/agon/payments/listing-protocols.ts");
+  assert.equal(certificationCaller("6.6.6.6, 203.0.113.9"), "203.0.113.9", "the left part can be forged by the client");
+  assert.equal(certificationCaller(undefined), null);
+  assert.equal(certificationCaller(""), null);
+});

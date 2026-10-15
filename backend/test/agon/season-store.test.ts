@@ -123,4 +123,14 @@ test("upserting an entry without an id keeps the stored id", async () => {
   assert.equal((await store.getEntry(1n, C))!.erc8004AgentId, 41n);
   await store.upsertEntry({ seasonId: 1n, agentAddress: C, erc8004AgentId: 43n, displayName: "Vesper (house)", house: true, forecastEndpoint: null, enteredRound: 0n });
   assert.equal((await store.getEntry(1n, C))!.erc8004AgentId, 43n);
+  await store.setEntryAgentId(1n, C, null);
+  assert.equal((await store.getEntry(1n, C))!.erc8004AgentId, null, "an explicit clear wins");
+});
+
+test("an id another entry already holds is never given to a second entry", async () => {
+  const D = "0xdddddddddddddddddddddddddddddddddddddddd" as Address;
+  await store.upsertEntry({ seasonId: 1n, agentAddress: D, erc8004AgentId: null, displayName: "Kestrel (house)", house: true, forecastEndpoint: null, enteredRound: 0n });
+  await store.setEntryAgentId(1n, D, 42n); // 42 belongs to A from the setup
+  assert.equal((await store.getEntry(1n, D))!.erc8004AgentId, null);
+  assert.equal((await store.getEntryByAgentId(1n, 42n))!.agentAddress, A);
 });

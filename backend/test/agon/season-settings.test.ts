@@ -56,15 +56,17 @@ test("bad or missing values come back as named problems instead of throwing", ()
   }
 });
 
-test("house agent ids map house keys to ERC-8004 ids and ignore unknown keys", () => {
-  const ok = resolveSeasonSettings({ ...valid, AGON_SEASON_HOUSE_AGENT_IDS: '{"atlas":"41","vesper":"42","nobody":"9"}' });
+test("house agent ids come from AGON_FIRST_PARTY_AGENTS; unset or invalid leaves stored ids alone", () => {
+  const owner = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+  const ok = resolveSeasonSettings({ ...valid, AGON_FIRST_PARTY_AGENTS: JSON.stringify({ lead: { agentId: "40", owner }, atlas: { agentId: "41", owner }, vesper: { agentId: "42", owner } }) });
   assert.ok(ok.enabled && ok.ok);
   assert.deepEqual(ok.settings.houseAgentIds, { atlas: 41n, vesper: 42n });
   const none = resolveSeasonSettings(valid);
   assert.ok(none.enabled && none.ok);
-  assert.deepEqual(none.settings.houseAgentIds, {});
-  for (const bad of ["not json", '["41"]', '{"atlas":"0x29"}', '{"atlas":41}']) {
-    const out = resolveSeasonSettings({ ...valid, AGON_SEASON_HOUSE_AGENT_IDS: bad });
-    assert.ok(out.enabled && !out.ok, bad);
+  assert.equal(none.settings.houseAgentIds, null);
+  for (const bad of ["not json", JSON.stringify({ atlas: { agentId: "41", owner }, vesper: { agentId: "41", owner } })]) {
+    const out = resolveSeasonSettings({ ...valid, AGON_FIRST_PARTY_AGENTS: bad });
+    assert.ok(out.enabled && out.ok, "a badge setting never stops the Season");
+    assert.equal(out.settings.houseAgentIds, null, bad);
   }
 });

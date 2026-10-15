@@ -81,6 +81,8 @@ export interface SeasonStore {
   ensureSeason(season: Season): Promise<Season>;
   getSeason(seasonId: bigint): Promise<Season | null>;
   upsertEntry(entry: SeasonEntry): Promise<void>;
+  /// Sets (or clears, with null) an entry's ERC-8004 id.
+  setEntryAgentId(seasonId: bigint, agent: Address, agentId: bigint | null): Promise<void>;
   getEntry(seasonId: bigint, agent: Address): Promise<SeasonEntry | null>;
   getEntryByAgentId(seasonId: bigint, erc8004AgentId: bigint): Promise<SeasonEntry | null>;
   listEntries(seasonId: bigint): Promise<SeasonEntry[]>;

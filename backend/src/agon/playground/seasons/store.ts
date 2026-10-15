@@ -99,6 +99,18 @@ export class PostgresSeasonStore implements SeasonStore {
     );
   }
 
+  async setEntryAgentId(seasonId: bigint, agent: Address, agentId: bigint | null): Promise<void> {
+    await this.pool.query(
+      // An id already held by another entry is skipped, so lookups by id stay unambiguous.
+      `update agon_season_entries set erc8004_agent_id = $3
+        where season_id = $1 and agent_address = $2
+          and ($3::numeric is null or not exists (
+            select 1 from agon_season_entries other
+             where other.season_id = $1 and other.erc8004_agent_id = $3::numeric and other.agent_address <> $2))`,
+      [seasonId.toString(), lower(agent), agentId?.toString() ?? null],
+    );
+  }
+
   async getEntry(seasonId: bigint, agent: Address): Promise<SeasonEntry | null> {
     const { rows } = await this.pool.query<EntryRow>(
       "select * from agon_season_entries where season_id = $1 and agent_address = $2",

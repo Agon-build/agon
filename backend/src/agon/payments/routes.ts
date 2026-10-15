@@ -6,8 +6,10 @@ import type { Address, Hex } from "viem";
 import type { AgonNetwork } from "../network.ts";
 import { LEAD_PROVIDER_REF, type LeadAnswer } from "../lead-agent/lead-agent.ts";
 import { exactPayment, type ExactSettler, type X402Paid } from "./exact-seller.ts";
+import { formatUsdc } from "./bargain.ts";
 import { receiptTree } from "./jobs.ts";
-import { LISTING_BODY_LIMIT_BYTES, answerListingCheck, createCertificationGate, type CertifyModelCaller } from "./listing-protocols.ts";
+import { triageEvidence } from "../lead-agent/evidence-triage.ts";
+import { LISTING_BODY_LIMIT_BYTES, answerListingCheck } from "./listing-protocols.ts";
 import type { PaymentsStore } from "./types.ts";
 
 const leadBody = z.object({ question: z.string().trim().min(8).max(300) });
@@ -18,17 +20,34 @@ export function createPaymentRoutes(deps: {
   lead: { address: Address; price: bigint; settle: ExactSettler; run: (input: { parentJobId: string | null; payer: Address; question: string; payment?: { txHash: Hex; amount: bigint } }) => Promise<LeadAnswer> };
   off?: () => boolean;
   log?: (m: string) => void;
-  /// The model that answers the listing certification call for the Lead.
-  certify?: { model: string; callModel: CertifyModelCaller };
+  /// Agon's own agents whose delivered jobs are shown on their cards.
+  activity?: { agentId: string; providerRef: string }[];
 }): Hono {
   const app = new Hono<{ Variables: { x402: X402Paid } }>();
 
-  const certifyGate = createCertificationGate();
+  // Public and read on every Agents page load, so the totals are kept for a minute.
+  let activityCache: { at: number; body: { network: string; agents: Record<string, { jobsCompleted: number; earnedUSDC: string }> } } | null = null;
+  app.get("/agents/activity", async (c) => {
+    const nowMs = Date.now();
+    if (!activityCache || nowMs - activityCache.at > 60_000) {
+      const agents = deps.activity ?? [];
+      const stats = await deps.store.deliveredJobStats(deps.network.id, agents.map((a) => a.providerRef));
+      const out: Record<string, { jobsCompleted: number; earnedUSDC: string }> = {};
+      for (const a of agents) {
+        const s = stats[a.providerRef];
+        if (s) out[a.agentId] = { jobsCompleted: s.jobs, earnedUSDC: formatUsdc(s.earnedAtomic) };
+      }
+      activityCache = { at: nowMs, body: { network: deps.network.id, agents: out } };
+    }
+    c.header("cache-control", "public, max-age=60");
+    return c.json(activityCache.body);
+  });
+
   app.use("/agents/lead/forecast", bodyLimit({ maxSize: LISTING_BODY_LIMIT_BYTES, onError: (c) => c.json({ error: "body_too_large" }, 413) }));
   app.use("/agents/lead/forecast", async (c, next) => {
     if (deps.off?.()) return c.json({ error: "lead_agent_off" }, 503);
     const raw = await c.req.raw.clone().json().catch(() => null);
-    const check = await answerListingCheck(c, raw, deps.certify ? { agent: { name: "Agon Lead Agent", capabilities: ["analysis"] }, ...deps.certify, gate: certifyGate } : null);
+    const check = await answerListingCheck(c, raw, { agent: { name: "Agon Lead Agent", capabilities: ["analysis"] }, answer: (task) => triageEvidence(task.evidence) });
     if (check === "preflight") return next();
     if (check) return check;
     const body = leadBody.safeParse(raw);
