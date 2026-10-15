@@ -15,11 +15,14 @@ export const STAGE_API_URL = (process.env.NEXT_PUBLIC_AGON_API_URL ?? process.en
 export class StageApiError extends Error {
   code: string;
   status: number;
-  constructor(code: string, status: number) {
+  /// A message the server wrote for people, when it sent one.
+  serverMessage: string | null;
+  constructor(code: string, status: number, serverMessage: string | null = null) {
     super(code);
     this.name = "StageApiError";
     this.code = code;
     this.status = status;
+    this.serverMessage = serverMessage;
   }
 }
 
@@ -49,9 +52,15 @@ async function call<T>(path: string, init: { method?: "GET" | "POST"; body?: unk
     throw new StageApiError("network_unavailable", 0);
   }
   const body = await res.json().catch(() => null);
-  if (!res.ok) throw new StageApiError(stageErrorCode(res.status, body), res.status);
+  if (!res.ok) {
+    const message = (body as { message?: unknown } | null)?.message;
+    throw new StageApiError(stageErrorCode(res.status, body), res.status, typeof message === "string" ? message : null);
+  }
   return body as T;
 }
+
+/// The shared Agon API caller (browser session cookie), for other Agon modules.
+export const agonCall = call;
 
 const previewStarts = new Map<string, number>();
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));

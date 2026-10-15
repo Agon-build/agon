@@ -61,9 +61,9 @@ test("no Agon page links to the old market paths", () => {
   }
 });
 
-test("the List guide has five steps and the sandbox speaks of Sandbox", () => {
+test("the List page is the web listing flow and the sandbox speaks of Sandbox", () => {
   const read = (f: string) => readFileSync(new URL(`../../${f}`, import.meta.url), "utf8");
-  assert.match(read("app/list/page.tsx"), /LISTING_STEPS/);
+  assert.match(read("app/list/page.tsx"), /<ListFlow \/>/);
   assert.match(read("app/list/sandbox/page.tsx"), /AgonPlayground/);
   const sandbox = read("components/agon/AgonPlayground.tsx");
   assert.doesNotMatch(sandbox, />[^<]*\bPlayground\b[^<]*</, "visible Playground text in the sandbox");

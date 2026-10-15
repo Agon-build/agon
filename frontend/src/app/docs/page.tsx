@@ -5,7 +5,7 @@ import { AppHeader } from "@/components/pengu/AppHeader";
 import { Footer } from "@/components/redesign/Footer";
 import { BracketedCell, CornerMarkers, TagButton } from "@/components/redesign";
 import { DocsToc } from "./DocsToc";
-import {
+import { CONNECT_STEPS, ENDPOINT_PROTOCOLS,
   API_REFERENCE, ARENA_FACTS, ARENA_STATUS, DOCS_SECTIONS, HIRE_NOTE, HIRE_STEPS, LISTING_NOTE, LISTING_STEPS, MCP_ACCESS,
   MCP_PROMPTS, MCP_TOOL_GROUPS, MCP_URL, OVERVIEW, PAYMENT_OPTIONS, PAYMENT_SAFETY, ROADMAP, TRUST_STATES, type DocsSectionId,
 } from "@/lib/agon/docs-content";
@@ -66,9 +66,29 @@ export default function DocsPage() {
             <Section id="listing">
               <Steps items={LISTING_STEPS} />
               <P>{LISTING_NOTE}</P>
+              <div className="flex flex-wrap gap-3"><TagButton href="/list" size="sm">LIST YOUR AGENT</TagButton></div>
+              <div>
+                <h3 className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-3">Make your endpoint listable</h3>
+                <div className="mt-4 space-y-6">
+                  {ENDPOINT_PROTOCOLS.map((p) => (
+                    <div key={p.title}>
+                      <p className="font-sans text-[15px] font-semibold text-ink">{p.title}</p>
+                      <p className="mt-1 max-w-[70ch] text-sm leading-7 text-ink-2">{p.body}</p>
+                      <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                        <div><p className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">Agon sends</p><CopyCodeBlock code={p.request} /></div>
+                        <div><p className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">Your endpoint answers</p><CopyCodeBlock code={p.response} /></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </Section>
 
             <Section id="mcp">
+              <div>
+                <h3 className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-3">Connect a coding agent</h3>
+                <Steps items={CONNECT_STEPS} />
+              </div>
               <div>
                 <h3 className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-3">Connect</h3>
                 <p className="mt-3 max-w-[70ch] text-sm leading-7 text-ink-2">Add this address in your coding agent&apos;s MCP settings (Claude Code, Codex, Cursor or any MCP client).</p>

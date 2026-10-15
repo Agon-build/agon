@@ -78,9 +78,34 @@ test("outside the roadmap, docs only describe what exists today", async () => {
   assert.ok(!today.includes("Discovered"), "the Discovered state arrives with the Agents page");
   const free = PAYMENT_OPTIONS.find((o) => o.title === "No subscriptions")!.body;
   assert.match(free, /network fee/i, "publishing a listing costs gas");
-  const sandbox = LISTING_STEPS.find((s) => s.title === "Sandbox")!.body;
-  assert.match(sandbox, /asks for payment correctly/);
-  const verify = LISTING_STEPS.find((s) => s.title === "Verify")!.body;
-  assert.ok(!/payout wallet/i.test(verify), "no payout-ownership check exists");
+  const check = LISTING_STEPS.find((s) => s.title === "Check")!.body;
+  assert.match(check, /without paying/);
+  assert.ok(!LISTING_STEPS.some((s) => /payout wallet/i.test(s.body)), "no payout-ownership check exists");
   assert.match(ARENA_FACTS[0]!.body, /up to two from each/);
+});
+
+test("the listing steps match the web flow and the endpoint protocols are documented exactly", async () => {
+  const { LISTING_STEPS, LISTING_NOTE, CONNECT_STEPS, ENDPOINT_PROTOCOLS, MCP_TOOL_GROUPS, MCP_ACCESS } = await import("./docs-content.ts");
+  assert.deepEqual(LISTING_STEPS.map((s) => s.title), ["Describe", "Check", "Approve and pay", "Live"]);
+  assert.doesNotMatch(LISTING_NOTE, /roadmap/i, "the web flow ships now");
+  assert.match(MCP_ACCESS, /Agent access/);
+  assert.ok(CONNECT_STEPS.some((s) => /Agent access/.test(s.body)));
+  assert.ok(CONNECT_STEPS.some((s) => /AGON_TOKEN/.test(s.body)));
+  assert.ok(CONNECT_STEPS.every((s) => !/agon_pat_[A-Za-z0-9]/.test(s.body)));
+  assert.deepEqual(ENDPOINT_PROTOCOLS.map((p) => p.title), ["Unpaid test call", "Certification call"]);
+  assert.match(ENDPOINT_PROTOCOLS[0]!.request, /agon-x402-preflight\/1/);
+  assert.match(ENDPOINT_PROTOCOLS[0]!.response, /402/);
+  assert.match(ENDPOINT_PROTOCOLS[1]!.request, /agon-playground\/1/);
+  assert.match(ENDPOINT_PROTOCOLS[1]!.request, /evidence-under-pressure/);
+  assert.match(ENDPOINT_PROTOCOLS[1]!.response, /"externalWrites": false/);
+  assert.match(ENDPOINT_PROTOCOLS[1]!.body, /Analysis/);
+  const listing = MCP_TOOL_GROUPS.find((g) => g.title === "Listing")!;
+  for (const t of ["setup_managed_publisher", "get_managed_listing", "approve_managed_listing", "continue_managed_listing"]) assert.ok(listing.tools.includes(t), t);
+});
+
+test("the Docs page shows how to make an endpoint listable and how to connect a coding agent", async () => {
+  const { readFileSync } = await import("node:fs");
+  const page = readFileSync(new URL("../../app/docs/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /ENDPOINT_PROTOCOLS/);
+  assert.match(page, /CONNECT_STEPS/);
 });

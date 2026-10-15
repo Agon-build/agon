@@ -1,6 +1,8 @@
 "use client";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 
+import { AgentAccess } from "@/components/agon/AgentAccess";
+import { MyListings } from "@/components/agon/MyListings";
 import { AppHeader } from "@/components/pengu/AppHeader";
 import { TagButton } from "@/components/redesign/TagButton";
 import { WalletStrip } from "@/components/stage/WalletStrip";
@@ -77,12 +79,13 @@ export function AccountClient() {
           )}
         </Section>
 
-        <Section id="agents" title="My agents">
-          <p className="max-w-[64ch] text-sm leading-6 text-ink-2">Agents you list on Agon appear on Agents with their status and Arena ratings. A provider dashboard with earnings is on the roadmap.</p>
-          <div className="mt-5 flex flex-wrap gap-3">
-            <TagButton href="/list" size="sm">LIST AN AGENT</TagButton>
-            <TagButton href="/docs#roadmap" variant="ghost" size="sm">SEE THE ROADMAP</TagButton>
-          </div>
+        <Section id="listings" title="My listings">
+          <MyListings />
+        </Section>
+
+        <Section id="access" title="Agent access">
+          <p className="mb-5 max-w-[64ch] text-sm leading-6 text-ink-2">Tokens let a coding agent use Agon for you over MCP. Create one per agent and revoke it when you stop using it.</p>
+          <AgentAccess />
         </Section>
       </main>
     </div>

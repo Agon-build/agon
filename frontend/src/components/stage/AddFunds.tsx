@@ -1,25 +1,15 @@
 "use client";
 import { useState } from "react";
-import { erc20Abi } from "viem";
-import { useAccount, useSwitchChain, useWriteContract } from "wagmi";
 
 import { TagButton } from "@/components/redesign/TagButton";
-import { useAuth } from "@/hooks/useAuth";
-import { fundingPath, parseAmount } from "@/lib/agon/add-funds";
+import { sendErrorText, useUsdcSend } from "@/components/stage/useUsdcSend";
+import { parseAmount } from "@/lib/agon/add-funds";
 import type { StageWallet } from "@/lib/agon/stage-types";
-
-const USDC_ON_ARC = "0x3600000000000000000000000000000000000000" as const;
-const ARC_TESTNET_ID = 5_042_002;
-const AUTH_URL = (process.env.NEXT_PUBLIC_AUTH_URL ?? "http://localhost:8082").replace(/\/+$/, "");
 
 /// Moves USDC from the signed-in account's own wallet into its Agon wallet:
 /// a browser wallet signs the transfer, a Circle wallet confirms it here.
 export function AddFunds({ wallet, onDone }: { wallet: StageWallet; onDone: () => void }) {
-  const { me } = useAuth();
-  const path = fundingPath(me?.walletKind, wallet.testnet);
-  const { isConnected, chainId } = useAccount();
-  const { switchChainAsync } = useSwitchChain();
-  const { writeContractAsync } = useWriteContract();
+  const { path, send: sendUsdc } = useUsdcSend(wallet.testnet);
   const [amount, setAmount] = useState("1.00");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,23 +27,11 @@ export function AddFunds({ wallet, onDone }: { wallet: StageWallet; onDone: () =
     setError(null);
     setSent(null);
     try {
-      if (path === "wallet") {
-        if (!isConnected) throw new Error("connect");
-        if (chainId !== ARC_TESTNET_ID) await switchChainAsync({ chainId: ARC_TESTNET_ID as never });
-        const tx = await writeContractAsync({ address: USDC_ON_ARC, abi: erc20Abi, functionName: "transfer", args: [wallet.address as `0x${string}`, atomic], chainId: ARC_TESTNET_ID as never });
-        setSent({ tx, note: `Sent ${amount.trim()} USDC.` });
-      } else {
-        const res = await fetch(`${AUTH_URL}/wallet/execute`, {
-          method: "POST", credentials: "include", headers: { "content-type": "application/json" },
-          body: JSON.stringify({ contractAddress: USDC_ON_ARC, abiFunctionSignature: "transfer(address,uint256)", abiParameters: [wallet.address, atomic.toString()] }),
-        });
-        if (!res.ok) throw new Error("circle");
-        setSent({ tx: null, note: `Transfer of ${amount.trim()} USDC submitted. It lands in a few seconds.` });
-      }
+      const { tx } = await sendUsdc(wallet.address, atomic);
+      setSent({ tx, note: tx ? `Sent ${amount.trim()} USDC.` : `Transfer of ${amount.trim()} USDC submitted. It lands in a few seconds.` });
       refreshSoon();
     } catch (e) {
-      const text = e instanceof Error ? e.message : "";
-      setError(text === "connect" ? "Connect your wallet first, then try again." : /reject|denied/i.test(text) ? "You declined the transfer. Nothing was sent." : "Transfer failed. Nothing was sent.");
+      setError(sendErrorText(e));
     } finally {
       setBusy(false);
     }
