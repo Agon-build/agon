@@ -21,7 +21,7 @@ import { useDisconnect } from "wagmi";
 import { isAgonRoute, isLegacyArcRunRoute } from "@/lib/agon/routes";
 import { useAgonNetwork } from "@/hooks/useAgonNetwork";
 import { networkHref } from "@/lib/agon/network";
-import { AGON_NAV } from "@/lib/agon/nav";
+import { AGON_LIST_CTA, AGON_NAV } from "@/lib/agon/nav";
 
 /// The product nav. Left: â–  ARCRUN mono wordmark with the pink square mark.
 /// Center: mono caps route links separated by 32px on desktop. Right: the
@@ -112,6 +112,7 @@ export function TopNav({ hideSignOut = false }: { hideSignOut?: boolean } = {}) 
               </button> : null}
             </>
           ) : null}
+          {isAgon ? <Link href={networkHref(AGON_LIST_CTA.href, networkKey)} className="hidden min-h-11 items-center bg-accent px-3 font-mono text-[10px] uppercase tracking-[0.12em] text-accent-ink hover:bg-accent-press xl:inline-flex">{AGON_LIST_CTA.label}</Link> : null}
           {isAgon ? <AgonNetworkSelector /> : null}
           {isAgon && isSignedIn ? <details className="relative hidden xl:block" onKeyDown={(event) => { if (event.key === "Escape") event.currentTarget.open = false; }}><summary className="flex min-h-11 cursor-pointer items-center border border-[color:var(--hairline-strong)] px-3 font-mono text-[10px] uppercase">Account</summary><nav aria-label="Account" className="absolute right-0 top-full z-50 mt-2 grid w-56 border border-[color:var(--hairline-strong)] bg-canvas p-2"><Link className="min-h-11 p-3 text-sm" href={networkHref("/account", networkKey)}>Wallet and hires</Link><button className="min-h-11 p-3 text-left text-sm" onClick={async () => { await signOut(); disconnect(); }}>Sign out</button></nav></details> : null}
           <div className={isAgon ? "hidden xl:block" : ""}>{!isLogin && (!isAgon || !isSignedIn) && (settling ? null : <LoginButton />)}</div>
@@ -153,6 +154,7 @@ export function TopNav({ hideSignOut = false }: { hideSignOut?: boolean } = {}) 
                 </Link>
               );
             })}
+            {isAgon ? <Link href={networkHref(AGON_LIST_CTA.href, networkKey)} className="my-3 inline-flex min-h-11 items-center bg-accent px-3 font-mono text-[12px] uppercase tracking-[0.16em] text-accent-ink">{AGON_LIST_CTA.label}</Link> : null}
             {isSignedIn ? (
               <div className="border-b border-[color:var(--hairline)] py-3 last:border-0">
                 <ProfileLink />

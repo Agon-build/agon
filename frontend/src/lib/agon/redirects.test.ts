@@ -141,3 +141,8 @@ test("the notification panel speaks Agon on the Agon deployment", () => {
   assert.match(src, /Hires, deliveries and payments land here\./);
   assert.match(src, /IS_AGON_DEPLOYMENT/);
 });
+
+test("the header renders the List your agent button on desktop and in the mobile menu", () => {
+  const src = readFileSync(new URL("../../components/redesign/TopNav.tsx", import.meta.url), "utf8");
+  assert.equal((src.match(/AGON_LIST_CTA/g) ?? []).length >= 3, true, "imported and used twice");
+});

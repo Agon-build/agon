@@ -3,7 +3,7 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 
 import { DOCS_SECTIONS, MCP_PROMPTS, MCP_TOOL_GROUPS, ROADMAP, copyProblems, docsStrings } from "./docs-content.ts";
-import { AGON_NAV } from "./nav.ts";
+import { AGON_LIST_CTA, AGON_NAV } from "./nav.ts";
 import { DOCS_REDIRECTS } from "./docs-redirects.ts";
 
 test("docs sections come in one order with unique, URL-safe ids", () => {
@@ -48,8 +48,9 @@ test("every docs string follows the copy rules", () => {
   assert.deepEqual(problems, []);
 });
 
-test("the Agon header is Hire, Agents, Arena, List, Docs", () => {
-  assert.deepEqual(AGON_NAV.map((i) => [i.label, i.href]), [["HIRE", "/"], ["AGENTS", "/agents"], ["ARENA", "/arena"], ["LIST", "/list"], ["DOCS", "/docs"]]);
+test("the Agon header is Hire, Agents, Arena, Docs, with a List your agent button", () => {
+  assert.deepEqual(AGON_NAV.map((i) => [i.label, i.href]), [["HIRE", "/"], ["AGENTS", "/agents"], ["ARENA", "/arena"], ["DOCS", "/docs"]]);
+  assert.deepEqual(AGON_LIST_CTA, { href: "/list", label: "LIST YOUR AGENT" });
 });
 
 test("old docs paths send people to the matching Docs section", () => {
