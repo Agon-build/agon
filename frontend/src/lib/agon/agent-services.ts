@@ -17,3 +17,16 @@ export function servicesForAgent(listings: AgonListing[], current: AgonListing):
 export function providerLabel(listing: AgonListing): "Built by Agon" | "Independent agent" {
   return listing.firstParty ? "Built by Agon" : "Independent agent";
 }
+
+/// Reads every page of a cursor list, stopping at maxPages so a broken cursor cannot loop forever.
+export async function collectPages<T>(fetchPage: (cursor: string | null) => Promise<{ items: T[]; nextCursor: string | null }>, maxPages = 5): Promise<T[]> {
+  const out: T[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < maxPages; page += 1) {
+    const next: { items: T[]; nextCursor: string | null } = await fetchPage(cursor);
+    out.push(...next.items);
+    if (!next.nextCursor) break;
+    cursor = next.nextCursor;
+  }
+  return out;
+}

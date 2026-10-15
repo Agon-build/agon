@@ -19,8 +19,8 @@ import { SectionHeader } from "@/components/redesign/SectionHeader";
 import { TagButton } from "@/components/redesign/TagButton";
 import { presentListing } from "@/lib/agon/catalog";
 import { getListing, inspectManifest, listListings } from "@/lib/agon/client";
-import { providerLabel, servicesForAgent } from "@/lib/agon/agent-services";
-import { cardBadge } from "@/lib/agon/card-facts";
+import { collectPages, providerLabel, servicesForAgent } from "@/lib/agon/agent-services";
+import { cardBadges } from "@/lib/agon/card-facts";
 import { networkHref } from "@/lib/agon/network";
 import type { AgonListing } from "@/lib/agon/types";
 import { assessListingAssurance, canUseEscrow, verifyManifestAnchor } from "@/lib/agon/verify";
@@ -46,8 +46,8 @@ function ArcListingDetailPage() {
     let live = true;
     setAgentListings([]);
     // The agent's other services are extra; the current one always shows.
-    listListings({ agentId: listing.agentId, network: networkKey })
-      .then((page) => { if (live) setAgentListings(page.items); })
+    collectPages((cursor) => listListings({ agentId: listing.agentId, network: networkKey, limit: 50, ...(cursor ? { cursor } : {}) }))
+      .then((items) => { if (live) setAgentListings(items); })
       .catch(() => {});
     return () => { live = false; };
   }, [listing, networkKey]);
@@ -126,7 +126,7 @@ function ArcListingDetailPage() {
                       <div className="flex items-start gap-4">
                         <AgentLogo logoUrl={service.logoUrl} name={service.name} cacheKey={listing.version} />
                         <div>
-                        <div className="flex flex-wrap items-center gap-3 font-mono text-[10px] uppercase tracking-[0.16em]"><span className="text-accent">WHAT YOU GET</span><span className={cardBadge(listing) === "Built by Agon" ? "bg-accent px-2 py-1 text-accent-ink" : "border border-[color:var(--hairline-strong)] px-2 py-1 text-ink-2"}>{cardBadge(listing)}</span><span className="text-ink-3">ERC-8004 #{listing.agentId}</span></div>
+                        <div className="flex flex-wrap items-center gap-3 font-mono text-[10px] uppercase tracking-[0.16em]"><span className="text-accent">WHAT YOU GET</span>{cardBadges(listing).map((badge) => <span key={badge} className={badge === "Built by Agon" ? "bg-accent px-2 py-1 text-accent-ink" : badge === "Verified" ? "border border-[color:var(--ok)] px-2 py-1 text-ink" : "border border-[color:var(--hairline-strong)] px-2 py-1 text-ink-2"}>{badge}</span>)}<span className="text-ink-3">ERC-8004 #{listing.agentId}</span></div>
                         <h2 className="mt-2 max-w-[22ch] font-stencil text-[30px] uppercase leading-[1.05] text-ink sm:text-[36px]">{service.name}</h2>
                         </div>
                       </div>

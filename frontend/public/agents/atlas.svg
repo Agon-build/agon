@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Atlas">
+  <rect width="256" height="256" fill="#1F3FD1"/>
+  <path d="M128 50 L204 206 H180 L128 98 L76 206 H52 Z" fill="#F4EFE6"/>
+  <ellipse cx="128" cy="160" rx="92" ry="24" fill="none" stroke="#F4EFE6" stroke-width="14" transform="rotate(-14 128 160)"/>
+</svg>

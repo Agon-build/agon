@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { BracketedCell } from "@/components/redesign/BracketedCell";
 import { inspectManifest } from "@/lib/agon/client";
-import { cardFacts, type CardBadge } from "@/lib/agon/card-facts";
+import { cardFacts, type AgentActivity, type CardBadge } from "@/lib/agon/card-facts";
 import type { AgonListing } from "@/lib/agon/types";
 import { useAgonNetwork } from "@/hooks/useAgonNetwork";
 
@@ -15,12 +15,12 @@ const BADGE_TONE: Record<CardBadge, string> = {
   Listed: "border border-[color:var(--hairline-strong)] text-ink-3",
 };
 
-export function ListingCard({ listing, arena = null, searchMatchTerms = [] }: { listing: AgonListing; arena?: { agentId: string; text: string } | null; searchMatchTerms?: string[] }) {
+export function ListingCard({ listing, arena = null, activity = null, searchMatchTerms = [] }: { listing: AgonListing; arena?: { agentId: string; text: string } | null; activity?: AgentActivity | null; searchMatchTerms?: string[] }) {
   const { networkKey } = useAgonNetwork();
   const [manifestBody, setManifestBody] = useState(listing.manifest.body);
   const [metadataState, setMetadataState] = useState<"idle" | "loading" | "ready" | "mismatch" | "error">(listing.manifest.body === undefined ? "idle" : "ready");
   const hydratedListing = useMemo(() => ({ ...listing, manifest: { ...listing.manifest, body: manifestBody } }), [listing, manifestBody]);
-  const facts = cardFacts(hydratedListing, arena);
+  const facts = cardFacts(hydratedListing, arena, activity);
   const quarantined = Boolean(listing.risk.quarantineReason);
   const metadataBlocked = metadataState === "mismatch" || metadataState === "error";
   const unavailable = listing.status !== "Listed" || quarantined || metadataBlocked;
@@ -64,7 +64,9 @@ export function ListingCard({ listing, arena = null, searchMatchTerms = [] }: { 
             <div className="min-w-0 flex-1">
               <div className="flex min-w-0 items-start justify-between gap-3">
                 <h2 className="min-w-0 truncate font-sans text-[18px] font-semibold leading-tight tracking-[-0.02em] text-ink">{facts.name}</h2>
-                <span className={`shrink-0 px-2 py-1 font-mono text-[9px] uppercase tracking-[0.12em] ${quarantined ? "border border-[color:var(--err)] text-[color:var(--err)]" : BADGE_TONE[facts.badge]}`}>{quarantined ? "Held" : facts.badge}</span>
+                <span className="flex shrink-0 flex-wrap justify-end gap-1">{quarantined
+                  ? <span className="border border-[color:var(--err)] px-2 py-1 font-mono text-[9px] uppercase tracking-[0.12em] text-[color:var(--err)]">Held</span>
+                  : facts.badges.map((badge) => <span key={badge} className={`px-2 py-1 font-mono text-[9px] uppercase tracking-[0.12em] ${BADGE_TONE[badge]}`}>{badge}</span>)}</span>
               </div>
               <p className="mt-1.5 line-clamp-2 font-sans text-[13px] leading-[1.45] text-ink-2">{facts.line}</p>
             </div>
@@ -80,7 +82,7 @@ export function ListingCard({ listing, arena = null, searchMatchTerms = [] }: { 
 
           <div aria-hidden className="min-h-4 flex-1" />
           <div className="flex items-end justify-between gap-4 border-t border-[color:var(--hairline)] pt-3">
-            <span className={`font-mono text-[10px] uppercase tracking-[0.12em] ${unavailable ? "text-[color:var(--err)]" : "text-ink-3"}`}>{unavailable ? "Check required" : facts.activity ?? ""}</span>
+            <ActivityLine text={unavailable ? "Check required" : facts.activity} />
             {facts.price ? <span className="font-mono text-[13px] text-ink">{facts.price}</span> : null}
           </div>
 
@@ -90,6 +92,17 @@ export function ListingCard({ listing, arena = null, searchMatchTerms = [] }: { 
         </BracketedCell>
       </Link>
     </article>
+  );
+}
+
+function ActivityLine({ text }: { text: string | null }) {
+  if (!text) return <span />;
+  const tone = text === "Online" ? "bg-[color:var(--ok)]" : text === "Offline" || text === "Check required" ? "bg-[color:var(--err)]" : null;
+  return (
+    <span className="flex min-w-0 items-center gap-2 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-2">
+      {tone ? <span aria-hidden className={`h-1.5 w-1.5 shrink-0 ${tone}`} /> : null}
+      <span className="truncate">{text}</span>
+    </span>
   );
 }
 

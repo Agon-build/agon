@@ -1,3 +1,4 @@
+import type { AgentActivity } from "./card-facts.ts";
 import { AGON_PREVIEW_MODE } from "./client";
 import {
   PREVIEW_JOB_ID, previewApproval, previewAsk, previewConfig, previewEntries, previewLeaderboard, previewLive, previewRatings, previewRounds, previewSeason, previewWallet,
@@ -113,6 +114,10 @@ export async function getLeaderboard(seasonId = AGON_SEASON_ID, category?: strin
 }
 export async function getRatings(seasonId = AGON_SEASON_ID): Promise<RatingsResponse> {
   return AGON_PREVIEW_MODE ? previewRatings : call(`/agon/seasons/${seasonId}/ratings`);
+}
+/// Delivered jobs for Agon's own agents, keyed by ERC-8004 id.
+export async function getAgentActivity(): Promise<{ network: string; agents: Record<string, AgentActivity> }> {
+  return AGON_PREVIEW_MODE ? { network: "arc-testnet", agents: {} } : call("/agon/agents/activity");
 }
 export async function getEntries(seasonId = AGON_SEASON_ID): Promise<{ entries: SeasonEntry[] }> {
   return AGON_PREVIEW_MODE ? { entries: previewEntries } : call(`/agon/seasons/${seasonId}/entries`);

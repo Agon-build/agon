@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Agon Lead Agent">
+  <rect width="256" height="256" fill="#FF3F88"/>
+  <g fill="#121212">
+    <path d="M56 56h22v122h122v22H56z"/>
+    <path d="M98 56h22v80h80v22H98z" opacity="0.7"/>
+    <path d="M140 56h22v38h38v22h-60z" opacity="0.42"/>
+  </g>
+</svg>

@@ -3,17 +3,18 @@ import type { RatingsResponse, SeasonEntry } from "./stage-types.ts";
 import type { AgonListing } from "./types.ts";
 
 export type CardBadge = "Built by Agon" | "Verified" | "Listed";
+export type AgentActivity = { jobsCompleted: number; earnedUSDC: string };
 export type CardFacts = {
   name: string;
   line: string;
   logoUrl: string | null;
   initials: string;
-  badge: CardBadge;
+  badges: CardBadge[];
   chips: ("Per call" | "Paid on delivery")[];
   price: string | null;
   arena: string | null;
-  /// "New" only when the card has no measured activity to show.
-  activity: "New" | null;
+  /// Delivered jobs from receipts, else the measured endpoint state; null when neither is known.
+  activity: string | null;
 };
 
 function initialsFor(name: string): string {
@@ -22,25 +23,47 @@ function initialsFor(name: string): string {
   return words.map((w) => w[0]!).join("").slice(0, 2).toUpperCase() || "A";
 }
 
-export function cardBadge(listing: AgonListing): CardBadge {
-  return listing.firstParty ? "Built by Agon" : listing.verification.status === "Verified" ? "Verified" : "Listed";
+export function cardBadges(listing: AgonListing): CardBadge[] {
+  const status: CardBadge = listing.verification.status === "Verified" ? "Verified" : "Listed";
+  return listing.firstParty ? ["Built by Agon", status] : [status];
 }
 
-/// What every agent card shows (spec 18.5). Jobs and ratings join with the
-/// Orders plan; until then every card says "New".
-export function cardFacts(listing: AgonListing, arena: { agentId: string; text: string } | null): CardFacts {
+function activityLine(listing: AgonListing, activity: AgentActivity | null): string | null {
+  if (activity && activity.jobsCompleted > 0) return `${activity.jobsCompleted} ${activity.jobsCompleted === 1 ? "job" : "jobs"} done · ${activity.earnedUSDC} USDC paid`;
+  const checked = listing.endpointQa?.status;
+  if (checked === "passed") return "Online";
+  if (checked === "failed") return "Offline";
+  return null;
+}
+
+/// What every agent card shows (spec 18.5): only facts Agon has measured.
+export function cardFacts(listing: AgonListing, arena: { agentId: string; text: string } | null, activity: AgentActivity | null = null): CardFacts {
   const p = presentListing(listing);
   return {
     name: p.name,
     line: p.description,
     logoUrl: p.logoUrl,
     initials: initialsFor(p.name),
-    badge: cardBadge(listing),
+    badges: cardBadges(listing),
     chips: [listing.payment.rail === "Escrow" ? "Paid on delivery" : "Per call"],
-    price: p.amountUSDC ? `From ${p.amountUSDC} USDC` : null,
+    price: p.amountUSDC ? `${p.amountUSDC} USDC` : null,
     arena: arena && arena.agentId === listing.agentId ? arena.text : null,
-    activity: arena && arena.agentId === listing.agentId ? null : "New",
+    activity: activityLine(listing, activity),
   };
+}
+
+/// The job totals and Arena line for one card. Both are keyed by ERC-8004 id,
+/// which is only unique per network, so they attach only on their own
+/// network; Agon's receipts attach only to Agon's own listings.
+export function cardExtras(
+  listing: AgonListing,
+  networkKey: string,
+  activity: { network: string; agents: Record<string, AgentActivity> } | null,
+  arena: { network: string; byAgentId: Map<string, string> } | null,
+): { activity: AgentActivity | null; arena: { agentId: string; text: string } | null } {
+  const jobs = activity && activity.network === networkKey && listing.firstParty ? activity.agents[listing.agentId] ?? null : null;
+  const text = arena && arena.network === networkKey ? arena.byAgentId.get(listing.agentId) : undefined;
+  return { activity: jobs, arena: text ? { agentId: listing.agentId, text } : null };
 }
 
 /// Arena line per ERC-8004 id, from the Season entries (which carry the id)
@@ -57,9 +80,9 @@ export function arenaTextByAgentId(entries: SeasonEntry[], ratings: RatingsRespo
   return out;
 }
 
-const BADGE_ORDER: Record<CardBadge, number> = { "Built by Agon": 0, Verified: 1, Listed: 2 };
+const rank = (l: AgonListing) => (l.verification.status === "Verified" ? 0 : 2) + (l.firstParty ? 0 : 1);
 
-/// Built by Agon first, then Verified, then Listed; the API order holds within each.
+/// Verified Agon agents, then verified, then other Agon listings, then the rest; the API order holds within each.
 export function sortForCards(listings: AgonListing[]): AgonListing[] {
-  return listings.map((l, i) => ({ l, i })).sort((a, b) => BADGE_ORDER[cardBadge(a.l)] - BADGE_ORDER[cardBadge(b.l)] || a.i - b.i).map((x) => x.l);
+  return listings.map((l, i) => ({ l, i })).sort((a, b) => rank(a.l) - rank(b.l) || a.i - b.i).map((x) => x.l);
 }

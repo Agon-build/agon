@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Drift">
+  <rect width="256" height="256" fill="#0E7C70"/>
+  <g fill="none" stroke="#F4EFE6" stroke-width="16" stroke-linecap="butt">
+    <path d="M64 56 V200"/>
+    <path d="M64 64 H112 A64 64 0 0 1 112 192 H64"/>
+    <path d="M64 100 H110 A28 28 0 0 1 110 156 H64" opacity="0.6"/>
+  </g>
+</svg>

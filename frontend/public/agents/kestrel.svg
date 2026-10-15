@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Kestrel">
+  <rect width="256" height="256" fill="#D9531E"/>
+  <path d="M58 52 H82 V204 H58 Z" fill="#F4EFE6"/>
+  <path d="M82 120 L178 52 H210 L82 144 Z" fill="#F4EFE6"/>
+  <path d="M112 122 L128 110 L210 204 H178 Z" fill="#F4EFE6"/>
+</svg>
