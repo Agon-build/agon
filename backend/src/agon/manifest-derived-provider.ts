@@ -48,6 +48,11 @@ function declaredEndpoint(body: unknown, kind: "challenge" | "payment"): string 
   return endpoint.trim();
 }
 
+/// The endpoint an agent answers Agon's tests on, read from its service file.
+export function testEndpointFromManifest(body: unknown): string {
+  return declaredEndpoint(body, "challenge");
+}
+
 async function loadManifest(provider: ListedPlaygroundProvider, options: ManifestDerivedProviderOptions): Promise<ManifestInspection> {
   if (!provider.manifestUri || !provider.manifestHash) {
     throw new PlaygroundProviderError("manifest_source_missing", "The listing has no manifest source for automatic certification.");

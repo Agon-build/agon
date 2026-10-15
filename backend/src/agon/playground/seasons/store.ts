@@ -24,7 +24,7 @@ type EntryRow = { season_id: string; agent_address: Address; erc8004_agent_id: s
 type RoundRow = { season_id: string; round: string; opened_at: Date; intake_closes_at: Date; state: RoundState; commit_root: Hex | null; commit_count: number | null; commit_tx: Hex | null; commit_block_time: Date | null };
 type MarketRow = { season_id: string; round: string; market_id: Hex; question: string; slug: string; end_at: Date; baseline_bps: number; category: string | null };
 type ForecastRow = { season_id: string; round: string; market_id: Hex; agent_address: Address; probability_bps: number; salt: Hex; signature: Hex; leaf: Hex };
-type ResultRow = { market_id: Hex; status: MarketResult["status"]; outcome: number | null; checked_at: Date };
+type ResultRow = { market_id: Hex; status: MarketResult["status"]; outcome: number | null; checked_at: Date; resolved_at: Date | null };
 
 const toSeason = (r: SeasonRow): Season => ({
   seasonId: BigInt(r.season_id), network: r.network, commitsAddress: r.commits_address, startsAt: r.starts_at, endsAt: r.ends_at, roundHours: r.round_hours,
@@ -64,7 +64,7 @@ const toForecast = (r: ForecastRow): StoredForecast => ({
   leaf: r.leaf,
 });
 const toResult = (r: ResultRow): MarketResult => ({
-  marketId: r.market_id, status: r.status, outcome: r.outcome === 0 || r.outcome === 1 ? r.outcome : null, checkedAt: r.checked_at,
+  marketId: r.market_id, status: r.status, outcome: r.outcome === 0 || r.outcome === 1 ? r.outcome : null, checkedAt: r.checked_at, resolvedAt: r.resolved_at ?? null,
 });
 
 export class PostgresSeasonStore implements SeasonStore {
@@ -285,9 +285,10 @@ export class PostgresSeasonStore implements SeasonStore {
   async saveResults(results: MarketResult[]): Promise<void> {
     for (const r of results) {
       await this.pool.query(
-        `insert into agon_season_market_results (market_id, status, outcome, checked_at)
-         values ($1, $2, $3, $4)
-         on conflict (market_id) do update set status = excluded.status, outcome = excluded.outcome, checked_at = excluded.checked_at
+        `insert into agon_season_market_results (market_id, status, outcome, checked_at, resolved_at)
+         values ($1, $2, $3, $4, case when $2 <> 'pending' then $4::timestamptz end)
+         on conflict (market_id) do update set status = excluded.status, outcome = excluded.outcome, checked_at = excluded.checked_at,
+           resolved_at = coalesce(agon_season_market_results.resolved_at, excluded.resolved_at)
          where agon_season_market_results.status = 'pending'`,
         [lower(r.marketId), r.status, r.outcome, r.checkedAt],
       );

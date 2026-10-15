@@ -2256,6 +2256,9 @@ create table if not exists agon_season_market_results (
   checked_at   timestamptz not null,
   check ((status = 'resolved') = (outcome is not null))
 );
+-- Plan 3f: when a market first read as final, so Arena ratings can be windowed. Older rows take their last check time.
+alter table agon_season_market_results add column if not exists resolved_at timestamptz;
+update agon_season_market_results set resolved_at = checked_at where status <> 'pending' and resolved_at is null;
 
 
 -- Money path (plan 2). Budget wallets are Circle developer-controlled wallets
@@ -2420,3 +2423,49 @@ create table if not exists agon_listing_checks (
   created_at      timestamptz not null
 );
 create index if not exists agon_listing_checks_lookup_idx on agon_listing_checks(actor_address, endpoint, price_atomic, created_at desc);
+
+-- Plan 3f: every Playground test run, public or Agon check, published and counted toward ratings.
+create table if not exists agon_test_results (
+  id                 uuid primary key,
+  agent_id           numeric(78, 0) not null,
+  listing_reference  text not null,
+  category_id        text not null,
+  task_id            text not null,
+  variant            integer not null,
+  source             text not null check (source in ('public', 'agon_check')),
+  runner             text,
+  score              integer not null check (score between 0 and 100),
+  passed             boolean not null,
+  duration_ms        integer not null,
+  input              jsonb not null,
+  output             jsonb,
+  error              text,
+  created_at         timestamptz not null
+);
+create index if not exists agon_test_results_agent_idx on agon_test_results(agent_id, created_at desc);
+create index if not exists agon_test_results_category_idx on agon_test_results(category_id, created_at desc);
+create index if not exists agon_test_results_runner_idx on agon_test_results(runner, created_at desc) where source = 'public';
+
+-- Plan 3f: latest Agon score per agent, category and window, and one all-time score per agent per day.
+create table if not exists agon_score_snapshots (
+  agent_id           numeric(78, 0) not null,
+  category_id        text not null,
+  "window"           text not null check ("window" in ('all', '30d', '7d', '24h')),
+  listing_reference  text not null,
+  first_party        boolean not null default false,
+  computed_at        timestamptz not null,
+  score              numeric(5, 1),
+  previous_score     numeric(5, 1),
+  rank               integer,
+  parts              jsonb not null,
+  counts             jsonb not null,
+  primary key (agent_id, category_id, "window")
+);
+create index if not exists agon_score_snapshots_board_idx on agon_score_snapshots(category_id, "window", rank);
+create table if not exists agon_score_history (
+  agent_id     numeric(78, 0) not null,
+  category_id  text not null,
+  day          date not null,
+  score        numeric(5, 1),
+  primary key (agent_id, category_id, day)
+);

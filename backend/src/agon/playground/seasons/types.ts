@@ -63,6 +63,8 @@ export type MarketResult = {
   status: "pending" | "resolved" | "void";
   outcome: 0 | 1 | null;
   checkedAt: Date;
+  /** When the market first read as final; set once, never changed. Null while pending or unknown. */
+  resolvedAt?: Date | null;
 };
 
 export type InsertForecastResult = "inserted" | "duplicate" | "changed" | "round_closed";

@@ -4,6 +4,15 @@ import { createMcpAccessAdapter } from "./adapter.ts";
 import type { ManagedPublisher } from "./managed-publisher.ts";
 import { registerStageTools, type StageMcpDeps } from "./stage-tools.ts";
 import { adapterResult, failure, requireActor, result } from "./tool-results.ts";
+import { REFUSALS } from "../tests/routes.ts";
+import type { RunResult } from "../tests/service.ts";
+
+/// Ratings tools read the same public routes the web app uses, so answers match exactly.
+export type RatingsMcpDeps = {
+  scores: { request(path: string): Response | Promise<Response> };
+  tests: { request(path: string): Response | Promise<Response> };
+  runTest(runner: string, listingReference: string): Promise<RunResult>;
+};
 
 type AccessAdapter = ReturnType<typeof createMcpAccessAdapter>;
 
@@ -67,7 +76,7 @@ const hireStatusSchema = fromJsonSchema<{ hireId: string }>({
  * an account. Every provider or buyer mutation receives the authenticated AGON
  * wallet address from the validated bearer token at the HTTP edge.
  */
-export function createAgonNativeMcpHandler(access: AccessAdapter, publisher?: ManagedPublisher, stage?: StageMcpDeps) {
+export function createAgonNativeMcpHandler(access: AccessAdapter, publisher?: ManagedPublisher, stage?: StageMcpDeps, ratings?: RatingsMcpDeps) {
   return createMcpHandler((context) => {
     const server = new McpServer({ name: "AGON", version: "1.0.0" });
 
@@ -272,6 +281,62 @@ export function createAgonNativeMcpHandler(access: AccessAdapter, publisher?: Ma
         description: "After explicit approval, advance ERC-8004 registration, hosted identity file, publication, and receipt reconciliation. Retry this tool while pending; idempotency prevents duplicate writes.",
         inputSchema: draftSchema,
       }, async ({ draftId }) => managed("listing:write", (owner) => publisher.advance(owner, draftId)));
+    }
+
+    if (ratings) {
+      const read = async (response: Response | Promise<Response>) => {
+        const res = await response;
+        const body = await res.json().catch(() => null) as { error?: string; message?: string } | null;
+        return res.ok ? result(body) : failure(body?.error ?? "request_failed", body?.message ?? "That request failed.");
+      };
+      server.registerTool("get_agent_scores", {
+        title: "Get Agon scores",
+        description: "Read a category leaderboard (category id, window all, 30d, 7d or 24h) or one agent's Agon score with its Playground, Arena and paid work parts.",
+        inputSchema: fromJsonSchema<{ category?: string; window?: string; sort?: string; agentId?: string }>({
+          type: "object",
+          properties: {
+            category: { type: "string", pattern: "^[0-9]{1,3}$" },
+            window: { type: "string", enum: ["all", "30d", "7d", "24h"] },
+            sort: { type: "string", enum: ["score", "playground", "arena", "paid"] },
+            agentId: { type: "string", pattern: "^[0-9]{1,78}$" },
+          },
+          additionalProperties: false,
+        }),
+      }, async ({ category, window, sort, agentId }) => {
+        if (agentId) return read(ratings.scores.request(`/${agentId}`));
+        const query = new URLSearchParams();
+        if (category) query.set("category", category);
+        if (window) query.set("window", window);
+        if (sort) query.set("sort", sort);
+        return read(ratings.scores.request(`/?${query.toString()}`));
+      });
+      server.registerTool("get_agent_tests", {
+        title: "Get Playground tests",
+        description: "Read the latest published Playground test results for one agent, or the most recent tests across Agon.",
+        inputSchema: fromJsonSchema<{ agentId?: string; limit?: number }>({
+          type: "object",
+          properties: { agentId: { type: "string", pattern: "^[0-9]{1,78}$" }, limit: { type: "number", minimum: 1, maximum: 50 } },
+          additionalProperties: false,
+        }),
+      }, async ({ agentId, limit }) => {
+        const query = new URLSearchParams();
+        if (agentId) query.set("agentId", agentId);
+        if (limit) query.set("limit", String(limit));
+        return read(ratings.tests.request(`/?${query.toString()}`));
+      });
+      server.registerTool("run_agent_test", {
+        title: "Run a Playground test",
+        description: "Send the free standard test for its category to a listed agent. The result is published and counts toward its rating. Limited to 5 per person per hour and 20 per agent per day.",
+        inputSchema: fromJsonSchema<{ listingReference: string }>({
+          type: "object", properties: { listingReference: { type: "string", minLength: 1, maxLength: 200 } },
+          required: ["listingReference"], additionalProperties: false,
+        }),
+      }, async ({ listingReference }) => {
+        const runner = requireActor(context.authInfo, "playground:run");
+        if (typeof runner !== "string") return runner;
+        const out = await ratings.runTest(runner, listingReference);
+        return out.ok ? result(out.result) : failure(out.code, REFUSALS[out.code].message);
+      });
     }
 
     if (stage) registerStageTools(server, () => context.authInfo, stage);

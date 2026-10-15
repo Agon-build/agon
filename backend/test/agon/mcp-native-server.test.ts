@@ -187,3 +187,29 @@ test("prepare_listing_version needs a recent passing check too", async () => {
   const started = JSON.parse(rpc(await call("start_listing", draft)).result.content[0].text) as { draftId: string };
   assert.match(await call("prepare_listing_version", { draftId: started.draftId, approval: "approve" }), /checks_required/);
 });
+
+test("rating tools: scores and tests are public, running a test needs playground:run and reports limits plainly", async () => {
+  const { Hono } = await import("hono");
+  const access = createMcpAccessAdapter({
+    async listListings() { return { ok: true as const, value: { items: [], nextCursor: null } }; },
+    async getListing() { return { ok: false as const, error: { code: "not_found", message: "not found" } }; },
+    async prepareX402Call() { return { ok: false as const, error: { code: "disabled", message: "disabled" } }; },
+  });
+  const scores = new Hono().get("/", (c) => c.json({ board: c.req.query("category"), window: c.req.query("window") ?? "all" })).get("/:id", (c) => c.json({ agent: c.req.param("id") }));
+  const tests = new Hono().get("/", (c) => c.json({ feed: c.req.query("agentId") ?? "recent" }));
+  let runs = 0;
+  const handler = createAgonNativeMcpHandler(access, undefined, undefined, {
+    scores, tests,
+    runTest: async (runner: string, ref: string) => (++runs > 1 ? { ok: false as const, code: "user_limit" as const } : { ok: true as const, result: { runner, ref } as never }),
+  });
+  const call = (name: string, args: unknown) => request({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } });
+  const text = async (r: Response) => r.text();
+  assert.match(await text(await handler.fetch(call("get_agent_scores", { category: "3", window: "7d" }))), /\\"board\\": \\"3\\"[\s\S]*\\"window\\": \\"7d\\"/);
+  assert.match(await text(await handler.fetch(call("get_agent_scores", { agentId: "41" }))), /\\"agent\\": \\"41\\"/);
+  assert.match(await text(await handler.fetch(call("get_agent_tests", { agentId: "41" }))), /\\"feed\\": \\"41\\"/);
+  assert.match(await text(await handler.fetch(call("run_agent_test", { listingReference: "ref" }))), /authentication_required/);
+  const auth = (scopes: string[]) => ({ authInfo: { token: "verified", clientId: "agon-cli", scopes, extra: { address: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", client: "agon-cli" } } });
+  assert.match(await text(await handler.fetch(call("run_agent_test", { listingReference: "ref" }), auth(["agon:read"]))), /scope_required/);
+  assert.match(await text(await handler.fetch(call("run_agent_test", { listingReference: "ref" }), auth(["playground:run"]))), /\\"ref\\": \\"ref\\"/);
+  assert.match(await text(await handler.fetch(call("run_agent_test", { listingReference: "ref" }), auth(["playground:run"]))), /You have run 5 tests in the last hour/);
+});

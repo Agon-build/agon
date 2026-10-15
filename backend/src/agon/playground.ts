@@ -148,6 +148,9 @@ function hash(value: unknown): `0x${string}` {
   return keccak256(stringToHex(canonicalizeManifest(value)));
 }
 
+/// The canonical manifest hash, shared with the public category tests.
+export const canonicalHash = hash;
+
 function boundedInput(input: unknown): unknown {
   let serialized: string;
   try {

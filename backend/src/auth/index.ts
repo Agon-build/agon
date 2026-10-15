@@ -51,6 +51,16 @@ import { PostgresListingCheckStore } from "../agon/listing/check-store.js";
 import { defaultListingCheckDeps, runListingChecks } from "../agon/listing/endpoint-check.js";
 import { agonNetwork } from "../agon/network.js";
 import { createBuilderRoutes } from "../agon/builder-routes.js";
+import { PostgresTestResultsStore } from "../agon/tests/results-store.ts";
+import { createTestService } from "../agon/tests/service.ts";
+import { createTestRoutes } from "../agon/tests/routes.ts";
+import { runAgentTest } from "../agon/tests/runner.ts";
+import { startAgonChecks } from "../agon/tests/agon-checks.ts";
+import { listLiveListings as pageLiveListings } from "../agon/tests/live-listings.ts";
+import { PostgresScoreSnapshotStore, startScoreSnapshots } from "../agon/tests/snapshots.ts";
+import { createScoresRoutes } from "../agon/tests/scores-routes.ts";
+import { parseWeights } from "../agon/tests/scores.ts";
+import { assertPublicHttpsDestination } from "../agon/manifest-inspector.ts";
 import { PostgresAccessTokenStore, createMcpTokenVerifier } from "../agon/access-tokens.js";
 import { PostgresAgonMarketService } from "../agon/http/service.js";
 import { createPostgresProviderDraftStore } from "../agon/mcp/provider-draft-store.ts";
@@ -887,6 +897,70 @@ app.route("/agon/builder", createBuilderRoutes({
     publisher: agonManagedPublisher,
   },
 }));
+// Plan 3f: public Playground tests. Anyone reads results; signed-in people (or tokens with playground:run) run them.
+const agonTestResults = new PostgresTestResultsStore(pool);
+const agonTestService = createTestService({
+  store: agonTestResults,
+  getListing: async (reference) => {
+    const found = await agonService.getListing(reference, { includeManifest: true });
+    if (!found.ok) return null;
+    const listing = found.value;
+    return {
+      agentId: listing.agentId,
+      categoryId: listing.category,
+      listed: listing.status === "Listed" && !listing.risk.quarantineReason,
+      listingReference: listing.id,
+      manifestBody: listing.manifest.body ?? null,
+    };
+  },
+  run: runAgentTest,
+  chain: { chainId: () => publicClient.getChainId(), blockNumber: () => publicClient.getBlockNumber() },
+  fetchDeps: { fetch: (url, init) => fetch(url, init), assertPublic: (url) => assertPublicHttpsDestination(url) },
+});
+const agonTestRoutes = createTestRoutes({
+  service: agonTestService,
+  store: agonTestResults,
+  requireRun: createAgonAuthMiddleware(config.adminToken, requireAgonScope("playground:run")),
+});
+app.route("/agon/tests", agonTestRoutes);
+
+/// Every listed, unquarantined listing, paged through the market service.
+const listLiveListings = () => pageLiveListings((cursor) => agonService.listListings({ limit: 100, cursor, category: null, agentId: null }));
+const listListedForTests = async () => (await listLiveListings()).map((l) => ({ listingReference: l.id, category: l.category }));
+
+// Plan 3f: Agon scores, read from snapshots recomputed every 5 minutes.
+const agonScoreSnapshots = new PostgresScoreSnapshotStore(pool);
+const agonScoresRoutes = createScoresRoutes({
+  store: agonScoreSnapshots,
+  remainingTests: (agentId) => agonTestResults.remainingToday(agentId, new Date(), agonTestService.limits.perAgentDay),
+});
+app.route("/agon/scores", agonScoresRoutes);
+if (config.agon.ratings.scoresWorkerEnabled) {
+  startScoreSnapshots({
+    store: agonScoreSnapshots,
+    deps: {
+      listListed: async () => (await listLiveListings()).map((l) => ({ agentId: l.agentId, listingReference: l.id, categoryId: l.category, firstParty: l.firstParty })),
+      tests: agonTestResults,
+      seasonRaw: async () => (agonSeason ? agonSeason.store.scoringRaw(agonSeason.season.seasonId) : null),
+      // Buyer scores arrive with the Orders plan; until then the part shows Coming next.
+      paid: { live: false, aggregates: async () => new Map() },
+      weights: parseWeights(config.agon.ratings.weights),
+    },
+    log: (message) => console.warn(`[agon-scores] ${message}`),
+  });
+  console.log("[agon-scores] snapshots every 5 minutes on");
+}
+
+if (config.agon.ratings.testsWorkerEnabled) {
+  startAgonChecks({
+    listListed: listListedForTests,
+    lastCheckAt: (reference) => agonTestResults.lastCheckAt(reference),
+    check: (reference) => agonTestService.runAgonCheck(reference),
+    log: (message) => console.warn(`[agon-tests] ${message}`),
+  });
+  console.log("[agon-tests] 6-hourly Agon checks on");
+}
+
 app.route("/agon", createAgonRoutes({
   service: agonService,
   verifyMcpToken: createMcpTokenVerifier(agonAccessTokens, verifyTokenClaims),
@@ -909,6 +983,11 @@ app.route("/agon", createAgonRoutes({
   requirePrincipal: createAgonPrincipalMiddleware(async (operatorAddress, requestedAddress) =>
     Boolean(await getWalletPrincipal(operatorAddress, requestedAddress, pool)),
   ),
+  ratingsMcp: {
+    scores: { request: (path: string) => agonScoresRoutes.request(path) },
+    tests: { request: (path: string) => agonTestRoutes.request(path) },
+    runTest: (runner: string, listingReference: string) => agonTestService.runPublic(runner, listingReference),
+  },
   playgroundStore: agonPlaygroundStore,
   playgroundRateLimiter: new RedisPlaygroundRateLimiter(redis),
   playgroundProviderRunner: agonPlaygroundProviderRunner,

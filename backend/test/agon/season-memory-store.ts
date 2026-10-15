@@ -153,7 +153,7 @@ export class MemorySeasonStore implements SeasonStore {
     for (const r of results) {
       const id = r.marketId.toLowerCase();
       const prev = this.results.get(id);
-      if (!prev || prev.status === "pending") this.results.set(id, { ...r, marketId: id as Hex });
+      if (!prev || prev.status === "pending") this.results.set(id, { ...r, marketId: id as Hex, resolvedAt: r.status === "pending" ? null : r.checkedAt });
     }
   }
 

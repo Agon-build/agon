@@ -858,7 +858,7 @@ export class PostgresAgonMarketService implements AgonMarketService {
     }
   }
 
-  async getListing(reference: string): Promise<Result<AgonListingView, AgonServiceError>> {
+  async getListing(reference: string, options: { includeManifest?: boolean } = {}): Promise<Result<AgonListingView, AgonServiceError>> {
     const key = parseReference(reference);
     if (!key) return { ok: false, error: { code: "not_found", message: "listing not found" } };
     try {
@@ -870,6 +870,7 @@ export class PostgresAgonMarketService implements AgonMarketService {
               listing,
               this.firstParty,
               (await this.repository.getLatestVerificationEvidence([listing])).get(`${listing.listingId}:${listing.agentId}`),
+              options.includeManifest ? await readValidatedManifest(listing) : undefined,
             ),
           }
         : { ok: false, error: { code: "not_found", message: "listing not found" } };

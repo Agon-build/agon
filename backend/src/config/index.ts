@@ -113,6 +113,11 @@ const envSchema = z.object({
   AGON_CERTIFICATION_FAILURE_THRESHOLD: z.coerce.number().int().min(1).max(10).default(3),
   AGON_CERTIFICATION_ENDPOINT_QA_REQUIRED: z.enum(["true", "false"]).default("true").transform((value) => value === "true"),
   AGON_CERTIFICATION_ALERT_OPERATOR_ADDRESS: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
+  // Plan 3f ratings: the 6-hourly Agon check and the score snapshot job, both off until the owner turns them on.
+  AGON_TESTS_WORKER_ENABLED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
+  AGON_SCORES_WORKER_ENABLED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
+  // JSON like {"paid":0.5,"arena":0.3,"playground":0.2}; invalid or missing uses those defaults.
+  AGON_SCORE_WEIGHTS: z.string().max(200).optional(),
   AGON_OPERATIONS_ALERTS_ENABLED: z.enum(["true", "false"]).default("true").transform((value) => value === "true"),
   AGON_OPERATIONS_ALERT_WORKER_ENABLED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   AGON_OPERATIONS_ALERT_OPERATOR_ADDRESS: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
@@ -767,6 +772,11 @@ export const config = {
       failureThreshold: env.AGON_CERTIFICATION_FAILURE_THRESHOLD,
       endpointQaRequired: env.AGON_CERTIFICATION_ENDPOINT_QA_REQUIRED,
       alertOperatorAddress: env.AGON_CERTIFICATION_ALERT_OPERATOR_ADDRESS?.toLowerCase(),
+    },
+    ratings: {
+      testsWorkerEnabled: env.AGON_TESTS_WORKER_ENABLED,
+      scoresWorkerEnabled: env.AGON_SCORES_WORKER_ENABLED,
+      weights: env.AGON_SCORE_WEIGHTS,
     },
     operationsAlerts: {
       enabled: env.AGON_OPERATIONS_ALERTS_ENABLED,

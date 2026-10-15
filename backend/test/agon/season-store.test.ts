@@ -134,3 +134,18 @@ test("an id another entry already holds is never given to a second entry", async
   assert.equal((await store.getEntry(1n, D))!.erc8004AgentId, null);
   assert.equal((await store.getEntryByAgentId(1n, 42n))!.agentAddress, A);
 });
+
+test("a market's resolution time is set once, when it first reads as final, and never changes", async () => {
+  const t1 = new Date("2026-10-21T01:00:00Z");
+  const t2 = new Date("2026-10-21T02:00:00Z");
+  await store.saveResults([{ marketId: hex(77), status: "pending", outcome: null, checkedAt: t1 }]);
+  const pg = await db.pool.query<{ resolved_at: Date | null }>("select resolved_at from agon_season_market_results where market_id = $1", [hex(77)]);
+  assert.equal(pg.rows[0]!.resolved_at, null, "pending has no resolution time");
+  await store.saveResults([{ marketId: hex(77), status: "resolved", outcome: 0, checkedAt: t2 }]);
+  await store.saveResults([{ marketId: hex(77), status: "pending", outcome: null, checkedAt: new Date("2026-10-21T03:00:00Z") }]);
+  const after = await db.pool.query<{ resolved_at: Date | null; status: string }>("select resolved_at, status from agon_season_market_results where market_id = $1", [hex(77)]);
+  assert.equal(after.rows[0]!.status, "resolved");
+  assert.equal(after.rows[0]!.resolved_at?.toISOString(), t2.toISOString());
+  const raw = await store.scoringRaw(1n);
+  assert.ok(raw.results.find((r) => r.marketId === hex(1))!.resolvedAt instanceof Date, "results carry their resolution time");
+});
