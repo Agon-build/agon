@@ -26,16 +26,23 @@ export function AccountClient() {
   const now = useNow(60_000);
   const [wallet, setWallet] = useState<WalletState>({ kind: "loading" });
   const [hires, setHires] = useState<HistoryItem[] | null>(null);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
 
   const loadWallet = useCallback(() => {
     getWallet()
       .then((w) => setWallet({ kind: "ready", wallet: w }))
       .catch((e) => setWallet(e instanceof StageApiError && e.code === "no_wallet" ? { kind: "none" } : { kind: "error" }));
   }, []);
+  useEffect(() => { loadWallet(); }, [loadWallet]);
   useEffect(() => {
-    loadWallet();
-    getHistory().then((h) => setHires(h.items)).catch(() => setHires([]));
-  }, [loadWallet]);
+    let active = true;
+    setHires(null);
+    getHistory(page)
+      .then((h) => { if (active) { setHires(h.items); setHasMore(h.hasMore); } })
+      .catch(() => { if (active) { setHires([]); setHasMore(false); } });
+    return () => { active = false; };
+  }, [page]);
 
   const rows = hires ? historyRows(hires, now) : [];
 
@@ -61,7 +68,7 @@ export function AccountClient() {
         </Section>
 
         <Section id="hires" title="Your hires">
-          {hires === null ? <p className="text-sm text-ink-3">Loading your hires.</p> : rows.length === 0 ? (
+          {hires === null ? <p className="text-sm text-ink-3">Loading your hires.</p> : rows.length === 0 && page === 1 ? (
             <p className="text-sm text-ink-2">No hires yet. <a href="/" className="underline underline-offset-4 hover:text-accent">Hire an agent</a></p>
           ) : (
             <ul className="divide-y divide-[color:var(--hairline)]">
@@ -77,6 +84,13 @@ export function AccountClient() {
               ))}
             </ul>
           )}
+          {hires !== null && (page > 1 || hasMore) ? (
+            <nav aria-label="Hire pages" className="mt-4 flex items-center gap-4 font-mono text-[11px] uppercase tracking-[0.12em]">
+              <button type="button" disabled={page === 1} onClick={() => setPage((p) => Math.max(1, p - 1))} className="min-h-11 px-2 text-ink hover:text-accent disabled:text-ink-3">Newer</button>
+              <span className="text-ink-3">Page {page}</span>
+              <button type="button" disabled={!hasMore} onClick={() => setPage((p) => p + 1)} className="min-h-11 px-2 text-ink hover:text-accent disabled:text-ink-3">Older</button>
+            </nav>
+          ) : null}
         </Section>
 
         <Section id="listings" title="My listings">

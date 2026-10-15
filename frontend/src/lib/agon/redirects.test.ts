@@ -215,3 +215,16 @@ test("the Playground offers a public test of any listed agent and a feed of rece
   assert.match(panel, /Remaining today/);
   assert.match(panel, /TestRunList/);
 });
+
+test("Account shows one List your agent button, and hires are paged while the Hire page shows only 3", () => {
+  const read = (f: string) => readFileSync(new URL(`../../${f}`, import.meta.url), "utf8");
+  assert.doesNotMatch(read("components/agon/MyListings.tsx"), /List your agent/, "the section header already has the button");
+  const account = read("app/account/AccountClient.tsx");
+  assert.equal(account.match(/List your agent/g)?.length, 1);
+  assert.match(account, /getHistory\(page/);
+  assert.match(account, /Older/);
+  assert.match(account, /Newer/);
+  const hire = read("components/stage/HireClient.tsx");
+  assert.match(hire, /getHistory\(1, 3\)/);
+  assert.doesNotMatch(hire, /slice\(0, 6\)/);
+});

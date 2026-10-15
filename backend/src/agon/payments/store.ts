@@ -224,10 +224,10 @@ export class PostgresPaymentsStore implements PaymentsStore {
     return rows.map(toJob);
   }
 
-  async listJobsByBuyer(buyerRef: string, limit: number): Promise<Job[]> {
+  async listJobsByBuyer(buyerRef: string, limit: number, offset = 0): Promise<Job[]> {
     const { rows } = await this.pool.query<JobRow>(
-      "select * from agon_jobs where buyer_ref = $1 and parent_id is null order by created_at desc limit $2",
-      [buyerRef, Math.max(1, Math.min(limit, 100))],
+      "select * from agon_jobs where buyer_ref = $1 and parent_id is null order by created_at desc, job_id limit $2 offset $3",
+      [buyerRef, Math.max(1, Math.min(limit, 100)), Math.max(0, Math.floor(offset))],
     );
     return rows.map(toJob);
   }

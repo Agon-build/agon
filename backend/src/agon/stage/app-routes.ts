@@ -93,7 +93,16 @@ export function createAppRoutes(deps: {
     );
   });
 
-  app.get("/history", async (c) => c.json({ items: await deps.services.history(owner(c), 20) }));
+  // Paged: one extra row tells whether an older page exists.
+  app.get("/history", async (c) => {
+    const page = Number(c.req.query("page") ?? 1);
+    const limit = Number(c.req.query("limit") ?? 10);
+    if (!Number.isInteger(page) || page < 1 || page > 1000 || !Number.isInteger(limit) || limit < 1 || limit > 50) {
+      return c.json({ error: "validation_failed", message: "page must be 1 or more and limit between 1 and 50" }, 400);
+    }
+    const rows = await deps.services.history(owner(c), limit + 1, (page - 1) * limit);
+    return c.json({ items: rows.slice(0, limit), page, hasMore: rows.length > limit });
+  });
 
   app.post("/wallet/limits", async (c) => {
     const body = limitsBody.safeParse(await readJson(c));

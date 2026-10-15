@@ -45,7 +45,7 @@ export type StageServices = {
   confirm(ownerRef: string, code: string): Promise<HireOutcome>;
   pendingJob(ownerRef: string): Promise<string | null>;
   live(jobId: string): Promise<LiveView | null>;
-  history(ownerRef: string, limit?: number): Promise<HistoryItem[]>;
+  history(ownerRef: string, limit?: number, offset?: number): Promise<HistoryItem[]>;
   lowerLimits(ownerRef: string, limits: { perHireCap?: bigint; dailyCap?: bigint }): Promise<{ ok: true } | { ok: false; code: string }>;
   freeze(ownerRef: string): Promise<boolean>;
   requestUnfreeze(ownerRef: string): Promise<ApprovalLink | null>;
@@ -199,8 +199,8 @@ export function createStageServices(deps: StageServiceDeps): StageServices {
       };
     },
 
-    async history(ownerRef, limit = 10) {
-      const jobs = await deps.store.listJobsByBuyer(budgetWalletRef(ownerRef), limit);
+    async history(ownerRef, limit = 10, offset = 0) {
+      const jobs = await deps.store.listJobsByBuyer(budgetWalletRef(ownerRef), limit, offset);
       return jobs.map((j) => ({ jobId: j.jobId, question: questionOf(j), state: j.state, price: formatUsdc(j.priceAtomic), createdAt: j.createdAt.toISOString(), receiptUrl: receiptUrl(j.jobId) }));
     },
 

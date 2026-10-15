@@ -58,8 +58,15 @@ test("ask, confirm and the live view run the whole story", async () => {
   assert.equal(live.answer.probabilityBps, 3400);
   assert.equal(live.events.length, 3);
   assert.equal(live.receiptUrl, `${SITE}/r/${quote.jobId}`);
-  const history = (await (await call("/history")).json()) as { items: { jobId: string; state: string }[] };
+  const history = (await (await call("/history")).json()) as { items: { jobId: string; state: string }[]; page: number; hasMore: boolean };
   assert.deepEqual(history.items.map((i) => [i.jobId, i.state]), [[quote.jobId, "delivered"]]);
+  assert.equal(history.page, 1);
+  assert.equal(history.hasMore, false);
+  const one = (await (await call("/history?limit=1&page=1")).json()) as { items: unknown[]; hasMore: boolean };
+  assert.equal(one.items.length, 1);
+  const past = (await (await call("/history?limit=1&page=2")).json()) as { items: unknown[]; hasMore: boolean };
+  assert.deepEqual([past.items.length, past.hasMore], [0, false]);
+  assert.equal((await call("/history?page=0")).status, 400);
   assert.equal((await call("/live/00000000-0000-4000-8000-000000000000", { as: null })).status, 404);
 });
 

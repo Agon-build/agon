@@ -43,7 +43,7 @@ export function HireClient() {
   const refreshWallet = useCallback(() => {
     if (!canAct) return;
     getWallet().then(setWallet).catch(() => setWallet(null));
-    getHistory().then((h) => setHistory(h.items)).catch(() => setHistory([]));
+    getHistory(1, 3).then((h) => setHistory(h.items)).catch(() => setHistory([]));
   }, [canAct]);
 
   useEffect(() => {
@@ -159,7 +159,7 @@ export function HireClient() {
           <section aria-labelledby="history-heading" className="mt-20">
             <h2 id="history-heading" className="border-b border-[color:var(--hairline-strong)] pb-3 font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Your recent hires</h2>
             <ul className="divide-y divide-[color:var(--hairline)]">
-              {history.slice(0, 6).map((h) => (
+              {history.slice(0, 3).map((h) => (
                 <li key={h.jobId}>
                   <a href={`/r/${h.jobId}`} className="grid min-h-11 gap-1 py-3 sm:grid-cols-[1fr_auto_auto] sm:items-center sm:gap-6 hover:text-accent">
                     <span className="text-sm text-ink">{h.question ?? "Agent job"}</span>

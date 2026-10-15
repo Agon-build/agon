@@ -2,7 +2,6 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { TagButton } from "@/components/redesign/TagButton";
 import { listingStatusLabel } from "@/lib/agon/access-setup";
 import { listDrafts, type DraftSummary } from "@/lib/agon/builder-api";
 
@@ -16,7 +15,7 @@ export function MyListings() {
 
   if (drafts === null) return <p className="text-sm text-ink-3">Loading listings</p>;
   if (failed) return <p className="text-sm text-ink-2">Your listings could not be loaded. Try again in a moment.</p>;
-  if (drafts.length === 0) return <div className="flex flex-wrap items-center gap-4"><p className="text-sm text-ink-2">No listings yet.</p><TagButton href="/list" size="sm">List your agent</TagButton></div>;
+  if (drafts.length === 0) return <p className="text-sm text-ink-2">No listings yet.</p>;
 
   return (
     <ul className="divide-y divide-[color:var(--hairline)] border-y border-[color:var(--hairline)]">

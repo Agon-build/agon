@@ -123,7 +123,7 @@ export interface PaymentsStore {
   listJobTree(rootId: string): Promise<Job[]>;
   listStuckJobs(state: JobState, updatedBefore: Date): Promise<Job[]>;
   /** Root jobs this buyer started, newest first. */
-  listJobsByBuyer(buyerRef: string, limit: number): Promise<Job[]>;
+  listJobsByBuyer(buyerRef: string, limit: number, offset?: number): Promise<Job[]>;
   /// Delivered jobs and their total price per provider on one network (providers with none are left out).
   deliveredJobStats(network: AgonNetworkId, providerRefs: string[]): Promise<Record<string, { jobs: number; earnedAtomic: bigint }>>;
   /** Reserved plus settled spend for the wallet on the UTC day of `now`. */

@@ -124,11 +124,11 @@ export class MemoryPaymentsStore implements PaymentsStore {
     }
     return out;
   }
-  async listJobsByBuyer(buyerRef: string, limit: number) {
+  async listJobsByBuyer(buyerRef: string, limit: number, offset = 0) {
     return [...this.jobs.values()]
       .filter((j) => j.buyerRef === buyerRef && j.parentId === null)
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-      .slice(0, Math.max(1, Math.min(limit, 100)));
+      .slice(offset, offset + Math.max(1, Math.min(limit, 100)));
   }
   async dailySpent(walletRef: string, network: AgonNetworkId, now: Date) {
     const day = now.toISOString().slice(0, 10);

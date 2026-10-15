@@ -122,6 +122,8 @@ test("root jobs list by buyer, newest first, and daily spend sums reserved and s
   await store.insertJob({ ...mk(randomUUID(), new Date("2026-10-27T11:30:00Z"), b), buyerRef: "budget:op:list" });
   assert.deepEqual((await store.listJobsByBuyer("budget:op:list", 10)).map((j) => j.jobId), [b, a]);
   assert.deepEqual((await store.listJobsByBuyer("budget:op:list", 1)).map((j) => j.jobId), [b]);
+  assert.deepEqual((await store.listJobsByBuyer("budget:op:list", 1, 1)).map((j) => j.jobId), [a], "offset pages through older hires");
+  assert.deepEqual(await store.listJobsByBuyer("budget:op:list", 10, 2), []);
 
   const wallet = "budget:op:spend";
   await store.reserveSpend(reservation("d1", 200_000n, { walletRef: wallet }));

@@ -88,9 +88,10 @@ export async function getLive(jobId: string): Promise<LiveView> {
   if (AGON_PREVIEW_MODE) return previewLive(jobId === PREVIEW_JOB_ID ? jobId : PREVIEW_JOB_ID, previewStarts.get(jobId) ?? null, Date.now());
   return call<LiveView>(`/agon/app/live/${encodeURIComponent(jobId)}`);
 }
-export async function getHistory(): Promise<{ items: HistoryItem[] }> {
-  if (AGON_PREVIEW_MODE) return { items: [{ jobId: PREVIEW_JOB_ID, question: "What's the real chance BTC closes above $120k on Friday?", state: "delivered", price: "0.30", createdAt: new Date().toISOString(), receiptUrl: `/r/${PREVIEW_JOB_ID}` }] };
-  return call("/agon/app/history");
+/// One page of the signed-in account's hires, newest first.
+export async function getHistory(page = 1, limit = 10): Promise<{ items: HistoryItem[]; page: number; hasMore: boolean }> {
+  if (AGON_PREVIEW_MODE) return { page, hasMore: false, items: page > 1 ? [] : [{ jobId: PREVIEW_JOB_ID, question: "What's the real chance BTC closes above $120k on Friday?", state: "delivered", price: "0.30", createdAt: new Date().toISOString(), receiptUrl: `/r/${PREVIEW_JOB_ID}` }] };
+  return call(`/agon/app/history?page=${page}&limit=${limit}`);
 }
 export async function lowerLimits(input: { perHire?: string; daily?: string }): Promise<{ ok: boolean; code?: string }> {
   return AGON_PREVIEW_MODE ? { ok: true } : call("/agon/app/wallet/limits", { body: input });
