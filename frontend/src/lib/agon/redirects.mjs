@@ -13,7 +13,8 @@ export const AGON_REDIRECTS = [
   { source: "/market/:id", destination: "/agents/:id", permanent: false },
   { source: "/market", destination: "/agents", permanent: false },
   { source: "/playground/season-1", destination: "/arena/season-1", permanent: false },
-  { source: "/agon/playground", destination: "/list/sandbox", permanent: false },
+  { source: "/agon/playground", destination: "/playground", permanent: false },
+  { source: "/list/sandbox", destination: "/playground", permanent: false },
   { source: "/agon", destination: "/agents", permanent: false },
   ...LEGACY.flatMap((p) => [
     { source: p, destination: "/", permanent: false },

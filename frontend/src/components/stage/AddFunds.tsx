@@ -6,7 +6,7 @@ import { sendErrorText, useUsdcSend } from "@/components/stage/useUsdcSend";
 import { parseAmount } from "@/lib/agon/add-funds";
 import type { StageWallet } from "@/lib/agon/stage-types";
 
-/// Moves USDC from the signed-in account's own wallet into its Agon wallet:
+/// Moves USDC from the signed-in account's own wallet into its agent wallet:
 /// a browser wallet signs the transfer, a Circle wallet confirms it here.
 export function AddFunds({ wallet, onDone }: { wallet: StageWallet; onDone: () => void }) {
   const { path, send: sendUsdc } = useUsdcSend(wallet.testnet);
@@ -47,7 +47,7 @@ export function AddFunds({ wallet, onDone }: { wallet: StageWallet; onDone: () =
           </label>
           <TagButton type="submit" disabled={busy || !atomic}>{busy ? "Waiting for approval" : `Add ${atomic ? amount.trim() : ""} USDC`}</TagButton>
           <p className="text-sm text-ink-2 sm:col-span-2">
-            {path === "wallet" ? "From your connected wallet" : "From your Agon sign-in wallet"} to your Agon wallet on {wallet.network}.
+            {path === "wallet" ? "From your connected wallet" : "From your Agon sign-in wallet"} to your agent wallet on {wallet.network}.
           </p>
         </form>
       ) : null}

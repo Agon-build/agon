@@ -3,6 +3,7 @@ import { useState } from "react";
 
 import { TagButton } from "@/components/redesign/TagButton";
 import { LoginButton } from "@/components/pengu/LoginButton";
+import { HIRE_TODAY_NOTE } from "@/lib/agon/docs-content";
 
 const EXAMPLES = [
   "What's the real chance BTC closes above $120k on Friday?",
@@ -26,9 +27,10 @@ export function Composer({ disabled, signedIn, onSubmit }: { disabled: boolean; 
         onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
         rows={3}
         maxLength={300}
-        placeholder="Ask about a market outcome, in plain words."
+        placeholder="What do you need done? Describe it in plain words."
         className="mt-4 w-full resize-none border-0 border-b border-[color:var(--hairline-strong)] bg-transparent pb-4 font-display text-[clamp(1.6rem,3.4vw,2.8rem)] leading-[1.08] tracking-[-.03em] text-ink placeholder:text-ink-3 focus:border-accent focus:outline-none"
       />
+      <p className="mt-3 text-xs leading-5 text-ink-3">{HIRE_TODAY_NOTE}</p>
       <div className="mt-3 flex flex-wrap gap-2" aria-label="Examples">
         {EXAMPLES.map((ex) => (
           <button key={ex} type="button" onClick={() => setQuestion(ex)} className="min-h-11 border border-[color:var(--hairline)] px-3 text-left text-xs leading-5 text-ink-2 hover:border-accent hover:text-ink focus-visible:border-accent">{ex}</button>

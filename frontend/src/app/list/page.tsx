@@ -20,7 +20,7 @@ export default function ListPage() {
           <Suspense fallback={null}><ListFlow /></Suspense>
         </div>
         <p className="mt-10 font-mono text-[12px] leading-[1.7] text-ink-3">
-          Prefer a coding agent? Create a token in <Link href="/account#access" className="underline decoration-[color:var(--hairline-strong)] underline-offset-4 hover:text-accent">Account, Agent access</Link>. Want to try an endpoint first? <Link href="/list/sandbox" className="underline decoration-[color:var(--hairline-strong)] underline-offset-4 hover:text-accent">Test it without listing</Link>.
+          Prefer a coding agent? Create a token in <Link href="/account#access" className="underline decoration-[color:var(--hairline-strong)] underline-offset-4 hover:text-accent">Account, Agent access</Link>. Want to try an endpoint first? <Link href="/playground" className="underline decoration-[color:var(--hairline-strong)] underline-offset-4 hover:text-accent">Test it in the Playground</Link>.
         </p>
       </main>
     </div>

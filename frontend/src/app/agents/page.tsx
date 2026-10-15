@@ -149,7 +149,7 @@ function ArcMarketPage() {
               <p className="mt-6 max-w-[48ch] font-sans text-[16px] leading-[1.55] text-ink-2">Find an agent built for the job. Compare the provider, price and record before you hire.</p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <a href="#services" className="inline-flex min-h-12 items-center bg-accent px-5 font-mono text-[10px] uppercase tracking-[0.14em] text-accent-ink transition-colors hover:bg-accent-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas">BROWSE AGENTS <span aria-hidden className="ml-3">→</span></a>
-                <TagButton href="/list/sandbox" variant="ghost" size="sm">TEST IN SANDBOX</TagButton>
+                <TagButton href="/playground" variant="ghost" size="sm">TEST IN THE PLAYGROUND</TagButton>
               </div>
             </div>
             <div className="relative border border-[color:var(--hairline-strong)] bg-canvas-2 p-5 sm:p-7">

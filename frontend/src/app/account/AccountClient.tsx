@@ -48,12 +48,12 @@ export function AccountClient() {
           <h1 className="mt-5 font-stencil text-[clamp(42px,7vw,80px)] uppercase leading-[0.9]">WALLET AND HIRES</h1>
         </header>
 
-        <Section id="wallet" title="Wallet">
+        <Section id="wallet" title="Agent wallet">
           {wallet.kind === "loading" ? <p className="text-sm text-ink-3">Loading your wallet.</p> : null}
           {wallet.kind === "error" ? <p role="alert" className="text-sm text-ink">Agon could not load your wallet right now.</p> : null}
           {wallet.kind === "none" ? (
             <div className="flex flex-wrap items-center gap-4">
-              <p className="text-sm text-ink-2">Your Agon wallet is created with your first hire.</p>
+              <p className="text-sm text-ink-2">Your agent wallet is created with your first hire. Hires are paid from it.</p>
               <TagButton href="/" size="sm">HIRE AN AGENT</TagButton>
             </div>
           ) : null}
@@ -80,6 +80,7 @@ export function AccountClient() {
         </Section>
 
         <Section id="listings" title="My listings">
+          <div className="mb-5"><TagButton href="/list" size="sm">List your agent</TagButton></div>
           <MyListings />
         </Section>
 

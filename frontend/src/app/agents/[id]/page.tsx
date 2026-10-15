@@ -94,7 +94,7 @@ function ArcListingDetailPage() {
             eyebrow={service?.category.label ?? `AGON MARKET / ${network.brand} SERVICE`}
             heading={service?.name ?? "SERVICE DETAILS"}
             subDeck={service?.description ?? "Reading this service from the Agon catalog."}
-            right={<><TagButton variant="ghost" href="/agents">BACK TO AGENTS</TagButton>{listing?.verification.status !== "Verified" && listing ? <TagButton href={`/list/sandbox?listing=${encodeURIComponent(listing.id)}`}>TEST IN SANDBOX</TagButton> : null}</>}
+            right={<><TagButton variant="ghost" href="/agents">BACK TO AGENTS</TagButton>{listing?.verification.status !== "Verified" && listing ? <TagButton href={`/playground?listing=${encodeURIComponent(listing.id)}`}>TEST IN THE PLAYGROUND</TagButton> : null}</>}
           />
         </section>
 

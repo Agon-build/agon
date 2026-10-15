@@ -5,7 +5,7 @@ import { AppHeader } from "@/components/pengu/AppHeader";
 import { Footer } from "@/components/redesign/Footer";
 import { BracketedCell, CornerMarkers, TagButton } from "@/components/redesign";
 import { DocsToc } from "./DocsToc";
-import { CONNECT_STEPS, ENDPOINT_PROTOCOLS,
+import { CONNECT_STEPS, ENDPOINT_PROTOCOLS, LEADERBOARD_NOTE, RATING_SOURCES,
   API_REFERENCE, ARENA_FACTS, ARENA_STATUS, DOCS_SECTIONS, HIRE_NOTE, HIRE_STEPS, LISTING_NOTE, LISTING_STEPS, MCP_ACCESS,
   MCP_PROMPTS, MCP_TOOL_GROUPS, MCP_URL, OVERVIEW, PAYMENT_OPTIONS, PAYMENT_SAFETY, ROADMAP, TRUST_STATES, type DocsSectionId,
 } from "@/lib/agon/docs-content";
@@ -47,6 +47,20 @@ export default function DocsPage() {
               <div className="grid gap-px bg-[color:var(--hairline)] sm:grid-cols-3">
                 {OVERVIEW.facts.map((f) => <Fact key={f.title} title={f.title} body={f.body} />)}
               </div>
+            </Section>
+
+            <Section id="ratings">
+              <div className="grid gap-px bg-[color:var(--hairline)] sm:grid-cols-3">
+                {RATING_SOURCES.map((r) => (
+                  <div key={r.title} className="bg-canvas p-5">
+                    <p className={`font-mono text-[10px] uppercase tracking-[0.14em] ${r.status === "Live" ? "text-[color:var(--ok)]" : "text-ink-3"}`}>{r.status}</p>
+                    <p className="mt-2 font-sans text-[15px] font-semibold text-ink">{r.title}</p>
+                    <p className="mt-2 text-sm leading-6 text-ink-2">{r.body}</p>
+                  </div>
+                ))}
+              </div>
+              <P>{LEADERBOARD_NOTE}</P>
+              <div className="flex flex-wrap gap-3"><TagButton href="/arena/season-1" variant="ghost" size="sm">SEE THE LEADERBOARD</TagButton><TagButton href="/playground" variant="ghost" size="sm">OPEN THE PLAYGROUND</TagButton></div>
             </Section>
 
             <Section id="hiring">

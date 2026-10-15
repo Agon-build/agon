@@ -17,8 +17,8 @@ export function liveProviderMessage(input: {
   if (input.category !== "analysis") {
     return connected.length > 0
       ? "Live listed services can be tested in Analysis. This selection runs AGON's public sample."
-      : "No listed service is connected to the Sandbox yet. This selection runs AGON's public sample.";
+      : "No listed service is connected to the Playground yet. This selection runs AGON's public sample.";
   }
-  if (input.providerScopes.length === 0) return "No listed service is connected to the Sandbox yet.";
+  if (input.providerScopes.length === 0) return "No listed service is connected to the Playground yet.";
   return connected.length === 0 ? "No live service is available in this category yet." : null;
 }

@@ -3,11 +3,11 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 
 import { DOCS_SECTIONS, MCP_PROMPTS, MCP_TOOL_GROUPS, ROADMAP, copyProblems, docsStrings } from "./docs-content.ts";
-import { AGON_LIST_CTA, AGON_NAV } from "./nav.ts";
+import { AGON_NAV } from "./nav.ts";
 import { DOCS_REDIRECTS } from "./docs-redirects.ts";
 
 test("docs sections come in one order with unique, URL-safe ids", () => {
-  assert.deepEqual(DOCS_SECTIONS.map((s) => s.id), ["overview", "hiring", "arena", "listing", "mcp", "payments", "trust", "roadmap", "reference"]);
+  assert.deepEqual(DOCS_SECTIONS.map((s) => s.id), ["overview", "ratings", "hiring", "arena", "listing", "mcp", "payments", "trust", "roadmap", "reference"]);
   for (const s of DOCS_SECTIONS) assert.match(s.id, /^[a-z]+$/);
   assert.equal(new Set(DOCS_SECTIONS.map((s) => s.label)).size, DOCS_SECTIONS.length);
 });
@@ -21,7 +21,7 @@ test("the roadmap names every deferred item from the spec, and Live now lists on
     "Hire the Lead agent on the web and in Telegram",
     "Season 1 dry run across six categories",
     "Agon MCP for coding agents",
-    "Sandbox tests for listed agents",
+    "Playground tests for listed agents",
   ]);
 });
 
@@ -36,7 +36,8 @@ test("copy rules catch em dashes, plus used as a word and retired names", () => 
   assert.deepEqual(copyProblems("Fine copy, with 0.50 USDC per hire."), []);
   assert.ok(copyProblems("one — two").length > 0);
   assert.ok(copyProblems("Research + analysis").length > 0);
-  assert.ok(copyProblems("Open the Playground").length > 0);
+  assert.ok(copyProblems("Open the Sandbox").length > 0, "Sandbox is retired; it is the Playground");
+  assert.deepEqual(copyProblems("Open the Playground"), []);
   assert.ok(copyProblems("Read the MCP guide").length > 0);
   assert.ok(copyProblems("Provider listed").length > 0);
   for (const retired of ["Find services", "Test services", "Live sandbox", "Use Agon with an agent", "Agon market", "Learn", "Browse services", "Browse the market", "reviewed in the market"]) assert.ok(copyProblems(retired).length > 0, retired);
@@ -48,9 +49,8 @@ test("every docs string follows the copy rules", () => {
   assert.deepEqual(problems, []);
 });
 
-test("the Agon header is Hire, Agents, Arena, Docs, with a List your agent button", () => {
+test("the Agon header is Hire, Agents, Arena, Docs", () => {
   assert.deepEqual(AGON_NAV.map((i) => [i.label, i.href]), [["HIRE", "/"], ["AGENTS", "/agents"], ["ARENA", "/arena"], ["DOCS", "/docs"]]);
-  assert.deepEqual(AGON_LIST_CTA, { href: "/list", label: "LIST YOUR AGENT" });
 });
 
 test("old docs paths send people to the matching Docs section", () => {
@@ -108,4 +108,20 @@ test("the Docs page shows how to make an endpoint listable and how to connect a 
   const page = readFileSync(new URL("../../app/docs/page.tsx", import.meta.url), "utf8");
   assert.match(page, /ENDPOINT_PROTOCOLS/);
   assert.match(page, /CONNECT_STEPS/);
+});
+
+test("Docs say what Agon is: it routes to the best agent and proves it with ratings from real tests", async () => {
+  const { OVERVIEW, RATING_SOURCES, LEADERBOARD_NOTE, HIRE_STEPS } = await import("./docs-content.ts");
+  assert.match(OVERVIEW.lead, /routes/i);
+  assert.match(OVERVIEW.lead, /real tests/i);
+  assert.doesNotMatch(OVERVIEW.lead, /a market for AI agents/i);
+  assert.deepEqual(RATING_SOURCES.map((r) => [r.title, r.status]), [
+    ["Playground tests", "Live"],
+    ["Arena seasons", "Live"],
+    ["Scores from paid work", "Coming next"],
+  ]);
+  assert.match(RATING_SOURCES[0]!.body, /rate limited/i);
+  assert.match(RATING_SOURCES[0]!.body, /published/i);
+  assert.match(LEADERBOARD_NOTE, /24 hours, 7 days and 30 days/);
+  assert.match(HIRE_STEPS.find((s) => s.title === "Confirm")!.body, /agent wallet/);
 });

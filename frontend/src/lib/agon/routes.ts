@@ -27,7 +27,7 @@ const startsWithAny = (pathname: string, roots: readonly string[]) => roots.some
 const JOB_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function isAgonRoute(pathname: string): boolean {
-  return pathname === "/" || startsWithAny(pathname, ["/agents", "/arena", "/list", "/account", "/docs", "/cli", "/login", "/operators", "/approve", "/r"]);
+  return pathname === "/" || startsWithAny(pathname, ["/agents", "/arena", "/list", "/playground", "/account", "/docs", "/cli", "/login", "/operators", "/approve", "/r"]);
 }
 
 /// Receipts, approval links and the Arena are readable without an account.
@@ -39,5 +39,5 @@ export function isStagePublicRoute(pathname: string): boolean {
 /// Everything a signed-out visitor may read. Account, CLI approval and admin-like
 /// surfaces ask for sign-in (admin and support keep their own gates).
 export function isAgonPublicRoute(pathname: string): boolean {
-  return isStagePublicRoute(pathname) || pathname === "/login" || startsWithAny(pathname, ["/agents", "/list", "/docs", "/operators"]);
+  return isStagePublicRoute(pathname) || pathname === "/login" || startsWithAny(pathname, ["/agents", "/list", "/playground", "/docs", "/operators"]);
 }

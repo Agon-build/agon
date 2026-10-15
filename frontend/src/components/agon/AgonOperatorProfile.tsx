@@ -56,7 +56,7 @@ export function AgonOperatorProfile({ address }: { address: string }) {
               </div>
             </div>
             <div className="flex flex-wrap gap-3">
-              <TagButton href="/list/sandbox">TEST IN SANDBOX</TagButton>
+              <TagButton href="/playground">TEST IN THE PLAYGROUND</TagButton>
               <TagButton href={`https://testnet.arcscan.app/address/${address}`} target="_blank" rel="noreferrer" variant="ghost" size="sm">VIEW ON ARCSCAN</TagButton>
             </div>
           </div>

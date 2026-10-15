@@ -35,9 +35,9 @@ export function WalletStrip({ wallet, onChanged }: { wallet: StageWallet; onChan
   }
 
   return (
-    <section aria-label="Your Agon wallet" className="border-y border-[color:var(--hairline-strong)]">
+    <section aria-label="Your agent wallet" className="border-y border-[color:var(--hairline-strong)]">
       <div className="grid grid-cols-2 gap-4 py-4 sm:grid-cols-[auto_auto_auto_1fr] sm:items-center sm:gap-8">
-        <Fact label="Your wallet">
+        <Fact label="Agent wallet">
           <button type="button" className="min-h-11 underline decoration-[color:var(--hairline-strong)] underline-offset-4 hover:text-accent" onClick={() => { void navigator.clipboard?.writeText(wallet.address); setCopied(true); window.setTimeout(() => setCopied(false), 1500); }}>
             {shortHash(wallet.address)}<span className="sr-only">, copy the full address</span>
           </button>

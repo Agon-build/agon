@@ -9,5 +9,3 @@ export const AGON_NAV: readonly NavItem[] = [
   { href: "/docs", label: "DOCS", exact: false },
 ];
 
-/// The action for agent owners, always visible in the header (spec 18.1).
-export const AGON_LIST_CTA = { href: "/list", label: "LIST YOUR AGENT" } as const;

@@ -19,7 +19,8 @@ test("old Agon paths go to their new homes", () => {
   assert.equal(to("/market/activity"), "/account");
   assert.equal(to("/market/compare"), "/agents");
   assert.equal(to("/playground/season-1"), "/arena/season-1");
-  assert.equal(to("/agon/playground"), "/list/sandbox");
+  assert.equal(to("/agon/playground"), "/playground");
+  assert.equal(to("/list/sandbox"), "/playground");
   assert.equal(to("/agon"), "/agents");
 });
 
@@ -61,13 +62,13 @@ test("no Agon page links to the old market paths", () => {
   }
 });
 
-test("the List page is the web listing flow and the sandbox speaks of Sandbox", () => {
+test("the List page is the web listing flow and the Playground has its own page", () => {
   const read = (f: string) => readFileSync(new URL(`../../${f}`, import.meta.url), "utf8");
   assert.match(read("app/list/page.tsx"), /<ListFlow \/>/);
-  assert.match(read("app/list/sandbox/page.tsx"), /AgonPlayground/);
-  const sandbox = read("components/agon/AgonPlayground.tsx");
-  assert.doesNotMatch(sandbox, />[^<]*\bPlayground\b[^<]*</, "visible Playground text in the sandbox");
-  assert.doesNotMatch(sandbox, /"[^"]*\bPlayground\b[^"]*"/, "Playground in a quoted UI string");
+  assert.match(read("app/playground/page.tsx"), /AgonPlayground/);
+  const playground = read("components/agon/AgonPlayground.tsx");
+  assert.doesNotMatch(playground, />[^<]*\bSandbox\b[^<]*</i, "visible Sandbox text in the Playground");
+  assert.doesNotMatch(playground, /"[^"]*\bSandbox\b[^"]*"/, "Sandbox in a quoted UI string");
   assert.doesNotMatch(read("components/agon/AgonOperatorProfile.tsx"), /href="\/app"/);
 });
 
@@ -142,9 +143,27 @@ test("the notification panel speaks Agon on the Agon deployment", () => {
   assert.match(src, /IS_AGON_DEPLOYMENT/);
 });
 
-test("the header renders the List your agent button on desktop and in the mobile menu", () => {
-  const src = readFileSync(new URL("../../components/redesign/TopNav.tsx", import.meta.url), "utf8");
-  assert.equal((src.match(/AGON_LIST_CTA/g) ?? []).length >= 3, true, "imported and used twice");
+test("listing lives in Account, not in the header", () => {
+  const nav = readFileSync(new URL("../../components/redesign/TopNav.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(nav, /AGON_LIST_CTA|LIST YOUR AGENT/);
+  const account = readFileSync(new URL("../../app/account/AccountClient.tsx", import.meta.url), "utf8");
+  assert.match(account, /href="\/list"/);
+  assert.match(account, /List your agent/);
+});
+
+test("the wallet hires are paid from is called the agent wallet everywhere", () => {
+  for (const f of ["components/stage/WalletStrip.tsx", "components/stage/AddFunds.tsx", "app/account/AccountClient.tsx", "app/account/page.tsx"]) {
+    const src = readFileSync(new URL(`../../${f}`, import.meta.url), "utf8");
+    assert.doesNotMatch(src, /Agon wallet|"Your wallet"/, f);
+  }
+  assert.match(readFileSync(new URL("../../components/stage/WalletStrip.tsx", import.meta.url), "utf8"), /label="Agent wallet"/);
+});
+
+test("the Hire box asks what you need done and says plainly what routes today", () => {
+  const composer = readFileSync(new URL("../../components/stage/Composer.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(composer, /market outcome/);
+  assert.match(composer, /What do you need done/);
+  assert.match(composer, /HIRE_TODAY_NOTE/);
 });
 
 test("the header and root layout render the same markup on the server and on first load", () => {

@@ -20,7 +20,7 @@ export const INTRO_CARDS: readonly IntroCard[] = [
   { id: "discover", eyebrow: "06 / Discover", title: "Find hidden agents", example: false, count: "discover",
     lines: ["ERC-8004 agent identities on Arc", "Verified agents can be hired. Discovered agents wait for their owner to list them."] },
   { id: "list", eyebrow: "07 / List", title: "List your agent", example: false,
-    lines: ["Identity, describe, sandbox, verify, publish", "Coding agents list over MCP"] },
+    lines: ["Describe, check, pay the network fee, go live", "Or list from a coding agent over MCP"] },
 ];
 
 export type IntroState = { index: number; paused: boolean; manual: boolean };
