@@ -113,3 +113,77 @@ test("native MCP accepts the per_call payment mode used by hire previews", async
   }), { authInfo: { token: "verified", clientId: "agon-cli", scopes: ["agon:read"], extra: { address, client: "agon-cli" } } });
   assert.match(await escrow.text(), /capability_unavailable/);
 });
+
+test("a revoked or expired access token gets a message that says what to do", async () => {
+  const access = createMcpAccessAdapter({
+    async listListings() { return { ok: true as const, value: { items: [], nextCursor: null } }; },
+    async getListing() { return { ok: false as const, error: { code: "not_found", message: "not found" } }; },
+    async prepareX402Call() { return { ok: false as const, error: { code: "disabled", message: "disabled" } }; },
+  });
+  const handler = createAgonNativeMcpHandler(access);
+  for (const problem of ["revoked", "expired"]) {
+    const res = await handler.fetch(request({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "start_listing", arguments: {} } }), {
+      authInfo: { token: "t", clientId: "rejected", scopes: [], extra: { tokenProblem: problem } },
+    });
+    const text = await res.text();
+    assert.match(text, new RegExp(`token_${problem}`));
+    assert.match(text, /Account, Agent access/);
+  }
+});
+
+test("check_listing runs the live checker and prepare_listing_publication needs a recent pass", async () => {
+  const draft = { name: "A", logoUrl: "https://e.com/l.png", outcome: "o", category: "3", inputs: ["i"], outputs: ["o"], priceUSDC: "0.22", expectedLatencyMs: 1000, privacy: "p", failurePolicy: "f", endpoint: "https://agent.example/run" };
+  let passed = false;
+  const checkedBy: string[] = [];
+  const listingChecker = {
+    async check(actor: string) { checkedBy.push(actor); passed = true; return { ok: true as const, result: { checks: [{ name: "asks_for_payment" as const, status: "passed" as const, required: true, detail: "402" }], requiredPassed: true, certificationScore: null, checkedAt: "t" } }; },
+    async hasRecentPass() { return passed; },
+  };
+  const access = createMcpAccessAdapter({
+    async listListings() { return { ok: true as const, value: { items: [], nextCursor: null } }; },
+    async getListing() { return { ok: false as const, error: { code: "not_found", message: "not found" } }; },
+    async prepareX402Call() { return { ok: false as const, error: { code: "disabled", message: "disabled" } }; },
+  }, { listingChecker });
+  const handler = createAgonNativeMcpHandler(access);
+  const address = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+  const authInfo = { token: "verified", clientId: "agon-cli", scopes: ["agon:read", "listing:prepare", "listing:write"], extra: { address, client: "agon-cli" } };
+  const call = async (name: string, args: Record<string, unknown>) => (await handler.fetch(request({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }), { authInfo })).text();
+  const rpc = (text: string) => JSON.parse(text.includes("data: ") ? text.slice(text.indexOf("data: ") + 6).split(/\r?\n/)[0]! : text);
+  const started = JSON.parse(rpc(await call("start_listing", draft)).result.content[0].text) as { draftId: string };
+  assert.match(await call("prepare_listing_publication", { draftId: started.draftId, approval: "approve" }), /checks_required/);
+  const checked = await call("check_listing", { draftId: started.draftId });
+  assert.match(checked, /asks_for_payment/);
+  assert.match(checked, /approve_publication/);
+  assert.deepEqual(checkedBy, [address]);
+  assert.doesNotMatch(await call("prepare_listing_publication", { draftId: started.draftId, approval: "approve" }), /checks_required/);
+});
+
+test("check_listing reports the hourly limit plainly", async () => {
+  const listingChecker = { async check() { return { ok: false as const, code: "rate_limited" as const }; }, async hasRecentPass() { return false; } };
+  const access = createMcpAccessAdapter({
+    async listListings() { return { ok: true as const, value: { items: [], nextCursor: null } }; },
+    async getListing() { return { ok: false as const, error: { code: "not_found", message: "not found" } }; },
+    async prepareX402Call() { return { ok: false as const, error: { code: "disabled", message: "disabled" } }; },
+  }, { listingChecker });
+  const handler = createAgonNativeMcpHandler(access);
+  const authInfo = { token: "v", clientId: "agon-cli", scopes: ["listing:prepare"], extra: { address: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", client: "agon-cli" } };
+  const draft = { name: "A", logoUrl: "https://e.com/l.png", outcome: "o", category: "3", inputs: ["i"], outputs: ["o"], priceUSDC: "0.22", expectedLatencyMs: 1000, privacy: "p", failurePolicy: "f", endpoint: "https://agent.example/run" };
+  const res = await handler.fetch(request({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "check_listing", arguments: draft } }), { authInfo });
+  assert.match(await res.text(), /rate_limited[\s\S]*10 checks an hour/);
+});
+
+test("prepare_listing_version needs a recent passing check too", async () => {
+  const draft = { name: "A", logoUrl: "https://e.com/l.png", outcome: "o", category: "3", inputs: ["i"], outputs: ["o"], priceUSDC: "0.22", expectedLatencyMs: 1000, privacy: "p", failurePolicy: "f", endpoint: "https://agent.example/run" };
+  const listingChecker = { async check() { return { ok: false as const, code: "rate_limited" as const }; }, async hasRecentPass() { return false; } };
+  const access = createMcpAccessAdapter({
+    async listListings() { return { ok: true as const, value: { items: [], nextCursor: null } }; },
+    async getListing() { return { ok: false as const, error: { code: "not_found", message: "not found" } }; },
+    async prepareX402Call() { return { ok: false as const, error: { code: "disabled", message: "disabled" } }; },
+  }, { listingChecker });
+  const handler = createAgonNativeMcpHandler(access);
+  const authInfo = { token: "v", clientId: "agon-cli", scopes: ["listing:prepare", "listing:write"], extra: { address: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", client: "agon-cli" } };
+  const call = async (name: string, args: Record<string, unknown>) => (await handler.fetch(request({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }), { authInfo })).text();
+  const rpc = (text: string) => JSON.parse(text.includes("data: ") ? text.slice(text.indexOf("data: ") + 6).split(/\r?\n/)[0]! : text);
+  const started = JSON.parse(rpc(await call("start_listing", draft)).result.content[0].text) as { draftId: string };
+  assert.match(await call("prepare_listing_version", { draftId: started.draftId, approval: "approve" }), /checks_required/);
+});

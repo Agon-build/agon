@@ -149,15 +149,24 @@ export function createAgonNativeMcpHandler(access: AccessAdapter, publisher?: Ma
         : authenticatedActor;
     });
 
+    /// Publishing a new listing or a new version needs a recent passing check for its endpoint and price.
+    const checksGate = async (actor: string, input: unknown) => {
+      const draftId = input && typeof input === "object" && typeof (input as { draftId?: unknown }).draftId === "string" ? (input as { draftId: string }).draftId : "";
+      if (draftId && !(await access.checksPassed(actor, draftId))) {
+        return failure("checks_required", "Run check_listing first: publishing needs a passing check for this endpoint and price from the last 30 minutes.");
+      }
+      return null;
+    };
+
     server.registerTool("prepare_listing_publication", {
       title: "Prepare listing publication",
       description: "Prepare the exact provider wallet action needed to publish a compiled listing. The provider must review and sign it separately.",
       inputSchema: openObject,
     }, async (input) => {
       const authenticatedActor = requireActor(context.authInfo, "listing:write");
-      return typeof authenticatedActor === "string"
-        ? adapterResult(await access.publishListing(authenticatedActor, input))
-        : authenticatedActor;
+      if (typeof authenticatedActor !== "string") return authenticatedActor;
+      const refused = await checksGate(authenticatedActor, input);
+      return refused ?? adapterResult(await access.publishListing(authenticatedActor, input));
     });
 
     server.registerTool("prepare_listing_version", {
@@ -166,9 +175,9 @@ export function createAgonNativeMcpHandler(access: AccessAdapter, publisher?: Ma
       inputSchema: openObject,
     }, async (input) => {
       const authenticatedActor = requireActor(context.authInfo, "listing:write");
-      return typeof authenticatedActor === "string"
-        ? adapterResult(await access.publishListingVersion(authenticatedActor, input))
-        : authenticatedActor;
+      if (typeof authenticatedActor !== "string") return authenticatedActor;
+      const refused = await checksGate(authenticatedActor, input);
+      return refused ?? adapterResult(await access.publishListingVersion(authenticatedActor, input));
     });
 
     server.registerTool("pause_listing", {
@@ -231,7 +240,7 @@ export function createAgonNativeMcpHandler(access: AccessAdapter, publisher?: Ma
         try { return result(await task(owner)); }
         catch (error) {
           const message = error instanceof Error ? error.message : "";
-          const safe = /^(?:No managed publisher|Create a listing draft|draft changed|Publisher |The exact draft digest|Provision the publisher|Gas quote|Pinned gas quote|Circle transaction does not match|Identity receipt|Registered identity|Prepared publication|Publication target|Publication receipt|Hosted manifest|Managed draft digest|Publisher state changed)/.test(message);
+          const safe = /^(?:Run the listing checks|No managed publisher|Create a listing draft|draft changed|Publisher |The exact draft digest|Provision the publisher|Gas quote|Pinned gas quote|Circle transaction does not match|Identity receipt|Registered identity|Prepared publication|Publication target|Publication receipt|Hosted manifest|Managed draft digest|Publisher state changed)/.test(message);
           return failure("managed_publisher_failed", safe ? message : "Managed publisher action failed. Check its status before retrying.");
         }
       };

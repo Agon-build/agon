@@ -2396,3 +2396,27 @@ alter table agon_operations_alerts add constraint agon_operations_alerts_source_
 alter table agon_alert_subscriptions drop constraint if exists agon_alert_subscriptions_source_check;
 alter table agon_alert_subscriptions add constraint agon_alert_subscriptions_source_check
   check (source in ('any', 'certification', 'arena', 'stage'));
+
+create table if not exists agon_access_tokens (
+  id            uuid primary key,
+  owner_address text not null,
+  name          text not null check (char_length(name) between 1 and 80),
+  level         text not null check (level in ('read', 'listing', 'hiring')),
+  token_hash    text not null unique,
+  created_at    timestamptz not null,
+  expires_at    timestamptz not null,
+  last_used_at  timestamptz,
+  revoked_at    timestamptz
+);
+create index if not exists agon_access_tokens_owner_idx on agon_access_tokens(owner_address, created_at desc);
+
+create table if not exists agon_listing_checks (
+  id              bigserial primary key,
+  actor_address   text not null,
+  endpoint        text not null,
+  price_atomic    numeric(78, 0) not null,
+  required_passed boolean not null,
+  result          jsonb not null,
+  created_at      timestamptz not null
+);
+create index if not exists agon_listing_checks_lookup_idx on agon_listing_checks(actor_address, endpoint, price_atomic, created_at desc);

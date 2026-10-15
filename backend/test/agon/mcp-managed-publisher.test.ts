@@ -27,7 +27,7 @@ const draft: ProviderDraftInput = {
 };
 const draftId = `draft-${createHash("sha256").update(JSON.stringify(draft)).digest("hex").slice(0, 24)}`;
 
-async function fixture(balance = 1_000_000_000_000_000_000n, badTransaction = false, uncertainOnce = false, highFee = false, writerReady = true) {
+async function fixture(balance = 1_000_000_000_000_000_000n, badTransaction = false, uncertainOnce = false, highFee = false, writerReady = true, extra: { checksPassed?: (a: string, d: string) => Promise<boolean> } = {}) {
   const store = createMemoryManagedPublisherStore();
   const draftStore = createMemoryProviderDraftStore();
   await draftStore.create(actor, draftId, draft);
@@ -89,6 +89,7 @@ async function fixture(balance = 1_000_000_000_000_000_000n, badTransaction = fa
     store, draftStore, access, circle, chain, identityRegistry: identity,
     serviceRegistry: registry, publicApiUrl: "https://api.example.com/",
     publicationReady: async () => writerReady,
+    ...extra,
   });
   const publisher = make();
   const setup = await publisher.setup(actor, draftId);
@@ -198,4 +199,14 @@ test("managed MCP tools are advertised only when wired and enforce scopes", asyn
   } });
   assert.match(await denied.text(), /scope_required/);
   assert.equal(f.calls.length, 0);
+});
+
+test("approval is refused without a recent passing check, and allowed after one", async () => {
+  let passed = false;
+  const seen: string[] = [];
+  const { publisher, setup } = await fixture(undefined, false, false, false, true, { checksPassed: async (a, d) => { seen.push(`${a}:${d}`); return passed; } });
+  await assert.rejects(publisher.approve(actor, draftId, setup.termsDigest, "approve"), /Run the listing checks first/);
+  assert.deepEqual(seen, [`${actor}:${draftId}`], "the gate asks about the approving builder and this draft");
+  passed = true;
+  assert.equal((await publisher.approve(actor, draftId, setup.termsDigest, "approve")).status, "ready");
 });

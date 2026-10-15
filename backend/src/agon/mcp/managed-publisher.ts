@@ -81,6 +81,8 @@ export function createManagedPublisher(options: {
   serviceRegistry: Address;
   publicApiUrl: string;
   publicationReady(): Promise<boolean>;
+  /** The builder's approval needs a recent passing listing check (Plan 3e). */
+  checksPassed?: (actor: string, draftId: string) => Promise<boolean>;
 }) {
   const origin = new URL(options.publicApiUrl);
   if (origin.protocol !== "https:" || origin.pathname !== "/" || origin.search || origin.hash) throw new Error("managed publisher requires a public HTTPS API origin");
@@ -201,6 +203,9 @@ export function createManagedPublisher(options: {
     async approve(actor: string, draftId: string, termsDigest: string, approval: string): Promise<ManagedPublisherResult> {
       const record = await getRecord(actor, draftId);
       if (approval !== "approve" || termsDigest.toLowerCase() !== record.state.draftDigest.toLowerCase()) throw new Error("The exact draft digest and explicit approval are required");
+      if (!record.state.approvedAt && options.checksPassed && !(await options.checksPassed(actor, draftId))) {
+        throw new Error("Run the listing checks first: publishing needs a passing check for this endpoint and price from the last 30 minutes.");
+      }
       if (!record.state.walletAddress) throw new Error("Provision the publisher wallet first");
       const updated = record.state.approvedAt ? record : await save(record, { ...record.state, approvedAt: new Date().toISOString() });
       return view(updated, "ready", "continue_managed_listing");

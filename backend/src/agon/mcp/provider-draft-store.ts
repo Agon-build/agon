@@ -29,6 +29,8 @@ export type ProviderPublicationEvidence = {
 export type ProviderDraftStore = {
   create(actor: string, draftId: string, draft: ProviderDraftInput): Promise<StoredProviderDraft>;
   get(actor: string, draftId: string): Promise<StoredProviderDraft | null>;
+  /** The actor's drafts, newest first. */
+  list(actor: string, limit: number): Promise<StoredProviderDraft[]>;
   saveCompilation(actor: string, draftId: string, compiled: CompiledProviderManifest, manifestUri: string | null, target?: { kind: "new" | "version"; listingId?: string }): Promise<StoredProviderDraft | null>;
   markPrepared(actor: string, draftId: string, operationId: string, reference?: string): Promise<StoredProviderDraft | null>;
   markConfirmed(actor: string, draftId: string, reference?: string, evidence?: ProviderPublicationEvidence): Promise<StoredProviderDraft | null>;
@@ -72,6 +74,10 @@ export function createMemoryProviderDraftStore(): ProviderDraftStore {
       return row;
     },
     async get(actor, draftId) { return rows.get(key(actor, draftId)) ?? null; },
+    async list(actor, limit) {
+      const prefix = `${normalizedActor(actor)}:`;
+      return [...rows.entries()].filter(([k]) => k.startsWith(prefix)).map(([, row]) => row).reverse().slice(0, Math.max(1, Math.min(limit, 100)));
+    },
     async saveCompilation(actor, draftId, compiled, manifestUri, target) {
       const row = rows.get(key(actor, draftId));
       if (!row) return null;
@@ -112,6 +118,15 @@ export function createMemoryProviderDraftStore(): ProviderDraftStore {
 /** Durable provider draft store. It persists the exact input and compiled manifest, never secrets. */
 export function createPostgresProviderDraftStore(pool: Pool): ProviderDraftStore {
   return {
+    async list(actor, limit) {
+      const normalized = normalizedActor(actor);
+      const { rows } = await pool.query<{ draft_id: string }>(
+        "select draft_id from agon_mcp_provider_drafts where actor_address = $1 order by updated_at desc, created_at desc limit $2",
+        [normalized, Math.max(1, Math.min(limit, 100))],
+      );
+      const drafts = await Promise.all(rows.map((r) => this.get(normalized, r.draft_id)));
+      return drafts.filter((d): d is StoredProviderDraft => d !== null);
+    },
     async create(actor, draftId, draft) {
       const normalized = normalizedActor(actor);
       await pool.query(

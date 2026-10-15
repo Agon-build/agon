@@ -20,6 +20,12 @@ export function actor(authInfo: AuthInfo | undefined): string | null {
 }
 
 export function requireActor(authInfo: AuthInfo | undefined, scope: string): string | ReturnType<typeof failure> {
+  const problem = authInfo?.extra?.tokenProblem;
+  if (problem === "expired" || problem === "revoked" || problem === "unknown") {
+    return failure(`token_${problem}`, problem === "unknown"
+      ? "This access token is not recognised. Create one in Account, Agent access."
+      : `This access token was ${problem}. Create a new one in Account, Agent access.`);
+  }
   const address = actor(authInfo);
   if (!address) return failure("authentication_required", "Connect AGON with an access token before preparing a hire or managing a listing.");
   const client = authInfo?.extra?.client;

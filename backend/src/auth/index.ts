@@ -46,6 +46,12 @@ import { createViemAgonPrizeEscrowReadAdapter, type AgonPrizeEscrowReadClient } 
 import { evaluateAgonEscrowProductionReadiness } from "../agon/execution/escrow-production-readiness.js";
 import { AGON_ESCROW_TRANSACTION_APPROVAL_PHRASES } from "../agon/execution/escrow-transaction-approval.js";
 import { parseFirstPartyAgents } from "../agon/first-party.js";
+import { createListingChecker } from "../agon/listing/checker.js";
+import { PostgresListingCheckStore } from "../agon/listing/check-store.js";
+import { defaultListingCheckDeps, runListingChecks } from "../agon/listing/endpoint-check.js";
+import { agonNetwork } from "../agon/network.js";
+import { createBuilderRoutes } from "../agon/builder-routes.js";
+import { PostgresAccessTokenStore, createMcpTokenVerifier } from "../agon/access-tokens.js";
 import { PostgresAgonMarketService } from "../agon/http/service.js";
 import { createPostgresProviderDraftStore } from "../agon/mcp/provider-draft-store.ts";
 import { createMcpAccessAdapter } from "../agon/mcp/adapter.ts";
@@ -383,6 +389,19 @@ app.post("/auth/cli/device/token", async (c) => {
 const agonRepository = new PostgresAgonRepository(pool);
 const agonOperationsAlerts = new PostgresAgonOperationsAlertRepository(pool);
 const agonProviderDraftStore = createPostgresProviderDraftStore(pool);
+const agonAccessTokens = new PostgresAccessTokenStore(pool);
+// One live checker for the web flow and the MCP tools (Plan 3e). Publishing needs a recent pass.
+const agonListingChecker = createListingChecker({
+  store: new PostgresListingCheckStore(pool),
+  run: (draft) => runListingChecks({
+    endpoint: draft.endpoint, priceUSDC: draft.priceUSDC, category: draft.category,
+    deps: defaultListingCheckDeps(agonNetwork(config.chainId === 5042002 ? "arc-testnet" : "arc")),
+  }),
+});
+const agonChecksPassed = async (actor: string, draftId: string) => {
+  const stored = await agonProviderDraftStore.get(actor, draftId);
+  return stored ? agonListingChecker.hasRecentPass(actor, stored.draft) : false;
+};
 const agonMcpHireStore = createPostgresMcpHireStore(pool);
 const agonOperations = new PostgresAgonOperationStore(pool);
 const agonActiveDeployment = config.agon.deployment
@@ -762,6 +781,7 @@ const agonManagedPublisher = config.agon.managedPublisherEnabled
       serviceRegistry: agonActiveDeployment.contracts.AgonServiceRegistry,
       publicApiUrl: config.agon.publicApiUrl,
       publicationReady: async () => (await agonReadiness.get(true)).ready,
+      checksPassed: agonChecksPassed,
     })
   : undefined;
 
@@ -857,9 +877,19 @@ if (agonPayments) {
   }
 }
 
+app.route("/agon/builder", createBuilderRoutes({
+  tokens: agonAccessTokens,
+  requireAuth,
+  // The web listing flow uses the same draft store, checker and publisher as the MCP tools.
+  listing: {
+    access: createMcpAccessAdapter(agonService, { providerDraftStore: agonProviderDraftStore, hostedManifestStore: agonHostedManifestStore, listingChecker: agonListingChecker }),
+    drafts: agonProviderDraftStore,
+    publisher: agonManagedPublisher,
+  },
+}));
 app.route("/agon", createAgonRoutes({
   service: agonService,
-  verifyMcpToken: verifyTokenClaims,
+  verifyMcpToken: createMcpTokenVerifier(agonAccessTokens, verifyTokenClaims),
   stageMcp: stageServices
     ? {
         services: stageServices,
@@ -883,6 +913,7 @@ app.route("/agon", createAgonRoutes({
   playgroundRateLimiter: new RedisPlaygroundRateLimiter(redis),
   playgroundProviderRunner: agonPlaygroundProviderRunner,
   providerDraftStore: agonProviderDraftStore,
+  listingChecker: agonListingChecker,
   hostedManifestStore: agonHostedManifestStore,
   hireStore: agonMcpHireStore,
   managedPublisher: agonManagedPublisher,

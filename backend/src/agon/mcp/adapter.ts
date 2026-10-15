@@ -5,6 +5,7 @@ import { compileProviderManifest } from "./provider-manifest.ts";
 import { createMemoryProviderDraftStore, type ProviderDraftStore, type ProviderPublicationEvidence } from "./provider-draft-store.ts";
 import { createMemoryMcpHireStore, reviewedTermsDigest, type McpHireStore } from "./hire-store.ts";
 import { HostedManifestError, type HostedManifestStore } from "../hosted-manifest-store.ts";
+import type { ListingChecker } from "../listing/checker.ts";
 
 export type McpResult<T> = { ok: true; value: T } | { ok: false; code: string; message: string };
 
@@ -56,7 +57,7 @@ function toServiceReference(listing: AgonListingView): ServiceReference {
   });
 }
 
-export function createMcpAccessAdapter(service: McpCatalogService, options: { providerDraftStore?: ProviderDraftStore; hireStore?: McpHireStore; hostedManifestStore?: HostedManifestStore; now?: () => number } = {}) {
+export function createMcpAccessAdapter(service: McpCatalogService, options: { providerDraftStore?: ProviderDraftStore; hireStore?: McpHireStore; hostedManifestStore?: HostedManifestStore; now?: () => number; listingChecker?: ListingChecker } = {}) {
   const hireStore = options.hireStore ?? createMemoryMcpHireStore();
   const now = options.now ?? Date.now;
   const providerDraftStore = options.providerDraftStore ?? createMemoryProviderDraftStore();
@@ -154,7 +155,7 @@ export function createMcpAccessAdapter(service: McpCatalogService, options: { pr
       return { ok: true, value: { draftId, draft: parsed.data, nextAction: "run_listing_checks" } };
     },
 
-    async checkListing(actorOrInput: string | unknown, maybeInput?: unknown): Promise<McpResult<{ draftId: string; checks: Array<{ name: string; status: "passed" | "needs_attention"; detail: string }>; nextAction: string }>> {
+    async checkListing(actorOrInput: string | unknown, maybeInput?: unknown): Promise<McpResult<{ draftId: string; checks: Array<{ name: string; status: "passed" | "failed" | "skipped" | "needs_attention"; required?: boolean; detail: string }>; requiredPassed?: boolean; certificationScore?: number | null; nextAction: string }>> {
       const actor = typeof actorOrInput === "string" && maybeInput !== undefined ? actorOrInput : null;
       const input = maybeInput === undefined ? actorOrInput : maybeInput;
       const reference = input && typeof input === "object" && "draftId" in input && typeof (input as { draftId?: unknown }).draftId === "string" ? (input as { draftId: string }).draftId : null;
@@ -164,6 +165,16 @@ export function createMcpAccessAdapter(service: McpCatalogService, options: { pr
         ? { ok: true as const, value: { draftId: reference, draft: draft?.draft ?? legacy!.draft, nextAction: "run_listing_checks" } }
         : await this.startListing(actor ?? input, actor ? input : undefined);
       if (!started.ok) return started;
+      if (options.listingChecker) {
+        // Checks are per builder: a pass lets that builder publish this endpoint at this price.
+        if (!actor) return { ok: false, code: "authentication_required", message: "Connect AGON with an access token to run listing checks." };
+        const out = await options.listingChecker.check(actor, started.value.draft);
+        if (!out.ok) return { ok: false, code: "rate_limited", message: "Up to 10 checks an hour. Try again later." };
+        return { ok: true, value: {
+          draftId: started.value.draftId, checks: out.result.checks, requiredPassed: out.result.requiredPassed,
+          certificationScore: out.result.certificationScore, nextAction: out.result.requiredPassed ? "approve_publication" : "fix_and_check_again",
+        } };
+      }
       const checks = [
         { name: "brand_identity", status: "passed" as const, detail: "The immutable service file includes the agent's public HTTPS logo." },
         { name: "secure_endpoint", status: "passed" as const, detail: "The service uses a public HTTPS endpoint." },
@@ -171,6 +182,13 @@ export function createMcpAccessAdapter(service: McpCatalogService, options: { pr
         { name: "wallet_publication", status: "needs_attention" as const, detail: "A provider wallet approval is required before publication." },
       ];
       return { ok: true, value: { draftId: started.value.draftId, checks, nextAction: "review_and_approve_publication" } };
+    },
+
+    /** True when this builder has a recent passing check for the draft's endpoint and price (always true without a checker). */
+    async checksPassed(actor: string, draftId: string): Promise<boolean> {
+      if (!options.listingChecker) return true;
+      const stored = await providerDraftStore.get(actor, draftId);
+      return stored ? options.listingChecker.hasRecentPass(actor, stored.draft) : false;
     },
 
     async publishListing(actor: string, input: unknown): Promise<McpResult<import("./contract.ts").ProviderMutationResult>> {

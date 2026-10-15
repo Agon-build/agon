@@ -1,3 +1,5 @@
+import type { ListingChecker } from "../listing/checker.ts";
+import type { McpTokenResult } from "../access-tokens.ts";
 import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { randomUUID } from "node:crypto";
 import { listPlaygroundCategories, runPlaygroundTask, PlaygroundError } from "../playground.ts";
@@ -373,7 +375,7 @@ export type AgonMarketService = {
 
 export type CreateAgonRoutesOptions = {
   service: AgonMarketService;
-  verifyMcpToken: (token: string) => Promise<{ address: string; client: string | null; scopes: string[] } | null>;
+  verifyMcpToken: (token: string) => Promise<McpTokenResult>;
   stageMcp?: StageMcpDeps;
   /** Optional external marketplace adapters. Arc remains the default source. */
   marketSources?: MarketSource[];
@@ -392,6 +394,7 @@ export type CreateAgonRoutesOptions = {
   playgroundRateLimiter?: PlaygroundRateLimiter;
   playgroundProviderRunner?: PlaygroundProviderRunner;
   providerDraftStore?: ProviderDraftStore;
+  listingChecker?: ListingChecker;
   hostedManifestStore?: HostedManifestStore;
   hireStore?: McpHireStore;
   managedPublisher?: ManagedPublisher;
@@ -728,7 +731,7 @@ function queryFromRequest(context: Context, overrides: Partial<ListingQuery> = {
 
 export function createAgonRoutes(options: CreateAgonRoutesOptions) {
   const app = new Hono<{ Variables: AgonRouteVariables }>();
-  const mcp = createMcpAccessAdapter(options.service, { providerDraftStore: options.providerDraftStore, hostedManifestStore: options.hostedManifestStore, hireStore: options.hireStore });
+  const mcp = createMcpAccessAdapter(options.service, { providerDraftStore: options.providerDraftStore, hostedManifestStore: options.hostedManifestStore, hireStore: options.hireStore, listingChecker: options.listingChecker });
   const nativeMcp = createAgonNativeMcpHandler(mcp, options.managedPublisher, options.stageMcp);
   const marketAggregator = createMarketAggregator(options.marketSources ?? [
     {
@@ -1145,9 +1148,14 @@ export function createAgonRoutes(options: CreateAgonRoutesOptions) {
   app.all("/mcp", async (context) => {
     const authorization = context.req.header("authorization") ?? "";
     const token = authorization.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
-    const claims = token ? await options.verifyMcpToken(token) : null;
+    const verified = token ? await options.verifyMcpToken(token) : null;
+    const claims = verified && "address" in verified ? verified : null;
+    // A known-bad Agent access token gets a specific message instead of "connect a token".
+    const problem = verified && "problem" in verified ? verified.problem : null;
     return nativeMcp.fetch(context.req.raw, {
-      authInfo: claims
+      authInfo: problem
+        ? { token, clientId: "rejected", scopes: [], extra: { tokenProblem: problem } }
+        : claims
         ? {
             token,
             clientId: claims.client ?? claims.address,
