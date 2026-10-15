@@ -243,12 +243,14 @@ export function createAgonNativeMcpHandler(access: AccessAdapter, publisher?: Ma
         type: "object", properties: { draftId: { type: "string", minLength: 1, maxLength: 256 } },
         required: ["draftId"], additionalProperties: false,
       });
-      const managed = async (scope: string, task: (owner: string) => Promise<unknown>) => {
+      const managed = async (tool: string, draftId: string, scope: string, task: (owner: string) => Promise<unknown>) => {
         const owner = requireActor(context.authInfo, scope);
         if (typeof owner !== "string") return owner;
         try { return result(await task(owner)); }
         catch (error) {
           const message = error instanceof Error ? error.message : "";
+          // The tool answer stays safe; the real reason goes to the server log.
+          console.warn(`[agon-listing] ${tool} failed for draft ${draftId}: ${(message || String(error)).slice(0, 500)}`);
           const safe = /^(?:Run the listing checks|No managed publisher|Create a listing draft|draft changed|Publisher |The exact draft digest|Provision the publisher|Gas quote|Pinned gas quote|Circle transaction does not match|Identity receipt|Registered identity|Prepared publication|Publication target|Publication receipt|Hosted manifest|Managed draft digest|Publisher state changed)/.test(message);
           return failure("managed_publisher_failed", safe ? message : "Managed publisher action failed. Check its status before retrying.");
         }
@@ -257,12 +259,12 @@ export function createAgonNativeMcpHandler(access: AccessAdapter, publisher?: Ma
         title: "Get a publisher wallet to fund",
         description: "Provision one Circle-custodied Arc Testnet wallet for an existing listing draft. This does not sign or publish. Fund its address with native USDC for gas.",
         inputSchema: draftSchema,
-      }, async ({ draftId }) => managed("listing:prepare", (owner) => publisher.setup(owner, draftId)));
+      }, async ({ draftId }) => managed("setup_managed_publisher", draftId, "listing:prepare", (owner) => publisher.setup(owner, draftId)));
       server.registerTool("get_managed_listing", {
         title: "Get managed listing status",
         description: "Read the publisher wallet, funding, identity, and listing progress after a restart.",
         inputSchema: draftSchema,
-      }, async ({ draftId }) => managed("agon:read", (owner) => publisher.status(owner, draftId)));
+      }, async ({ draftId }) => managed("get_managed_listing", draftId, "agon:read", (owner) => publisher.status(owner, draftId)));
       server.registerTool("approve_managed_listing", {
         title: "Approve managed identity and publication",
         description: "After the user reviews the exact listing digest and AGON custody, approve this draft's identity registration and publication. Funding alone is not approval.",
@@ -275,12 +277,12 @@ export function createAgonNativeMcpHandler(access: AccessAdapter, publisher?: Ma
           },
           required: ["draftId", "termsDigest", "approval"], additionalProperties: false,
         }),
-      }, async ({ draftId, termsDigest, approval }) => managed("listing:write", (owner) => publisher.approve(owner, draftId, termsDigest, approval)));
+      }, async ({ draftId, termsDigest, approval }) => managed("approve_managed_listing", draftId, "listing:write", (owner) => publisher.approve(owner, draftId, termsDigest, approval)));
       server.registerTool("continue_managed_listing", {
         title: "Continue managed listing",
         description: "After explicit approval, advance ERC-8004 registration, hosted identity file, publication, and receipt reconciliation. Retry this tool while pending; idempotency prevents duplicate writes.",
         inputSchema: draftSchema,
-      }, async ({ draftId }) => managed("listing:write", (owner) => publisher.advance(owner, draftId)));
+      }, async ({ draftId }) => managed("continue_managed_listing", draftId, "listing:write", (owner) => publisher.advance(owner, draftId)));
     }
 
     if (ratings) {

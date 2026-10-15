@@ -213,3 +213,27 @@ test("rating tools: scores and tests are public, running a test needs playground
   assert.match(await text(await handler.fetch(call("run_agent_test", { listingReference: "ref" }), auth(["playground:run"]))), /\\"ref\\": \\"ref\\"/);
   assert.match(await text(await handler.fetch(call("run_agent_test", { listingReference: "ref" }), auth(["playground:run"]))), /You have run 5 tests in the last hour/);
 });
+
+test("a hidden managed publisher failure is logged on the server, while the tool returns the safe message", async () => {
+  const access = createMcpAccessAdapter({
+    async listListings() { return { ok: true as const, value: { items: [], nextCursor: null } }; },
+    async getListing() { return { ok: false as const, error: { code: "not_found", message: "not found" } }; },
+    async prepareX402Call() { return { ok: false as const, error: { code: "disabled", message: "disabled" } }; },
+  });
+  const publisher = { async advance() { throw new Error("internal rpc detail"); } } as never;
+  const handler = createAgonNativeMcpHandler(access, publisher);
+  const logged: string[] = [];
+  const original = console.warn;
+  console.warn = (m: unknown) => { logged.push(String(m)); };
+  try {
+    const res = await handler.fetch(request({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "continue_managed_listing", arguments: { draftId: "draft-9" } } }),
+      { authInfo: { token: "verified", clientId: "agon-cli", scopes: ["listing:write"], extra: { address: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", client: "agon-cli" } } });
+    const text = await res.text();
+    assert.match(text, /managed_publisher_failed/);
+    assert.doesNotMatch(text, /internal rpc detail/);
+  } finally {
+    console.warn = original;
+  }
+  assert.equal(logged.length, 1);
+  assert.match(logged[0]!, /continue_managed_listing failed for draft draft-9: internal rpc detail/);
+});

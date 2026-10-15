@@ -38,6 +38,8 @@ export function createBuilderRoutes(deps: {
   requireAuth: MiddlewareHandler<{ Variables: { address: string } }>;
   now?: () => Date;
   listing?: BuilderListingDeps;
+  /// Server log for failures the page only sees as a safe message.
+  log?: (message: string) => void;
 }): Hono {
   const app = new Hono<{ Variables: { address: string } }>();
   const now = deps.now ?? (() => new Date());
@@ -71,6 +73,9 @@ export function createBuilderRoutes(deps: {
       try {
         return c.json(await run(listing.publisher) as Record<string, unknown>);
       } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        const action = c.req.path.split("/").pop();
+        (deps.log ?? ((m: string) => console.warn(m)))(`[agon-listing] ${action} failed for draft ${c.req.param("id")}: ${detail.slice(0, 500)}`);
         const message = error instanceof Error && SAFE_PUBLISHER_MESSAGE.test(error.message) ? error.message : "Publishing could not continue. Check the status and try again.";
         return c.json({ error: "publishing_failed", message }, 400);
       }

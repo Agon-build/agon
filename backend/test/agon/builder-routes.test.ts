@@ -124,3 +124,15 @@ test("rate-limited checks and missing publishing get clear answers", async () =>
   const one = (await (await limited.request("http://x/drafts/draft-1")).json()) as { publishing: unknown };
   assert.equal(one.publishing, null);
 });
+
+test("a hidden publisher failure is logged on the server with the draft, while the page gets the safe message", async () => {
+  const logged: string[] = [];
+  const app = createBuilderRoutes({ tokens: fakeTokens(), requireAuth: auth(true), listing: listingFakes(), log: (m) => logged.push(m) });
+  await app.request("http://x/drafts", json(draftBody));
+  const res = await app.request("http://x/drafts/draft-1/advance", json({}));
+  assert.doesNotMatch(await res.text(), /secret internal detail/);
+  assert.equal(logged.length, 1);
+  assert.match(logged[0]!, /advance/);
+  assert.match(logged[0]!, /draft-1/);
+  assert.match(logged[0]!, /secret internal detail/);
+});
