@@ -24,6 +24,10 @@ html,
 body {
   margin: 0;
   padding: 0;
+  /* Corner markers sit half outside their section and can widen the page by
+     a few pixels. clip (unlike hidden) does not create a scroll container, so
+     the sticky header keeps working at every width. */
+  overflow-x: clip;
 }
 
 body {
@@ -560,12 +564,14 @@ footer {
 /* Mobile: never let a single stray-wide element (a long unbroken string, an
    un-clipped flex/grid row) make the document wider than the viewport, which
    makes mobile browsers zoom the whole page out to "PC mode". Internal
-   overflow-x-auto scrollers still scroll. Desktop is untouched so the sticky
-   side panels and wide layouts keep working. */
+   overflow-x-auto scrollers still scroll. clip keeps the header sticky; the
+   desktop rule above does the same for wide layouts. */
 @media (max-width: 1024px) {
   html,
   body {
+    /* hidden first for Safari before 16, which ignores clip. */
     overflow-x: hidden;
+    overflow-x: clip;
     max-width: 100%;
   }
 }

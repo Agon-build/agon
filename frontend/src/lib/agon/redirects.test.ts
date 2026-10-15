@@ -146,3 +146,25 @@ test("the header renders the List your agent button on desktop and in the mobile
   const src = readFileSync(new URL("../../components/redesign/TopNav.tsx", import.meta.url), "utf8");
   assert.equal((src.match(/AGON_LIST_CTA/g) ?? []).length >= 3, true, "imported and used twice");
 });
+
+test("the header and root layout render the same markup on the server and on first load", () => {
+  const nav = readFileSync(new URL("../../components/redesign/TopNav.tsx", import.meta.url), "utf8");
+  assert.match(nav, /useHydrated\(\)/, "auth-dependent header items wait for hydration");
+  assert.match(nav, /const isSignedIn = hydrated && /);
+  assert.match(nav, /const settling = !hydrated \|\| /);
+  const hook = readFileSync(new URL("../../hooks/useHydrated.ts", import.meta.url), "utf8");
+  assert.match(hook, /useSyncExternalStore/);
+  assert.match(readFileSync(new URL("../../app/layout.tsx", import.meta.url), "utf8"), /<html[^>]*suppressHydrationWarning/);
+});
+
+test("the Docs page title leaves the product name to the layout template", () => {
+  const src = readFileSync(new URL("../../app/docs/page.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(src, /title: "[^"]*Agon[^"]*"/);
+});
+
+test("the page root clips sideways overflow without breaking the sticky header", () => {
+  const css = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
+  const blocks = [...css.matchAll(/html,\s*body\s*\{([^}]*)\}/g)].map((m) => m[1]!);
+  assert.ok(blocks.some((b) => /overflow-x:\s*clip/.test(b)));
+  for (const b of blocks) if (/overflow-x:\s*hidden/.test(b)) assert.match(b, /overflow-x:\s*hidden;[\s\S]*overflow-x:\s*clip/, "hidden on html/body breaks position: sticky unless clip overrides it");
+});

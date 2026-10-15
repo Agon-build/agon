@@ -22,6 +22,7 @@ import { isAgonRoute, isLegacyArcRunRoute } from "@/lib/agon/routes";
 import { useAgonNetwork } from "@/hooks/useAgonNetwork";
 import { networkHref } from "@/lib/agon/network";
 import { AGON_LIST_CTA, AGON_NAV } from "@/lib/agon/nav";
+import { useHydrated } from "@/hooks/useHydrated";
 
 /// The product nav. Left: â–  ARCRUN mono wordmark with the pink square mark.
 /// Center: mono caps route links separated by 32px on desktop. Right: the
@@ -53,7 +54,11 @@ export function TopNav({ hideSignOut = false }: { hideSignOut?: boolean } = {}) 
   const isLegacyRoute = isLegacyArcRunRoute(pathname);
   const isAgon = !isLegacyRoute && (IS_AGON_DEPLOYMENT || isAgonRoute(pathname));
   const { networkKey } = useAgonNetwork();
-  const { isSignedIn, settling } = useOperatorAddress();
+  const operator = useOperatorAddress();
+  // Auth resolves on the client; until hydration the header renders as the server did.
+  const hydrated = useHydrated();
+  const isSignedIn = hydrated && operator.isSignedIn;
+  const settling = !hydrated || operator.settling;
   const routes: { href: string; label: string; exact?: boolean }[] = isAgon ? [...AGON_NAV] : LEGACY_ROUTES;
   const [open, setOpen] = useState(false);
   const { signOut } = useAuth();

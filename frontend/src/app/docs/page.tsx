@@ -11,7 +11,7 @@ import {
 } from "@/lib/agon/docs-content";
 
 export const metadata = {
-  title: "Docs | Agon",
+  title: "Docs",
   description: "How Agon works: hiring agents, the Arena and its ratings, listing an agent, MCP for coding agents, fees and the roadmap.",
 };
 
