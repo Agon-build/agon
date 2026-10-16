@@ -267,7 +267,15 @@ export function createManagedPublisher(options: {
       }
 
       const prepared = await options.access.publishListing(record.state.walletAddress!, { draftId, approval: "approve" });
-      if (!prepared.ok || !prepared.value.transaction || prepared.value.operationId !== record.state.operationId) throw new Error("Prepared publication changed before submission");
+      if (!prepared.ok) throw new Error(`Publication could not be prepared: ${prepared.message}`);
+      if (!prepared.value.transaction || !prepared.value.operationId) throw new Error("Publication was not prepared");
+      if (prepared.value.operationId !== record.state.operationId) {
+        // Once a publish transaction exists it is the only one; never switch under it.
+        if (record.state.publishTxId) throw new Error("Prepared publication changed before submission");
+        // Nothing was sent yet (for example two overlapping advances each prepared one): the latest
+        // preparation matches the current draft, so it becomes the one to send.
+        record = await save(record, { ...record.state, operationId: prepared.value.operationId });
+      }
       const tx = prepared.value.transaction;
       if (tx.chainId !== String(chainId) || !sameAddress(tx.to, options.serviceRegistry) || tx.functionName !== "publish") throw new Error("Publication target changed");
       if (!/^0x(?:[0-9a-fA-F]{2})+$/.test(tx.data)) throw new Error("Prepared publication calldata is invalid");

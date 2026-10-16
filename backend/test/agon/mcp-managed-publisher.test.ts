@@ -210,3 +210,20 @@ test("approval is refused without a recent passing check, and allowed after one"
   passed = true;
   assert.equal((await publisher.approve(actor, draftId, setup.termsDigest, "approve")).status, "ready");
 });
+
+test("a publication re-prepared before anything was sent is adopted instead of blocking the listing", async () => {
+  const f = await fixture();
+  let prepares = 0;
+  const access = f.access as unknown as { publishListing: () => Promise<unknown> };
+  // The first prepare is saved; every later one returns a different operation, as when two advances overlapped.
+  access.publishListing = async () => {
+    prepares += 1;
+    return { ok: true, value: { status: "prepared", operationId: prepares === 1 ? "operation-one" : "operation-two", transaction: {
+      chainId: "5042002", to: registry, data: "0xabcd", functionName: "publish", args: [],
+    } } };
+  };
+  await f.publisher.approve(actor, draftId, f.setup.termsDigest, "approve");
+  const published = await f.publisher.advance(actor, draftId);
+  assert.equal(published.status, "published");
+  assert.equal(f.calls.length, 2, "one register, one publish");
+});
