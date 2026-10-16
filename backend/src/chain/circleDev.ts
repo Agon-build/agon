@@ -6,6 +6,7 @@ import {
 import { config } from "../config/index.js";
 import { platformTransferInput } from "./circle-transfer-input.ts";
 import { circleErrorText } from "./circle-error.ts";
+import { publisherExecutionInput } from "./circle-publisher-input.ts";
 
 /// Backend integration with Circle Developer-Controlled Wallets. ArcRun email
 /// users sign in with an email, the backend mints a Circle wallet for them,
@@ -160,14 +161,8 @@ export async function executePublisherCall(input: {
 }): Promise<{ id: string; state: string }> {
   let response;
   try {
-    response = await getClient().createContractExecutionTransaction({
-      walletId: input.walletId,
-      contractAddress: input.contractAddress,
-      callData: input.callData,
-      idempotencyKey: input.idempotencyKey,
-      refId: input.refId,
-      fee: { type: "gas", config: input.fee },
-    });
+    // input.fee is the publisher's own affordability estimate; Circle sets the actual fee.
+    response = await getClient().createContractExecutionTransaction(publisherExecutionInput(input));
   } catch (error) {
     // Keep Circle's own reason; the SDK error alone only says the HTTP status.
     throw new Error(circleErrorText(error));
