@@ -2445,6 +2445,10 @@ create table if not exists agon_test_results (
 create index if not exists agon_test_results_agent_idx on agon_test_results(agent_id, created_at desc);
 create index if not exists agon_test_results_category_idx on agon_test_results(category_id, created_at desc);
 create index if not exists agon_test_results_runner_idx on agon_test_results(runner, created_at desc) where source = 'public';
+-- Each run keeps the rules it was scored against and a fingerprint anyone can recompute.
+alter table agon_test_results add column if not exists checks jsonb not null default '[]'::jsonb;
+alter table agon_test_results add column if not exists notes jsonb not null default '[]'::jsonb;
+alter table agon_test_results add column if not exists evidence_hash text;
 
 -- Plan 3f: latest Agon score per agent, category and window, and one all-time score per agent per day.
 create table if not exists agon_score_snapshots (

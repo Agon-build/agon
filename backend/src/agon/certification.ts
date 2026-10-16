@@ -78,7 +78,7 @@ export type AgonCertificationScheduleDecision = {
   blockedReason: string | null;
 };
 
-const CATEGORY_SLUGS: Readonly<Record<string, string>> = {
+export const CATEGORY_SLUGS: Readonly<Record<string, string>> = {
   "1": "research",
   "2": "market-data",
   "3": "analysis",

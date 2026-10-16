@@ -22,9 +22,10 @@ export type PublicTestView = {
   passed: boolean;
   durationMs: number;
   error: string | null;
+  evidenceHash: string;
   createdAt: string;
 };
-export type PublicTestDetail = PublicTestView & { input: unknown; output: unknown | null };
+export type PublicTestDetail = PublicTestView & { input: unknown; output: unknown | null; checks: TestResult["checks"]; notes: string[] };
 
 export type RunRefusal = "not_found" | "not_listed" | "no_test_for_category" | "user_limit" | "agent_limit" | "in_progress" | "unavailable";
 export type RunResult = { ok: true; result: PublicTestView } | { ok: false; code: RunRefusal };
@@ -37,12 +38,13 @@ export function shortAddress(address: string | null): string | null {
 export function publicView(r: TestResult): PublicTestView {
   return {
     id: r.id, agentId: r.agentId, listingReference: r.listingReference, categoryId: r.categoryId, taskId: r.taskId, variant: r.variant,
-    source: r.source, runner: shortAddress(r.runner), score: r.score, passed: r.passed, durationMs: r.durationMs, error: r.error, createdAt: r.createdAt.toISOString(),
+    source: r.source, runner: shortAddress(r.runner), score: r.score, passed: r.passed, durationMs: r.durationMs, error: r.error,
+    evidenceHash: r.evidenceHash, createdAt: r.createdAt.toISOString(),
   };
 }
 
 export function publicDetail(r: TestResult): PublicTestDetail {
-  return { ...publicView(r), input: r.input, output: r.output };
+  return { ...publicView(r), input: r.input, output: r.output, checks: r.checks, notes: r.notes };
 }
 
 export type TestService = {
@@ -73,7 +75,7 @@ export function createTestService(deps: {
       endpoint = testEndpointFromManifest(listing.manifestBody);
     } catch {
       const test = buildTestCase(listing.categoryId, variant)!;
-      return { taskId: test.taskId, variant: test.variant, score: 0, passed: false, durationMs: 0, input: test.input, output: null, error: "manifest_endpoint_missing", notes: [] };
+      return { taskId: test.taskId, variant: test.variant, score: 0, passed: false, durationMs: 0, input: test.input, output: null, error: "manifest_endpoint_missing", notes: [], checks: [{ label: "The service file declares a test endpoint", points: 0, max: 100 }] };
     }
     let ctx: { arcChainId: number; arcBlock: bigint };
     try {
@@ -97,6 +99,7 @@ export function createTestService(deps: {
   const toRow = (listing: TestableListing, outcome: TestRunOutcome, source: NewTestResult["source"], runner: string | null): NewTestResult => ({
     agentId: listing.agentId, listingReference: listing.listingReference, categoryId: listing.categoryId, taskId: outcome.taskId, variant: outcome.variant,
     source, runner, score: outcome.score, passed: outcome.passed, durationMs: outcome.durationMs, input: outcome.input, output: outcome.output, error: outcome.error,
+    checks: outcome.checks ?? [], notes: outcome.notes ?? [],
   });
 
   return {

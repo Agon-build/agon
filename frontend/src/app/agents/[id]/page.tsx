@@ -110,9 +110,9 @@ function ArcListingDetailPage() {
 
           {listing && service && proof && assurance ? (
             <div className="space-y-6">
-              {listing.risk.unverified || quarantined ? (
+              {quarantined ? (
                 <UnverifiedWarning message={listing.risk.warning} quarantineReason={listing.risk.quarantineReason} />
-              ) : (
+              ) : listing.risk.unverified ? null : (
                 <div className="border-l-[3px] border-[color:var(--ok)] bg-canvas-2 px-5 py-4">
                   <div className="flex flex-wrap items-center gap-3"><VerificationBadge status={listing.verification.status} /><span className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3">Exact version scope</span></div>
                   <p className="mt-3 max-w-[90ch] font-mono text-[11px] leading-relaxed text-ink-2">Agon tested Agent #{listing.agentId}, version {listing.version}, for {service.category.label}. A later version needs a new test.</p>
@@ -123,17 +123,11 @@ function ArcListingDetailPage() {
                 <div className="space-y-5">
                   <BracketedCell pad="lg">
                     <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[color:var(--hairline)] pb-5">
-                      <div className="flex items-start gap-4">
+                      <div className="flex items-center gap-4">
                         <AgentLogo logoUrl={service.logoUrl} name={service.name} cacheKey={listing.version} />
-                        <div>
-                        <div className="flex flex-wrap items-center gap-3 font-mono text-[10px] uppercase tracking-[0.16em]"><span className="text-accent">WHAT YOU GET</span>{cardBadges(listing).map((badge) => <span key={badge} className={badge === "Built by Agon" ? "bg-accent px-2 py-1 text-accent-ink" : badge === "Verified" ? "border border-[color:var(--ok)] px-2 py-1 text-ink" : "border border-[color:var(--hairline-strong)] px-2 py-1 text-ink-2"}>{badge}</span>)}<span className="text-ink-3">ERC-8004 #{listing.agentId}</span></div>
-                        <h2 className="mt-2 max-w-[22ch] font-stencil text-[30px] uppercase leading-[1.05] text-ink sm:text-[36px]">{service.name}</h2>
-                        </div>
+                        <div className="flex flex-wrap items-center gap-3 font-mono text-[10px] uppercase tracking-[0.16em]">{cardBadges(listing).map((badge) => <span key={badge} className={badge === "Built by Agon" ? "bg-accent px-2 py-1 text-accent-ink" : badge === "Verified" ? "border border-[color:var(--ok)] px-2 py-1 text-ink" : "border border-[color:var(--hairline-strong)] px-2 py-1 text-ink-2"}>{badge === "Listed" ? "Being checked" : badge}</span>)}<span className="text-ink-3">Agent #{listing.agentId}</span></div>
                       </div>
-                      <VerificationBadge status={listing.verification.status} quarantined={quarantined} />
                     </div>
-
-                    <p className="mt-6 max-w-[72ch] font-mono text-[13px] leading-[1.7] text-ink-2">{service.description}</p>
 
                     <dl className="mt-7 grid gap-px bg-[color:var(--hairline)] sm:grid-cols-2">
                       <OverviewFact label="CATEGORY" value={service.category.label} note={service.category.description} />
@@ -142,11 +136,11 @@ function ArcListingDetailPage() {
                       <OverviewFact label="DELIVERY TIME" value={service.timeoutMs ? `Up to ${Math.round(service.timeoutMs / 1000)} seconds` : "Provider terms"} note="The service declares its maximum response time." />
                     </dl>
 
-                    {service.tags.length ? (
+                    {visibleTags(service.tags, service.category.slug).length ? (
                       <div className="mt-6">
                         <div className="font-mono text-[9px] uppercase tracking-[0.14em] text-ink-3">SKILLS AND SEARCH TERMS</div>
                         <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 font-mono text-[11px] uppercase text-ink-2">
-                          {service.tags.map((tag) => <span key={tag}>#{tag}</span>)}
+                          {visibleTags(service.tags, service.category.slug).map((tag) => <span key={tag}>#{tag}</span>)}
                         </div>
                       </div>
                     ) : null}
@@ -158,7 +152,7 @@ function ArcListingDetailPage() {
                     ) : null}
                   </BracketedCell>
 
-                  <BracketedCell pad="lg">
+                  {servicesForAgent(agentListings, hydratedListing!).length > 1 ? <BracketedCell pad="lg">
                     <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">SERVICES</div>
                     <ul className="mt-4 divide-y divide-[color:var(--hairline)] border-y border-[color:var(--hairline)]">
                       {servicesForAgent(agentListings, hydratedListing!).map((row) => (
@@ -174,7 +168,7 @@ function ArcListingDetailPage() {
                         </li>
                       ))}
                     </ul>
-                  </BracketedCell>
+                  </BracketedCell> : null}
 
                   <BracketedCell pad="lg">
                     <div id="rating" className="scroll-mt-24">
@@ -206,7 +200,6 @@ function ArcListingDetailPage() {
                         state={quarantined || listing.endpointQa.status === "failed" ? "blocked" : listing.endpointQa.status === "passed" ? "ready" : "caution"}
                         value={quarantined ? "BLOCKED" : listing.endpointQa.status === "passed" ? "AVAILABLE" : listing.endpointQa.status === "failed" ? "BLOCKED" : listing.payment.directX402 ? "CHECK REQUIRED" : "NO"}
                       />
-                      <Readiness label="PROTECTED PROJECT" state={escrowEligible ? "ready" : "blocked"} value={escrowEligible ? "AVAILABLE" : "NOT AVAILABLE"} />
                     </div>
 
                     <div className="mt-5 border-t border-current pt-4 font-mono text-[10px] leading-relaxed opacity-70">
@@ -264,4 +257,9 @@ function DetailLoading() {
       <div className="mt-4 h-0.5 w-full overflow-hidden bg-canvas-3"><div className="h-full w-1/3 animate-pulse bg-accent" /></div>
     </div>
   );
+}
+
+/// Search terms worth showing: not bare numbers, not just the category name again.
+function visibleTags(tags: string[], categorySlug: string): string[] {
+  return tags.filter((tag) => !/^\d+$/.test(tag) && tag.toLowerCase() !== categorySlug.toLowerCase());
 }

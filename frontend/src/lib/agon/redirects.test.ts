@@ -235,3 +235,39 @@ test("the network shows once, in the header selector, not again under it", () =>
   assert.doesNotMatch(bar, /\{network\}/, "no second network chip under the header");
   assert.match(bar, /Preview data/);
 });
+
+test("audit: the app opens on the product, and pages show each thing once", () => {
+  const read = (f: string) => readFileSync(new URL(`../../${f}`, import.meta.url), "utf8");
+  const agents = read("app/agents/page.tsx");
+  assert.doesNotMatch(agents, /A SIMPLE WAY TO START|HeroStat|"Choose", "Compare", "Test", "Use"|LIST YOUR AGENT| loaded<\/span>|01 \/ CHOOSE A CATEGORY/, "Agents page drops the stats, the step strip, the list button and the loaded counter");
+  assert.match(agents, /Verified only/, "one plain verified toggle instead of a second ALL");
+  const hire = read("components/stage/HireClient.tsx");
+  assert.match(hire, /mode\.kind !== "idle" \? <div className="mt-6"><PhaseRail/, "the progress rail appears once a hire starts, not before");
+  const detail = read("app/agents/[id]/page.tsx");
+  assert.doesNotMatch(detail, /PROTECTED PROJECT/);
+  assert.doesNotMatch(detail, /<h2 className="mt-2 max-w-\[22ch\] font-stencil/, "the name is shown once, in the page header");
+  assert.match(detail, /visibleTags/, "numeric and category-only tags are hidden");
+  const nav = read("components/redesign/TopNav.tsx");
+  assert.doesNotMatch(nav, /Wallet and hires/);
+  assert.match(nav, />Account</);
+  assert.match(nav, /Sign out/);
+  const help = read("components/agon/AgonHelpButton.tsx");
+  assert.match(help, / hidden [^"]*sm:inline-flex/, "the floating help button does not cover forms on phones");
+  const account = read("app/account/AccountClient.tsx");
+  assert.doesNotMatch(account, /WALLET AND HIRES/);
+  assert.match(account, /Sign-in wallet/, "email users see the wallet that pays listing fees");
+  const list = read("components/agon/list/ListFlow.tsx");
+  assert.match(list, /autoChecked/, "checks start by themselves after saving");
+  assert.match(list, /from your sign-in wallet/);
+  const playground = read("components/agon/AgonPlayground.tsx");
+  assert.match(playground, /<details/, "the builder sample is folded away below the public test");
+});
+
+test("audit: a test run shows how it was scored and a fingerprint anyone can recompute", () => {
+  const read = (f: string) => readFileSync(new URL(`../../${f}`, import.meta.url), "utf8");
+  const runs = read("components/agon/TestRunList.tsx");
+  assert.match(runs, /How it was scored/);
+  assert.match(runs, /evidenceHash/);
+  assert.match(runs, /Download this run/);
+  assert.match(runs, /names\?/, "the feed shows agent names when it has them");
+});

@@ -11,6 +11,7 @@ export type TestRunOutcome = {
   output: unknown | null;
   error: string | null;
   notes: string[];
+  checks: { label: string; points: number; max: number }[];
 };
 
 export type TestRunDeps = { fetch: typeof fetch; assertPublic(url: string): Promise<URL>; now?: () => number };
@@ -32,6 +33,7 @@ export async function runAgentTest(input: {
   const started = now();
   const failed = (error: string): TestRunOutcome => ({
     taskId: test.taskId, variant: test.variant, score: 0, passed: false, durationMs: now() - started, input: test.input, output: null, error, notes: [],
+    checks: [{ label: "The agent gave a valid answer", points: 0, max: 100 }],
   });
 
   try {
@@ -73,6 +75,6 @@ export async function runAgentTest(input: {
   const scored = scoreAnswer(test, reply.output, input.ctx);
   return {
     taskId: test.taskId, variant: test.variant, score: scored.score, passed: scored.passed, durationMs: now() - started,
-    input: test.input, output: reply.output ?? null, error: null, notes: scored.notes,
+    input: test.input, output: reply.output ?? null, error: null, notes: scored.notes, checks: scored.checks,
   };
 }

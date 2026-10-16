@@ -253,6 +253,8 @@ function ArcPlayground() {
           <PublicTestPanel />
         </section>
 
+        <details className="mx-auto max-w-[1120px] px-4 pb-14 sm:px-6">
+          <summary className="mb-6 inline-flex min-h-11 cursor-pointer items-center font-mono text-[11px] uppercase tracking-[0.14em] text-ink-2 hover:text-ink">Check your own endpoint before listing</summary>
         <section className="mx-auto max-w-[1120px] px-4 pb-14 sm:px-6">
           <BracketedCell pad="lg">
             <div className="flex flex-wrap items-start justify-between gap-4">
@@ -350,6 +352,7 @@ function ArcPlayground() {
             </div>
           </section>
         ) : null}
+        </details>
       </main>
     </div>
   );

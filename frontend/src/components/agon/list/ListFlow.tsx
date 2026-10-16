@@ -71,6 +71,8 @@ export function ListFlow() {
   const [error, setError] = useState<string | null>(null);
   // Live publishing stops after repeated failures and waits for the builder to try again.
   const [stalled, setStalled] = useState(false);
+  // Checks start by themselves the first time the Check step opens for a saved draft.
+  const autoChecked = useRef(false);
   const [attempt, setAttempt] = useState(0);
   const [payTx, setPayTx] = useState<string | null>(null);
   const [paidAt, setPaidAt] = useState<number | null>(null);
@@ -130,9 +132,9 @@ export function ListFlow() {
           if (listing?.verification.status === "Verified" || i > 120) return;
           await sleep(10_000);
         } catch (e) {
-          setError(errorText(e, "Publishing paused. It resumes when you come back."));
           tries = afterLiveAttempt(tries, false);
-          if (tries.stalled) { setStalled(true); return; }
+          // A single failed try is retried quietly; the reason shows only once publishing has stopped.
+          if (tries.stalled) { setError(errorText(e, "Publishing paused. It resumes when you come back.")); setStalled(true); return; }
           await sleep(3_000);
         }
       }
@@ -155,6 +157,13 @@ export function ListFlow() {
       setBusy(null);
     }
   }, []);
+
+  useEffect(() => {
+    if (step !== "check" || !draftId || checks || autoChecked.current) return;
+    autoChecked.current = true;
+    void run("check", async () => { setChecks(await runChecks(draftId)); }, "The checks could not run. Try again.");
+  }, [step, draftId, checks, run]);
+
 
   if (!hydrated) return null;
   if (!me) {
@@ -316,7 +325,7 @@ function ApproveStep(props: { draftId: string | null; form: DraftForm; publishin
         {[
           ["Identity", "A new ERC-8004 agent identity, held in an Agon-managed wallet"],
           ["Listing", `${props.form.name} at ${props.form.priceUSDC} USDC per call`],
-          ["Network fee", short ? "The publishing wallet needs a little more gas" : "0.50 USDC from your wallet"],
+          ["Network fee", short ? "The publishing wallet needs a little more gas" : props.payPath === "circle" ? "0.50 USDC from your sign-in wallet (see Account)" : "0.50 USDC from your connected wallet"],
           ["Publishing wallet", publishing?.fundingAddress ?? "Preparing"],
         ].map(([k, v]) => <div key={k} className="bg-canvas p-3"><dt className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">{k}</dt><dd className="mt-1 break-all text-sm text-ink">{v}</dd></div>)}
       </dl>

@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type pg from "pg";
 
 export type TestSource = "public" | "agon_check";
@@ -17,9 +17,28 @@ export type TestResult = {
   input: unknown;
   output: unknown | null;
   error: string | null;
+  /** The rules the answer was scored against, with points earned. */
+  checks: { label: string; points: number; max: number }[];
+  notes: string[];
+  /** sha256 of the canonical record (task, variant, input, answer, score, checks); anyone can recompute it. */
+  evidenceHash: string;
   createdAt: Date;
 };
-export type NewTestResult = Omit<TestResult, "id" | "createdAt">;
+export type NewTestResult = Omit<TestResult, "id" | "createdAt" | "evidenceHash">;
+
+/// JSON with object keys sorted at every level, so the same record always gives the same bytes.
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value as object).sort().map((k) => `${JSON.stringify(k)}:${canonical((value as Record<string, unknown>)[k])}`).join(",")}}`;
+  }
+  return JSON.stringify(value ?? null);
+}
+
+/// The published fingerprint of a run. Recompute it from GET /agon/tests/:id to confirm the record was not changed.
+export function evidenceHashOf(r: { taskId: string; variant: number; input: unknown; output: unknown; score: number; checks: unknown[] }): string {
+  return `0x${createHash("sha256").update(canonical({ taskId: r.taskId, variant: r.variant, input: r.input, output: r.output ?? null, score: r.score, checks: r.checks })).digest("hex")}`;
+}
 export type TestLimits = { perUserHour: number; perAgentDay: number };
 export type LimitedInsert = { ok: true; result: TestResult } | { ok: false; code: "user_limit" | "agent_limit" };
 
@@ -45,10 +64,12 @@ export interface TestResultsStore {
 type Row = {
   id: string; agent_id: string; listing_reference: string; category_id: string; task_id: string; variant: number; source: TestSource;
   runner: string | null; score: number; passed: boolean; duration_ms: number; input: unknown; output: unknown | null; error: string | null; created_at: Date;
+  checks: TestResult["checks"] | null; notes: string[] | null; evidence_hash: string | null;
 };
 const fromRow = (r: Row): TestResult => ({
   id: r.id, agentId: String(r.agent_id), listingReference: r.listing_reference, categoryId: r.category_id, taskId: r.task_id, variant: r.variant,
-  source: r.source, runner: r.runner, score: r.score, passed: r.passed, durationMs: r.duration_ms, input: r.input, output: r.output, error: r.error, createdAt: r.created_at,
+  source: r.source, runner: r.runner, score: r.score, passed: r.passed, durationMs: r.duration_ms, input: r.input, output: r.output, error: r.error,
+  checks: r.checks ?? [], notes: r.notes ?? [], evidenceHash: r.evidence_hash ?? "", createdAt: r.created_at,
 });
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -58,10 +79,11 @@ export class PostgresTestResultsStore implements TestResultsStore {
 
   private async insertWith(client: pg.Pool | pg.PoolClient, r: NewTestResult, now: Date): Promise<TestResult> {
     const { rows } = await client.query<Row>(
-      `insert into agon_test_results (id, agent_id, listing_reference, category_id, task_id, variant, source, runner, score, passed, duration_ms, input, output, error, created_at)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13::jsonb, $14, $15) returning *`,
+      `insert into agon_test_results (id, agent_id, listing_reference, category_id, task_id, variant, source, runner, score, passed, duration_ms, input, output, error, created_at, checks, notes, evidence_hash)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13::jsonb, $14, $15, $16::jsonb, $17::jsonb, $18) returning *`,
       [randomUUID(), r.agentId, r.listingReference, r.categoryId, r.taskId, r.variant, r.source, r.runner?.toLowerCase() ?? null, r.score, r.passed, r.durationMs,
-        JSON.stringify(r.input ?? null), r.output === null || r.output === undefined ? null : JSON.stringify(r.output), r.error, now],
+        JSON.stringify(r.input ?? null), r.output === null || r.output === undefined ? null : JSON.stringify(r.output), r.error, now,
+        JSON.stringify(r.checks ?? []), JSON.stringify(r.notes ?? []), evidenceHashOf({ ...r, checks: r.checks ?? [] })],
     );
     return fromRow(rows[0]!);
   }

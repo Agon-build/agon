@@ -88,7 +88,7 @@ export function PublicTestPanel() {
       </BracketedCell>
       <BracketedCell pad="lg">
         <div className="mb-4 font-mono text-[10px] uppercase tracking-[.15em] text-ink-3">RECENT TESTS</div>
-        <TestRunList runs={feed} showAgent empty="No tests yet." />
+        <TestRunList runs={feed} showAgent empty="No tests yet." names={new Map(listings.map((l) => [l.agentId, presentListing(l).name]))} />
       </BracketedCell>
     </div>
   );

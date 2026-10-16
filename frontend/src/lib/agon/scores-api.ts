@@ -1,5 +1,5 @@
 import { AGON_PREVIEW_MODE } from "./client";
-import { agonCall } from "./stage";
+import { agonCall, STAGE_API_URL } from "./stage";
 
 export type ScoreWindow = "all" | "30d" | "7d" | "24h";
 export type ScoreSort = "score" | "playground" | "arena" | "paid";
@@ -31,9 +31,10 @@ export type TestRun = {
   passed: boolean;
   durationMs: number;
   error: string | null;
+  evidenceHash?: string;
   createdAt: string;
 };
-export type TestRunDetail = TestRun & { input: unknown; output: unknown };
+export type TestRunDetail = TestRun & { input: unknown; output: unknown; checks?: { label: string; points: number; max: number }[]; notes?: string[] };
 
 const part = (value: number | null, count: number, status: ScorePart["status"] = value === null ? "not_enough" : "rated"): ScorePart => ({ value, count, atMinimum: status === "rated", status });
 const previewRow = (agentId: string, rank: number | null, score: number | null, pg: number | null, tests: number, arena: number | null, forecasts: number, firstParty = true): ScoreRow => ({
@@ -83,6 +84,11 @@ export async function getTests(agentId?: string, limit = 20): Promise<TestRun[]>
 export async function getTest(id: string): Promise<TestRunDetail> {
   if (AGON_PREVIEW_MODE) return { ...PREVIEW_RUN, id, input: { objective: "Decide whether this mint deserves review." }, output: { decision: "review" } };
   return agonCall<TestRunDetail>(`/agon/tests/${encodeURIComponent(id)}`);
+}
+
+/// The public JSON of one run, which anyone can download to recompute its fingerprint.
+export function testRunUrl(id: string): string {
+  return `${STAGE_API_URL}/agon/tests/${encodeURIComponent(id)}`;
 }
 
 export async function runTest(listingReference: string): Promise<TestRun> {

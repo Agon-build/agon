@@ -92,7 +92,7 @@ export function HireClient() {
     <StageShell network={config?.network ?? null} preview={config?.preview}>
       <div className="mx-auto max-w-[1536px] px-4 pb-24 pt-6 sm:px-6 sm:pt-8">
         {canAct && wallet ? <WalletStrip wallet={wallet} onChanged={refreshWallet} /> : null}
-        <div className="mt-6"><PhaseRail step={step} working={working} /></div>
+        {mode.kind !== "idle" ? <div className="mt-6"><PhaseRail step={step} working={working} /></div> : null}
 
         <div className="mt-10 grid gap-12 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-16">
           <div className="min-w-0">

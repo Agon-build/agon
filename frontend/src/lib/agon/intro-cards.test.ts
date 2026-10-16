@@ -58,7 +58,7 @@ test("Enter leaves the intro unless focus is on one of its controls; arrows alwa
 });
 
 test("the intro shows on a first visit, never over a resumed job, and always with ?intro=1", () => {
-  assert.equal(introStartPhase({ seen: false, forced: false, resumingJob: false }), "show");
+  assert.equal(introStartPhase({ seen: false, forced: false, resumingJob: false }), "skip", "the app opens on Hire; the intro plays only when asked for");
   assert.equal(introStartPhase({ seen: true, forced: false, resumingJob: false }), "skip");
   assert.equal(introStartPhase({ seen: false, forced: false, resumingJob: true }), "skip");
   assert.equal(introStartPhase({ seen: true, forced: true, resumingJob: true }), "show");

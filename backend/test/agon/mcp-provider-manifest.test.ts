@@ -33,3 +33,8 @@ test("the same provider draft and identity produce stable keys and hashes", () =
   assert.equal(first.manifestHash, second.manifestHash);
   assert.equal(first.draftDigest, second.draftDigest);
 });
+
+test("a numeric registry category becomes a readable search tag", () => {
+  assert.deepEqual(compileProviderManifest({ ...draft, category: "3" }, { agentId: "42" }).body.service.tags, ["analysis"]);
+  assert.deepEqual(compileProviderManifest(draft, { agentId: "42" }).body.service.tags, ["crm"]);
+});

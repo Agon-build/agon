@@ -116,3 +116,42 @@ test("persists every lifecycle check and recovers a suspended version only after
   assert.equal(confirmed?.verificationActionState, "confirmed");
   assert.equal(confirmed?.verificationTransactionHash, HASH);
 });
+
+test("a certification job blocked only because the listing was briefly quarantined runs once the quarantine lifts", async () => {
+  const now = new Date("2026-10-16T12:00:00.000Z");
+  const job = await repository.withTransaction((transaction) => transaction.scheduleAgonCertification({
+    chainId: 5042002n, serviceRegistry: REGISTRY, listingId: 21n, agentId: 897358n, listingVersion: 1n,
+    serviceKey: `0x${"55".repeat(32)}`, category: 3n, manifestHash: HASH, manifestUri: "https://provider.example/agon/m.json",
+    paymentRail: "X402", providerSnapshot: PROVIDER, listingStatus: "Listed", quarantineReason: "missing_validated_version", now,
+  }));
+  assert.equal(job.state, "blocked");
+  const stateOf = async () => (await database.pool.query<{ state: string; blocked_reason: string | null }>("select state, blocked_reason from agon_certification_jobs where job_id = $1", [job.jobId])).rows[0];
+  await repository.reconcileListingAnchor({
+    chainId: 5042002n, serviceRegistry: REGISTRY, listingId: 21n, version: 1n, manifestHash: HASH,
+    manifestUri: "https://provider.example/agon/m.json", paymentRail: "X402", providerSnapshot: PROVIDER as `0x${string}`, validatedAt: now,
+  });
+  assert.deepEqual(await stateOf(), { state: "scheduled", blocked_reason: null });
+});
+
+test("the worker's start-up pass queues jobs left blocked by a quarantine that has since lifted, and leaves real quarantines alone", async () => {
+  const now = new Date("2026-10-16T13:00:00.000Z");
+  const schedule = (listingId: bigint) => repository.withTransaction((transaction) => transaction.scheduleAgonCertification({
+    chainId: 5042002n, serviceRegistry: REGISTRY, listingId, agentId: 900000n + listingId, listingVersion: 1n,
+    serviceKey: `0x${"66".repeat(32)}`, category: 3n, manifestHash: HASH, manifestUri: "https://provider.example/agon/x.json",
+    paymentRail: "X402", providerSnapshot: PROVIDER, listingStatus: "Listed", quarantineReason: "missing_validated_version", now,
+  }));
+  const listing = (listingId: bigint, quarantine: string | null) => database.pool.query(
+    `insert into agon_listings (chain_id, service_registry_address, listing_id, agent_id, service_key, category, current_version, manifest_hash, manifest_uri,
+       payment_rail, provider_snapshot, chain_status, status, verification, quarantine_reason, source_block_number, source_tx_hash, source_log_index, created_at, updated_at)
+     values (5042002, $1, $2, $3, $4, 3, 1, $5, 'https://provider.example/agon/x.json', 'X402', $6, 'Listed', $7, 'Unverified', $8, 1, $9, 0, now(), now())`,
+    [REGISTRY, listingId.toString(), (900000n + listingId).toString(), `0x${"66".repeat(32)}`, HASH, PROVIDER, quarantine ? "Suspended" : "Listed", quarantine, `0x${"77".repeat(32)}`],
+  );
+  const lifted = await schedule(31n);
+  const stillQuarantined = await schedule(32n);
+  await listing(31n, null);
+  await listing(32n, "manifest_hash_mismatch");
+  await repository.backfillAgonCertifications(100, now);
+  const stateOf = async (jobId: string) => (await database.pool.query<{ state: string }>("select state from agon_certification_jobs where job_id = $1", [jobId])).rows[0]!.state;
+  assert.equal(await stateOf(lifted.jobId), "scheduled");
+  assert.equal(await stateOf(stillQuarantined.jobId), "blocked");
+});

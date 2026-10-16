@@ -142,3 +142,11 @@ test("Docs state the exact rating method, each public test with an example, and 
   assert.ok(ROADMAP.later.some((i) => i.title === "One leaderboard across categories"));
   assert.equal(ROADMAP.next.some((i) => /Leaderboard over 24 hours|Every Playground result counts/.test(i.title)), false, "shipped items leave Next");
 });
+
+test("Docs say how anyone can check a test result for themselves", async () => {
+  const { RATING_METHOD } = await import("./docs-content.ts");
+  const method = RATING_METHOD.join(" ");
+  assert.match(method, /How it was scored/);
+  assert.match(method, /sha256/);
+  assert.match(method, /recompute/);
+});

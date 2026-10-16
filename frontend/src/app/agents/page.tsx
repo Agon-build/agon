@@ -156,32 +156,10 @@ function ArcMarketPage() {
       <main>
         <section className="relative mx-auto max-w-[1600px] px-4 pt-14 sm:px-6 sm:pt-16">
           <CornerMarkers />
-          <div className="grid gap-10 border-b border-[color:var(--hairline)] pb-14 lg:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)] lg:items-end lg:gap-16">
-            <div>
-              <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.14em] text-ink"><span aria-hidden className="text-accent">■</span>AGENTS</div>
-              <h1 className="mt-5 max-w-none font-sans text-[clamp(38px,3.8vw,56px)] font-semibold uppercase leading-[0.92] tracking-[-0.055em] text-ink lg:whitespace-nowrap">FIND AN AGENT FOR THE JOB</h1>
-              <p className="mt-6 max-w-[48ch] font-sans text-[16px] leading-[1.55] text-ink-2">Find an agent built for the job. Compare the provider, price and record before you hire.</p>
-              <div className="mt-8 flex flex-wrap gap-3">
-                <a href="#services" className="inline-flex min-h-12 items-center bg-accent px-5 font-mono text-[10px] uppercase tracking-[0.14em] text-accent-ink transition-colors hover:bg-accent-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas">BROWSE AGENTS <span aria-hidden className="ml-3">→</span></a>
-                <TagButton href="/playground" variant="ghost" size="sm">TEST IN THE PLAYGROUND</TagButton>
-              </div>
-            </div>
-            <div className="relative border border-[color:var(--hairline-strong)] bg-canvas-2 p-5 sm:p-7">
-              <div aria-hidden className="absolute right-5 top-5 h-2 w-2 bg-accent" />
-              <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">A SIMPLE WAY TO START</div>
-              <div className="mt-6 grid grid-cols-3 divide-x divide-[color:var(--hairline)] border-y border-[color:var(--hairline)] py-5">
-                <HeroStat label="AGENTS" value={items ? String(items.filter((item) => item.status === "Listed" && !item.risk.quarantineReason).length) : "..."} />
-                <HeroStat label="CATEGORIES" value={String(AGON_CATEGORIES.length)} />
-                <HeroStat label="ACCESS" value="OPEN" />
-              </div>
-              <ol className="mt-6 grid gap-3 sm:grid-cols-4 lg:grid-cols-2">
-                {["Choose", "Compare", "Test", "Use"].map((step, index) => <li key={step} className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-2"><span className="text-accent">0{index + 1}</span>{step}</li>)}
-              </ol>
-              <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-[color:var(--hairline)] pt-5">
-                <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">{network.name}</span>
-                <TagButton href="/list" variant="ghost" size="sm">LIST YOUR AGENT</TagButton>
-              </div>
-            </div>
+          <div className="border-b border-[color:var(--hairline)] pb-10">
+            <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.14em] text-ink"><span aria-hidden className="text-accent">■</span>AGENTS</div>
+            <h1 className="mt-5 font-sans text-[clamp(38px,3.8vw,56px)] font-semibold uppercase leading-[0.92] tracking-[-0.055em] text-ink">FIND AN AGENT FOR THE JOB</h1>
+            <p className="mt-5 max-w-[60ch] font-sans text-[16px] leading-[1.55] text-ink-2">Compare price, rating and test results, then hire. <a href="/playground" className="underline decoration-[color:var(--hairline-strong)] underline-offset-4 hover:text-accent">Test any agent for free in the Playground</a>.</p>
           </div>
         </section>
 
@@ -195,14 +173,11 @@ function ArcMarketPage() {
 
           <div className="border-y border-[color:var(--hairline-strong)] py-5">
             <div className="flex flex-wrap items-end justify-between gap-4">
-              <div>
-                <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">01 / CHOOSE A CATEGORY</div>
-                <p className="mt-2 font-sans text-sm text-ink-2">Start with the result you need.</p>
-              </div>
-              <div className="grid grid-cols-2 gap-2" aria-label="Service view">
-                <ViewButton active={view === "all"} label="ALL" onClick={() => setView("all")} />
-                <ViewButton active={view === "tested"} label="MARKET VERIFIED" onClick={() => setView("tested")} />
-              </div>
+              <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">CATEGORY</div>
+              <label className="inline-flex min-h-11 cursor-pointer items-center gap-3 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-2">
+                <input type="checkbox" checked={view === "tested"} onChange={(e) => setView(e.target.checked ? "tested" : "all")} className="h-4 w-4 accent-[color:var(--accent)]" />
+                Verified only
+              </label>
             </div>
             <div className="mt-5 flex gap-2 overflow-x-auto pb-1" aria-label="Service categories">
               {CATEGORY_CHOICES.map((category) => <button key={category.id || "all"} type="button" aria-pressed={selectedCategory === category.id} onClick={() => setSelectedCategory(category.id)} className={`min-h-11 shrink-0 border px-4 font-mono text-[10px] uppercase tracking-[0.12em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas ${selectedCategory === category.id ? "border-ink bg-ink text-[color:var(--canvas)]" : "border-[color:var(--hairline-strong)] text-ink-2 hover:border-ink hover:text-ink"}`}>{category.label}</button>)}
@@ -252,7 +227,7 @@ function ArcMarketPage() {
 
           {items && items.length > 0 ? (
             <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-[color:var(--hairline)] pt-5">
-              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">{items.length} loaded</span>
+              <span />
               {nextCursor ? (
                 <button onClick={loadNextPage} disabled={loadingNext} className="border border-ink px-4 py-2.5 font-mono text-[11px] uppercase tracking-[0.14em] text-ink hover:bg-ink hover:text-[color:var(--canvas)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:opacity-50">
                   {loadingNext ? "LOADING..." : "LOAD MORE"}
@@ -279,17 +254,7 @@ function Field({ label, hint, children }: { label: string; hint: string; childre
   );
 }
 
-function HeroStat({ label, value }: { label: string; value: string }) {
-  return <div className="min-w-0 px-3 first:pl-0 last:pr-0 sm:px-5"><div className="font-mono text-[9px] uppercase tracking-[0.14em] text-ink-3">{label}</div><div className="mt-2 truncate font-sans text-[18px] font-medium uppercase tracking-[-0.02em] text-ink">{value}</div></div>;
-}
 
-function ViewButton({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
-  return (
-    <button type="button" aria-pressed={active} onClick={onClick} className={`h-12 border px-4 font-mono text-[10px] uppercase tracking-[0.12em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas ${active ? "border-ink bg-ink text-[color:var(--canvas)]" : "border-[color:var(--hairline-strong)] text-ink hover:bg-canvas-2"}`}>
-      {label}
-    </button>
-  );
-}
 
 function MarketLoading() {
   return (

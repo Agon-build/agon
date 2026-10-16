@@ -14,7 +14,7 @@ function app(signedIn = true) {
   const service = createTestService({
     store,
     getListing: async (ref) => (ref === "5042002:0xreg:1" ? { agentId: "41", categoryId: "3", listed: true, listingReference: ref, manifestBody: { endpoint: "https://a.example/t" } } : null),
-    run: async (input) => ({ taskId: "evidence-under-pressure", variant: input.variant, score: 85, passed: true, durationMs: 3, input: { secret: "in" }, output: { secret: "out" }, error: null, notes: [] }),
+    run: async (input) => ({ taskId: "evidence-under-pressure", variant: input.variant, score: 85, passed: true, durationMs: 3, input: { secret: "in" }, output: { secret: "out" }, error: null, notes: [], checks: [{ label: "Decision is review or reject", points: 15, max: 15 }] }),
     chain: { chainId: async () => 5042002, blockNumber: async () => 1n },
     now: () => NOW,
     fetchDeps: { fetch: (async () => new Response("")) as typeof fetch, assertPublic: async (u: string) => new URL(u) },
@@ -43,6 +43,9 @@ test("a signed-in person runs a public test; the feed and agent list never show 
   assert.deepEqual(one.input, { secret: "in" });
   assert.deepEqual(one.output, { secret: "out" });
   assert.equal(one.runner, "0xbbbb…bbbb");
+  const evidence = one as unknown as { checks: { label: string }[]; evidenceHash: string };
+  assert.equal(evidence.checks[0]!.label, "Decision is review or reject", "the run shows the rules it was scored against");
+  assert.match(evidence.evidenceHash, /^0x[0-9a-f]{64}$/);
   assert.deepEqual(await (await routes.request("/remaining/41")).json(), { agentId: "41", remainingToday: 19, perAgentDay: 20 });
 });
 

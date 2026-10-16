@@ -14,7 +14,7 @@ const at = (minutes: number) => new Date(T0.getTime() + minutes * 60_000);
 const runner = (n: number) => `0x${n.toString(16).padStart(40, "a")}`;
 const row = (over: Partial<NewTestResult> = {}): NewTestResult => ({
   agentId: "41", listingReference: "agon:41", categoryId: "3", taskId: "evidence-under-pressure", variant: 0,
-  source: "public", runner: runner(1), score: 80, passed: true, durationMs: 120, input: { a: 1 }, output: { b: 2 }, error: null, ...over,
+  source: "public", runner: runner(1), score: 80, passed: true, durationMs: 120, input: { a: 1 }, output: { b: 2 }, error: null, checks: [], notes: [], ...over,
 });
 
 test("a public result reads back by id and by agent", async () => {
@@ -83,4 +83,17 @@ test("the recent feed is newest first", async () => {
   const b = await store.insert(row({ agentId: "9", source: "agon_check", runner: null }), at(1001));
   const recent = await store.listRecent(2);
   assert.deepEqual(recent.map((r) => r.id), [b.id, a.id]);
+});
+
+test("a run keeps its scoring checks and notes, and its fingerprint can be recomputed from what is published", async () => {
+  const { evidenceHashOf } = await import("../../src/agon/tests/results-store.ts");
+  const store = new PostgresTestResultsStore(db.pool);
+  const checks = [{ label: "Chain id is Arc's", points: 50, max: 50 }, { label: "A source is given", points: 0, max: 10 }];
+  const saved = await store.insert(row({ agentId: "11", source: "agon_check", runner: null, score: 50, checks, notes: ["Lost 10: A source is given"] }), at(5));
+  const got = (await store.get(saved.id))!;
+  assert.deepEqual(got.checks, checks);
+  assert.deepEqual(got.notes, ["Lost 10: A source is given"]);
+  assert.match(got.evidenceHash, /^0x[0-9a-f]{64}$/);
+  assert.equal(got.evidenceHash, evidenceHashOf({ taskId: got.taskId, variant: got.variant, input: got.input, output: got.output, score: got.score, checks: got.checks }));
+  assert.notEqual(evidenceHashOf({ taskId: got.taskId, variant: got.variant, input: got.input, output: got.output, score: 51, checks: got.checks }), got.evidenceHash, "any change to the record changes the fingerprint");
 });

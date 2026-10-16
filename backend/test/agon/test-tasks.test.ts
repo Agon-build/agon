@@ -63,3 +63,17 @@ test("Execution: allow only known destinations and supported actions", () => {
   assert.equal(scoreAnswer(t, { results: Object.keys(ex).map((id) => ({ id, decision: "allow" })) }, ctx).passed, false, "allowing everything fails");
   assert.equal(scoreAnswer(t, { results: [] }, ctx).score, 0);
 });
+
+test("every score comes with the rules it was checked against, so a person can see why", () => {
+  for (const c of TESTABLE_CATEGORIES) {
+    const t = buildTestCase(c, 0, ctx)!;
+    const empty = scoreAnswer(t, {}, ctx);
+    assert.ok(empty.checks.length >= 2, c);
+    assert.equal(empty.checks.reduce((s, k) => s + k.max, 0), 100, `${c} rules add up to 100`);
+    for (const k of empty.checks) assert.ok(k.label.length > 5 && k.points >= 0 && k.points <= k.max, c);
+  }
+  const t = buildTestCase("1", 0, ctx)!;
+  const out = scoreAnswer(t, { chainId: 5042002, blockNumber: "1000010", source: "rpc" }, ctx);
+  assert.deepEqual(out.checks.map((k) => [k.points, k.max]), [[50, 50], [40, 40], [10, 10]]);
+  assert.equal(out.checks.reduce((s, k) => s + k.points, 0), out.score);
+});

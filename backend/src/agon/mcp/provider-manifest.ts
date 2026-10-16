@@ -6,6 +6,7 @@ import {
 } from "../core/manifest.ts";
 import { manifestV2ServiceKey } from "../invocation/manifest-v2.ts";
 import { inspectManifest, verifyHostedManifestHash, type ManifestInspection } from "../manifest-inspector.ts";
+import { CATEGORY_SLUGS } from "../certification.ts";
 import type { ProviderDraftInput } from "./contract.ts";
 
 export type ProviderManifestIdentity = {
@@ -35,7 +36,8 @@ export function compileProviderManifest(draft: ProviderDraftInput, identity: Pro
       name: draft.name,
       description: draft.outcome,
       category: slug(draft.category),
-      tags: [slug(draft.category)],
+      // Registry ids ("3") read as their name ("analysis") so search tags make sense to people.
+      tags: [CATEGORY_SLUGS[draft.category] ?? slug(draft.category)],
       logoUrl: draft.logoUrl,
       version: identity.version ?? "1",
       capabilities: [slug(draft.category)],

@@ -1258,6 +1258,27 @@ export class PostgresAgonRepository {
         anchor.providerSnapshot.toLowerCase(),
       ],
     );
+    // A listing is often indexed a moment before Agon records its validated version, so its
+    // certification job starts blocked as quarantined. Once the anchor is confirmed, queue it.
+    await this.pool.query(
+      `update agon_certification_jobs
+          set state = 'scheduled', blocked_reason = null, next_attempt_at = now(), updated_at = now()
+        where chain_id = $1
+          and service_registry_address = $2
+          and listing_id = $3
+          and listing_version = $4
+          and manifest_hash = $5
+          and state = 'blocked'
+          and blocked_reason = 'listing_quarantined'
+          and task_id is not null`,
+      [
+        anchor.chainId.toString(),
+        anchor.serviceRegistry.toLowerCase(),
+        anchor.listingId.toString(),
+        anchor.version.toString(),
+        anchor.manifestHash.toLowerCase(),
+      ],
+    );
   }
 
   async getAgonEscrowIntent(intentId: string): Promise<StoredAgonEscrowIntent | null> {
@@ -2752,6 +2773,23 @@ export class AgonTransactionRepository {
   async backfillAgonCertifications(limit = 100, now = new Date()): Promise<number> {
     requireCertificationBackfillLimit(limit);
     if (!Number.isFinite(now.getTime())) throw new AgonStoreInvariantError("certification backfill time is invalid");
+    // Jobs created while a listing was briefly quarantined (indexed before its anchor was recorded)
+    // are queued once the listing is clean and active at that same version.
+    await this.client.query(
+      `update agon_certification_jobs j
+          set state = 'scheduled', blocked_reason = null, next_attempt_at = $1, updated_at = $1
+         from agon_listings l
+        where j.state = 'blocked'
+          and j.blocked_reason = 'listing_quarantined'
+          and j.task_id is not null
+          and l.chain_id = j.chain_id
+          and l.service_registry_address = j.service_registry_address
+          and l.listing_id = j.listing_id
+          and l.current_version = j.listing_version
+          and l.quarantine_reason is null
+          and l.status = 'Listed'`,
+      [now],
+    );
     const candidates = await this.client.query<CertificationBackfillRow>(
       `select v.chain_id, v.service_registry_address, v.listing_id, l.agent_id,
               l.service_key, l.category, v.version, v.manifest_hash, v.manifest_uri,

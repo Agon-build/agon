@@ -54,6 +54,8 @@ export function introKeyAction(key: string, onInteractiveControl: boolean): "nex
 
 /// Once per session; never over a resumed job (spec 4a: every other page opens directly); ?intro=1 always shows it.
 export function introStartPhase(input: { seen: boolean; forced: boolean; resumingJob: boolean }): "show" | "skip" {
-  if (input.forced) return "show";
-  return input.seen || input.resumingJob ? "skip" : "show";
+  // The app opens on Hire. The intro plays only when someone asks for it with ?intro=1.
+  void input.seen;
+  void input.resumingJob;
+  return input.forced ? "show" : "skip";
 }

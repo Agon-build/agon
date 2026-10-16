@@ -22,7 +22,7 @@ function setup(score = 90) {
   const calls: Parameters<typeof runAgentTest>[0][] = [];
   const run: typeof runAgentTest = async (input) => {
     calls.push(input);
-    return { taskId: "evidence-under-pressure", variant: input.variant, score, passed: score >= 80, durationMs: 5, input: { q: 1 }, output: { a: 1 }, error: null, notes: [] };
+    return { taskId: "evidence-under-pressure", variant: input.variant, score, passed: score >= 80, durationMs: 5, input: { q: 1 }, output: { a: 1 }, error: null, notes: [], checks: [{ label: "Decision is review or reject", points: 15, max: 15 }] };
   };
   const service = createTestService({
     store,
@@ -83,7 +83,7 @@ test("a burst of parallel tests by one person reaches the agent once at a time",
   const service = createTestService({
     store,
     getListing: async (ref) => listings[ref] ?? null,
-    run: async (input) => { calls += 1; await gate; return { taskId: "t", variant: input.variant, score: 90, passed: true, durationMs: 1, input: {}, output: {}, error: null, notes: [] }; },
+    run: async (input) => { calls += 1; await gate; return { taskId: "t", variant: input.variant, score: 90, passed: true, durationMs: 1, input: {}, output: {}, error: null, notes: [], checks: [{ label: "Decision is review or reject", points: 15, max: 15 }] }; },
     chain: { chainId: async () => 5042002, blockNumber: async () => 1000n },
     now: () => NOW,
     fetchDeps: { fetch: (async () => new Response("")) as typeof fetch, assertPublic: async (u: string) => new URL(u) },

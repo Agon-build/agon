@@ -7,6 +7,7 @@ import { AppHeader } from "@/components/pengu/AppHeader";
 import { TagButton } from "@/components/redesign/TagButton";
 import { WalletStrip } from "@/components/stage/WalletStrip";
 import { useNow } from "@/components/stage/useNow";
+import { useAuth } from "@/hooks/useAuth";
 import { getHistory, getWallet, StageApiError } from "@/lib/agon/stage";
 import type { HistoryItem, StageWallet } from "@/lib/agon/stage-types";
 import { historyRows } from "@/lib/agon/stage-view";
@@ -24,6 +25,7 @@ function Section({ id, title, children }: { id: string; title: string; children:
 
 export function AccountClient() {
   const now = useNow(60_000);
+  const { me } = useAuth();
   const [wallet, setWallet] = useState<WalletState>({ kind: "loading" });
   const [hires, setHires] = useState<HistoryItem[] | null>(null);
   const [page, setPage] = useState(1);
@@ -52,8 +54,15 @@ export function AccountClient() {
       <main className="mx-auto grid max-w-[1120px] gap-12 px-4 pb-24 pt-14 sm:px-6">
         <header>
           <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-accent">ACCOUNT</p>
-          <h1 className="mt-5 font-stencil text-[clamp(42px,7vw,80px)] uppercase leading-[0.9]">WALLET AND HIRES</h1>
+          <h1 className="mt-5 font-stencil text-[clamp(42px,7vw,80px)] uppercase leading-[0.9]">ACCOUNT</h1>
         </header>
+
+        {me?.walletKind === "circle" && me.address ? (
+          <Section id="sign-in-wallet" title="Sign-in wallet">
+            <p className="text-sm text-ink-2">Created with your email sign-in. Listing fees are paid from it, so keep a little USDC on Arc here.</p>
+            <p className="mt-3 break-all font-mono text-[12px] text-ink">{me.address}</p>
+          </Section>
+        ) : null}
 
         <Section id="wallet" title="Agent wallet">
           {wallet.kind === "loading" ? <p className="text-sm text-ink-3">Loading your wallet.</p> : null}

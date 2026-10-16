@@ -118,7 +118,7 @@ export function TopNav({ hideSignOut = false }: { hideSignOut?: boolean } = {}) 
             </>
           ) : null}
           {isAgon ? <AgonNetworkSelector /> : null}
-          {isAgon && isSignedIn ? <details className="relative hidden xl:block" onKeyDown={(event) => { if (event.key === "Escape") event.currentTarget.open = false; }}><summary className="flex min-h-11 cursor-pointer items-center border border-[color:var(--hairline-strong)] px-3 font-mono text-[10px] uppercase">Account</summary><nav aria-label="Account" className="absolute right-0 top-full z-50 mt-2 grid w-56 border border-[color:var(--hairline-strong)] bg-canvas p-2"><Link className="min-h-11 p-3 text-sm" href={networkHref("/account", networkKey)}>Wallet and hires</Link><button className="min-h-11 p-3 text-left text-sm" onClick={async () => { await signOut(); disconnect(); }}>Sign out</button></nav></details> : null}
+          {isAgon && isSignedIn ? <details className="relative hidden xl:block" onKeyDown={(event) => { if (event.key === "Escape") event.currentTarget.open = false; }}><summary className="flex min-h-11 cursor-pointer items-center border border-[color:var(--hairline-strong)] px-3 font-mono text-[10px] uppercase">Account</summary><nav aria-label="Account" className="absolute right-0 top-full z-50 mt-2 grid w-56 border border-[color:var(--hairline-strong)] bg-canvas p-2"><Link className="min-h-11 p-3 text-sm" href={networkHref("/account", networkKey)}>Account</Link><button className="min-h-11 p-3 text-left text-sm" onClick={async () => { await signOut(); disconnect(); }}>Sign out</button></nav></details> : null}
           <div className={isAgon ? "hidden xl:block" : ""}>{!isLogin && (!isAgon || !isSignedIn) && (settling ? null : <LoginButton />)}</div>
           {!isAgon ? <ThemeToggle /> : null}
           {!isLogin && (isAgon || isSignedIn) ? (
@@ -143,7 +143,7 @@ export function TopNav({ hideSignOut = false }: { hideSignOut?: boolean } = {}) 
                 see the selected network's payment-token state. */}
             {isSignedIn && !isAgon ? <WalletBalanceChip variant="row" /> : null}
             {isAgon ? <div className="flex flex-wrap items-center gap-3 border-b border-[color:var(--hairline)] py-3">{!isSignedIn ? <LoginButton /> : <NotificationBell />}</div> : null}
-            {isAgon && isSignedIn ? <Link className="inline-flex min-h-11 items-center py-3 text-sm" href={networkHref("/account", networkKey)}>Wallet and hires</Link> : null}
+            {isAgon && isSignedIn ? <Link className="inline-flex min-h-11 items-center border-b border-[color:var(--hairline)] py-3 font-mono text-[12px] uppercase tracking-[0.16em] text-ink-3" href={networkHref("/account", networkKey)}>Account</Link> : null}
             {routes.map((r) => {
               const active = r.exact ? pathname === r.href : pathname === r.href || pathname.startsWith(`${r.href}/`);
               return (
@@ -158,6 +158,8 @@ export function TopNav({ hideSignOut = false }: { hideSignOut?: boolean } = {}) 
                 </Link>
               );
             })}
+            {isAgon && isSignedIn ? <button type="button" onClick={async () => { await signOut(); disconnect(); }} className="inline-flex min-h-11 items-center py-3 text-left font-mono text-[12px] uppercase tracking-[0.16em] text-ink-3">Sign out</button> : null}
+            {isAgon ? <Link className="inline-flex min-h-11 items-center py-3 font-mono text-[12px] uppercase tracking-[0.16em] text-ink-3" href="/support">Help</Link> : null}
             {isSignedIn ? (
               <div className="border-b border-[color:var(--hairline)] py-3 last:border-0">
                 <ProfileLink />

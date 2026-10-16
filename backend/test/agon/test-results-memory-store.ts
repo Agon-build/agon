@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import type { NewTestResult, TestLimits, TestResult, TestResultsStore } from "../../src/agon/tests/results-store.ts";
+import { evidenceHashOf, type NewTestResult, type TestLimits, type TestResult, type TestResultsStore } from "../../src/agon/tests/results-store.ts";
 
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
@@ -8,7 +8,8 @@ const DAY_MS = 24 * HOUR_MS;
 export function createMemoryTestResultsStore(): TestResultsStore & { rows: TestResult[] } {
   const rows: TestResult[] = [];
   const add = (r: NewTestResult, now: Date) => {
-    const row: TestResult = { ...r, runner: r.runner?.toLowerCase() ?? null, id: randomUUID(), createdAt: now };
+    const checks = r.checks ?? [];
+    const row: TestResult = { ...r, checks, notes: r.notes ?? [], runner: r.runner?.toLowerCase() ?? null, id: randomUUID(), createdAt: now, evidenceHash: evidenceHashOf({ ...r, checks }) };
     rows.push(row);
     return row;
   };
