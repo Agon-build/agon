@@ -224,8 +224,9 @@ export function createManagedPublisher(options: {
       record = await save(record, { ...record.state, agentId: matches[0]!.toString(), registerTxHash: confirmed.hash });
     }
 
-    // A publish that already reached the chain (its confirmation lost) is recovered, never sent twice.
-    if (!record.state.publishTxId && options.recoverPublished) {
+    // A publish that already reached the chain is recovered from its event, never prepared or sent twice.
+    // This holds whether or not its Circle transaction ID was saved before the run that sent it stopped.
+    if (options.recoverPublished) {
       const found = await options.recoverPublished(record.state.walletAddress!, record.state.agentId!);
       if (found) {
         record = await save(record, { ...record.state, reference: found.reference, publishTxHash: found.txHash });

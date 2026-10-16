@@ -94,7 +94,7 @@ async function fixture(balance = 1_000_000_000_000_000_000n, badTransaction = fa
   const publisher = make();
   const setup = await publisher.setup(actor, draftId);
   storePublicId = (await store.get(actor, draftId))!.publicId;
-  return { publisher, make, setup, calls, access, publicId: storePublicId, walletCreates: () => walletCreates };
+  return { publisher, make, setup, calls, access, store, publicId: storePublicId, walletCreates: () => walletCreates };
 }
 
 test("a new draft gets one Circle wallet and requires an exact approval before writes", async () => {
@@ -251,4 +251,19 @@ test("two overlapping advances for one draft run one after the other and publish
   assert.equal(a.status, "published");
   assert.equal(b.status, "published");
   assert.equal(f.calls.length, 2, "one register, one publish");
+});
+
+test("a publish whose transaction is on record but never confirmed is recovered, not prepared again", async () => {
+  const f = await fixture(1_000_000_000_000_000_000n, false, false, false, true, {
+    recoverPublished: async () => ({ reference: `5042002:${registry}:1`, txHash: `0x${"b".repeat(64)}` as `0x${string}` }),
+  } as never);
+  await f.publisher.approve(actor, draftId, f.setup.termsDigest, "approve");
+  // The state this listing was really in: identity done, a publish sent and saved, then the run died before confirming.
+  const record = (await f.store.get(actor, draftId))!;
+  await f.store.save(record, { ...record.state, agentId: "42", registerTxHash: `0x${"c".repeat(64)}`, operationId: "operation-one", publishTxId: "circle-9" });
+  const access = f.access as unknown as { publishListing: () => Promise<unknown> };
+  access.publishListing = async () => ({ ok: false, code: "conflict", message: "listing publication simulation was refused by the contract" });
+  const out = await f.publisher.advance(actor, draftId);
+  assert.equal(out.status, "published");
+  assert.equal(out.reference, `5042002:${registry}:1`);
 });
