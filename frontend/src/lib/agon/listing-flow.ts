@@ -101,3 +101,12 @@ export function liveOutcome(p: { status: string; reference: string | null; nextA
 export function stepAfterError(message: string): FlowStep | null {
   return /^Run the listing checks/.test(message) ? "check" : null;
 }
+
+/// How many publishing failures in a row before the page stops retrying and asks.
+export const LIVE_MAX_FAILURES = 3;
+
+export function afterLiveAttempt(state: { failures: number; stalled: boolean }, ok: boolean): { failures: number; stalled: boolean } {
+  if (ok) return { failures: 0, stalled: false };
+  const failures = state.failures + 1;
+  return { failures, stalled: failures >= LIVE_MAX_FAILURES };
+}

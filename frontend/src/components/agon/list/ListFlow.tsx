@@ -13,7 +13,7 @@ import { useHydrated } from "@/hooks/useHydrated";
 import { advancePublishing, approvePublishing, createDraft, getDraft, runChecks, setupPublishing, type CheckResult, type PublishingResult } from "@/lib/agon/builder-api";
 import { AGON_CATEGORIES } from "@/lib/agon/catalog";
 import { getListing } from "@/lib/agon/client";
-import { EMPTY_FORM, FEE_ATOMIC, draftFromForm, feeLanding, formFromDraft, liveOutcome, missingFee, stepAfterError, stepFor, timeline, validateForm, type DraftForm, type FlowStep } from "@/lib/agon/listing-flow";
+import { EMPTY_FORM, FEE_ATOMIC, LIVE_MAX_FAILURES, afterLiveAttempt, draftFromForm, feeLanding, formFromDraft, liveOutcome, missingFee, stepAfterError, stepFor, timeline, validateForm, type DraftForm, type FlowStep } from "@/lib/agon/listing-flow";
 import { StageApiError } from "@/lib/agon/stage";
 import type { AgonListing } from "@/lib/agon/types";
 
@@ -69,6 +69,9 @@ export function ListFlow() {
   const [verification, setVerification] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Live publishing stops after repeated failures and waits for the builder to try again.
+  const [stalled, setStalled] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [payTx, setPayTx] = useState<string | null>(null);
   const [paidAt, setPaidAt] = useState<number | null>(null);
   const [feeShort, setFeeShort] = useState(false);
@@ -97,6 +100,7 @@ export function ListFlow() {
   useEffect(() => {
     if (step !== "live" || !draftId) return;
     let stop = false;
+    let tries = { failures: 0, stalled: false };
     const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
     const tick = async () => {
       let reference: string | null = null;
@@ -113,6 +117,7 @@ export function ListFlow() {
             if (stop) return;
             setPublishing(p);
             setError(null);
+            tries = afterLiveAttempt(tries, true);
             const outcome = liveOutcome(p);
             if (outcome.stop) { setError(outcome.message); return; }
             setFeeShort(p.status === "fund_wallet" && feeLanding({ balanceUSDC: p.balanceUSDC, paidAt, now: Date.now() }) === "ask_again");
@@ -126,13 +131,15 @@ export function ListFlow() {
           await sleep(10_000);
         } catch (e) {
           setError(errorText(e, "Publishing paused. It resumes when you come back."));
+          tries = afterLiveAttempt(tries, false);
+          if (tries.stalled) { setStalled(true); return; }
           await sleep(3_000);
         }
       }
     };
     void tick();
     return () => { stop = true; };
-  }, [step, draftId, networkKey, paidAt]);
+  }, [step, draftId, networkKey, paidAt, attempt]);
 
   const run = useCallback(async (label: string, action: () => Promise<void>, fallback: string) => {
     setBusy(label);
@@ -280,7 +287,14 @@ export function ListFlow() {
           {publishing?.txHash ? <p className="text-sm text-ink-2">Listing transaction: <a className="font-mono underline decoration-[color:var(--hairline-strong)] underline-offset-4 hover:text-accent" href={`${network.explorerUrl}/tx/${publishing.txHash}`} target="_blank" rel="noopener noreferrer">{publishing.txHash.slice(0, 10)}…</a></p> : null}
           {feeShort ? <p className="text-sm text-ink">The publishing wallet needs a little more gas. <button type="button" className="underline underline-offset-4 hover:text-accent" onClick={() => setStep("approve")}>Add it</button></p> : null}
           {publishing?.agentId ? <p className="font-mono text-xs text-ink-3">Agent #{publishing.agentId}, published from {publishing.fundingAddress}</p> : null}
-          {publishing?.reference ? <div><TagButton href={`/agents/${encodeURIComponent(publishing.reference)}`}>View your agent</TagButton></div> : <p className="text-sm text-ink-2">Publishing on Arc. This usually takes under a minute.</p>}
+          {publishing?.reference ? <div><TagButton href={`/agents/${encodeURIComponent(publishing.reference)}`}>View your agent</TagButton></div> : null}
+          {!publishing?.reference && !error && !stalled ? <p className="text-sm text-ink-2">Publishing on Arc. This usually takes under a minute.</p> : null}
+          {!publishing?.reference && stalled ? (
+            <div className="grid gap-3">
+              <p className="text-sm text-ink-2">Publishing stopped after {LIVE_MAX_FAILURES} tries. Your fee is safe in the publishing wallet, and nothing is sent twice.</p>
+              <div><TagButton variant="ghost" onClick={() => { setStalled(false); setError(null); setAttempt((a) => a + 1); }}>Try again</TagButton></div>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </section>

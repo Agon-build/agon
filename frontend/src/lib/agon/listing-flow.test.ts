@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { EMPTY_FORM, FEE_ATOMIC, draftFromForm, formFromDraft, missingFee, stepFor, timeline, validateForm } from "./listing-flow.ts";
@@ -65,4 +66,23 @@ test("a failed publish stops Live and shows why; a stale check sends the builder
   assert.deepEqual(liveOutcome({ status: "pending", reference: null, nextAction: "x" }), { stop: false, message: null });
   assert.equal(stepAfterError("Run the listing checks first: publishing needs a passing check."), "check");
   assert.equal(stepAfterError("Publishing could not continue."), null);
+});
+
+test("publishing stops after 3 failures in a row and asks the builder to try again; a success resets the count", async () => {
+  const { afterLiveAttempt, LIVE_MAX_FAILURES } = await import("./listing-flow.ts");
+  assert.equal(LIVE_MAX_FAILURES, 3);
+  let state = { failures: 0, stalled: false };
+  state = afterLiveAttempt(state, false);
+  state = afterLiveAttempt(state, false);
+  assert.deepEqual(state, { failures: 2, stalled: false });
+  assert.deepEqual(afterLiveAttempt(state, true), { failures: 0, stalled: false }, "a success resets");
+  assert.deepEqual(afterLiveAttempt(state, false), { failures: 3, stalled: true });
+});
+
+test("while stalled the page shows the reason and Try again, never the under-a-minute line", () => {
+  const src = readFileSync(new URL("../../components/agon/list/ListFlow.tsx", import.meta.url), "utf8");
+  assert.match(src, /afterLiveAttempt/);
+  assert.match(src, /stalled \?/);
+  assert.match(src, /Try again/);
+  assert.match(src, /!error && !stalled/);
 });
