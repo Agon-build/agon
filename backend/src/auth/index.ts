@@ -791,6 +791,17 @@ const agonManagedPublisher = config.agon.managedPublisherEnabled
       serviceRegistry: agonActiveDeployment.contracts.AgonServiceRegistry,
       publicApiUrl: config.agon.publicApiUrl,
       publicationReady: async () => (await agonReadiness.get(true)).ready,
+      // A publish that reached the chain but was never confirmed is confirmed from its own event.
+      recoverPublished: async (walletAddress, agentId) => {
+        const page = await agonService.listListings({ limit: 20, cursor: null, category: null, agentId });
+        if (!page.ok) return null;
+        const listing = page.value.items.find((item) => item.providerSnapshot.toLowerCase() === walletAddress.toLowerCase());
+        if (!listing) return null;
+        const txHash = listing.provenance.sourceTxHash as `0x${string}`;
+        const confirmed = await agonService.confirmPublishedListing(walletAddress, txHash);
+        if (!confirmed.ok) throw new Error(`Listing ${listing.id} is on chain but could not be confirmed: ${confirmed.error.message}`);
+        return { reference: listing.id, txHash };
+      },
       checksPassed: agonChecksPassed,
     })
   : undefined;

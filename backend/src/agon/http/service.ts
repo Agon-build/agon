@@ -142,6 +142,8 @@ export type AgonWriteAdapter = {
     actor: string,
     request: PauseListingRequest,
   ): Promise<Result<SubmittedOperation, AgonServiceError>>;
+  /** Confirms a publish already on chain from its event; optional for older writers. */
+  confirmPublishedListing?(actor: string, txHash: `0x${string}`): Promise<Result<SubmittedOperation, AgonServiceError>>;
   confirmOperation(
     actor: string,
     operationId: string,
@@ -1031,6 +1033,12 @@ export class PostgresAgonMarketService implements AgonMarketService {
       listingId: parsed.listingId.toString(),
     });
     return result;
+  }
+
+  /// Recovers a publish that reached the chain but was never confirmed.
+  async confirmPublishedListing(actor: string, txHash: `0x${string}`): Promise<Result<SubmittedOperation, AgonServiceError>> {
+    if (!this.options.writer?.confirmPublishedListing) return { ok: false, error: { code: "capability_unavailable", message: "listing writes are unavailable" } };
+    return this.options.writer.confirmPublishedListing(actor, txHash);
   }
 
   async confirmOperation(

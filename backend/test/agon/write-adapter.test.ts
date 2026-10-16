@@ -392,3 +392,29 @@ test("rejects reverted, mismatched, or duplicate matching receipt evidence", asy
     if (!confirmed.ok) assert.equal(confirmed.error.code, "receipt_invalid");
   }
 });
+
+test("a publish already on chain is confirmed from its own event, repairing the anchor without a second write", async () => {
+  const listingAnchors = new MemoryListingAnchors();
+  const { adapter, simulations } = setup({ transactionReceipt: receipt([listingLog()]), listingAnchors });
+  const prepared = await adapter.publishListing(ACTOR, {
+    chainId: "5042002", agentId: "42", serviceKey: SERVICE_KEY, manifestHash: MANIFEST_HASH, manifestUri: "ipfs://manifest", category: "3", paymentRail: "X402",
+  });
+  assert.equal(prepared.ok, true);
+  const before = simulations();
+  const recovered = await adapter.confirmPublishedListing(ACTOR, TX_HASH);
+  assert.equal(recovered.ok, true);
+  if (!recovered.ok) return;
+  assert.equal(recovered.value.resultReference, `5042002:${SERVICE}:9`);
+  assert.equal(listingAnchors.anchors.length, 1);
+  assert.equal(listingAnchors.reconciled.length, 1);
+  assert.equal(simulations(), before, "nothing simulated or sent again");
+});
+
+test("an on-chain publish with no matching prepared operation, or by another wallet, is not confirmed", async () => {
+  const { adapter } = setup({ transactionReceipt: receipt([listingLog()]) });
+  const none = await adapter.confirmPublishedListing(ACTOR, TX_HASH);
+  assert.equal(none.ok, false);
+  const other = setup({ transactionReceipt: receipt([listingLog({ actor: `0x${"9".repeat(40)}` })]) });
+  await other.adapter.publishListing(ACTOR, { chainId: "5042002", agentId: "42", serviceKey: SERVICE_KEY, manifestHash: MANIFEST_HASH, manifestUri: "ipfs://manifest", category: "3", paymentRail: "X402" });
+  assert.equal((await other.adapter.confirmPublishedListing(ACTOR, TX_HASH)).ok, false);
+});

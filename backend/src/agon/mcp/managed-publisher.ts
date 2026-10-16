@@ -83,6 +83,8 @@ export function createManagedPublisher(options: {
   publicationReady(): Promise<boolean>;
   /** The builder's approval needs a recent passing listing check (Plan 3e). */
   checksPassed?: (actor: string, draftId: string) => Promise<boolean>;
+  /** Finds and confirms this wallet's listing for the agent if it is already on chain. */
+  recoverPublished?: (walletAddress: Address, agentId: string) => Promise<{ reference: string; txHash: Hash } | null>;
 }) {
   const origin = new URL(options.publicApiUrl);
   if (origin.protocol !== "https:" || origin.pathname !== "/" || origin.search || origin.hash) throw new Error("managed publisher requires a public HTTPS API origin");
@@ -188,6 +190,98 @@ export function createManagedPublisher(options: {
     return "ready";
   }
 
+  async function advanceOnce(actor: string, draftId: string): Promise<ManagedPublisherResult> {
+    let record = await getRecord(actor, draftId);
+    const state = record.state;
+    if (state.reference) return view(record, "published", "wait_for_automatic_certification", state.publishTxHash);
+    if (!state.walletAddress || !state.walletId) return view(record, "needs_attention", "setup_managed_publisher");
+    if (!state.approvedAt) return view(record, "review_terms", "approve_managed_listing");
+    const [identityCode, serviceCode, writerReady] = await Promise.all([
+      options.chain.hasCode(options.identityRegistry), options.chain.hasCode(options.serviceRegistry), options.publicationReady(),
+    ]);
+    if (!identityCode || !serviceCode || !writerReady) {
+      return view(record, "needs_attention", "Identity registration and publication are paused until the configured Arc contracts and AGON writer are ready.");
+    }
+
+    if (!state.agentId) {
+      const uri = identityUri(record);
+      const callData = encodeFunctionData({ abi: identityAbi, functionName: "register", args: [uri] });
+      const submitted = await submit(record, "register", options.identityRegistry, callData);
+      if ("status" in submitted) return submitted;
+      record = submitted;
+      const confirmed = await confirmedTransaction(record, record.state.registerTxId!, options.identityRegistry, callData);
+      if ("status" in confirmed) return confirmed;
+      const matches = confirmed.receipt.logs.filter((log) => sameAddress(log.address, options.identityRegistry)).flatMap((log) => {
+        try {
+          const event = decodeEventLog({ abi: identityAbi, data: log.data, topics: log.topics, strict: true });
+          return event.eventName === "Transfer" && sameAddress(event.args.from, "0x0000000000000000000000000000000000000000")
+            && sameAddress(event.args.to, state.walletAddress!) ? [event.args.tokenId] : [];
+        } catch { return []; }
+      });
+      if (matches.length !== 1) throw new Error("Identity receipt lacks one matching mint Transfer event");
+      const [owner, onchainUri] = await Promise.all([options.chain.ownerOf(matches[0]!), options.chain.agentURI(matches[0]!)]);
+      if (!sameAddress(owner, state.walletAddress!) || onchainUri !== uri) throw new Error("Registered identity owner or URI does not match the publisher wallet");
+      record = await save(record, { ...record.state, agentId: matches[0]!.toString(), registerTxHash: confirmed.hash });
+    }
+
+    // A publish that already reached the chain (its confirmation lost) is recovered, never sent twice.
+    if (!record.state.publishTxId && options.recoverPublished) {
+      const found = await options.recoverPublished(record.state.walletAddress!, record.state.agentId!);
+      if (found) {
+        record = await save(record, { ...record.state, reference: found.reference, publishTxHash: found.txHash });
+        return view(record, "published", "wait_for_automatic_certification", found.txHash);
+      }
+    }
+
+    if (!record.state.operationId) {
+      const draft = await options.draftStore.get(actor, draftId);
+      if (!draft) throw new Error("Publisher draft disappeared");
+      const started = await options.access.startListing(record.state.walletAddress!, draft.draft);
+      if (!started.ok) throw new Error(started.message);
+      if (started.value.draftId !== draftId) throw new Error("Managed draft digest differs from the approved draft");
+      const compiled = await options.access.compileListing(record.state.walletAddress!, { draftId, agentId: record.state.agentId });
+      if (!compiled.ok || !compiled.value.manifestUri) throw new Error(compiled.ok ? "Hosted manifest unavailable" : compiled.message);
+      const prepared = await options.access.publishListing(record.state.walletAddress!, { draftId, approval: "approve" });
+      if (!prepared.ok || !prepared.value.operationId || !prepared.value.transaction) throw new Error(prepared.ok ? "Publication was not prepared" : prepared.message);
+      if (prepared.value.transaction.chainId !== String(chainId) || !sameAddress(prepared.value.transaction.to, options.serviceRegistry)
+        || prepared.value.transaction.functionName !== "publish") throw new Error("Publication target is not the active Arc registry");
+      record = await save(record, { ...record.state, operationId: prepared.value.operationId });
+    }
+
+    const prepared = await options.access.publishListing(record.state.walletAddress!, { draftId, approval: "approve" });
+    if (!prepared.ok) throw new Error(`Publication could not be prepared: ${prepared.message}`);
+    if (!prepared.value.transaction || !prepared.value.operationId) throw new Error("Publication was not prepared");
+    if (prepared.value.operationId !== record.state.operationId) {
+      // Once a publish transaction exists it is the only one; never switch under it.
+      if (record.state.publishTxId) throw new Error("Prepared publication changed before submission");
+      // Nothing was sent yet (for example two overlapping advances each prepared one): the latest
+      // preparation matches the current draft, so it becomes the one to send.
+      record = await save(record, { ...record.state, operationId: prepared.value.operationId });
+    }
+    const tx = prepared.value.transaction;
+    if (tx.chainId !== String(chainId) || !sameAddress(tx.to, options.serviceRegistry) || tx.functionName !== "publish") throw new Error("Publication target changed");
+    if (!/^0x(?:[0-9a-fA-F]{2})+$/.test(tx.data)) throw new Error("Prepared publication calldata is invalid");
+    const submitted = await submit(record, "publish", options.serviceRegistry, tx.data as Hash);
+    if ("status" in submitted) return submitted;
+    record = submitted;
+    const confirmed = await confirmedTransaction(record, record.state.publishTxId!, options.serviceRegistry, tx.data as Hash);
+    if ("status" in confirmed) return confirmed;
+    const published = await options.access.confirmListing(record.state.walletAddress!, { draftId, operationId: record.state.operationId, txHash: confirmed.hash });
+    if (!published.ok || published.value.status !== "published" || !published.value.reference) throw new Error(published.ok ? "Publication receipt did not reconcile" : published.message);
+    record = await save(record, { ...record.state, publishTxHash: confirmed.hash, reference: published.value.reference });
+    return view(record, "published", "wait_for_automatic_certification", confirmed.hash);
+  }
+
+  // One advance per draft at a time: overlapping runs once prepared two publications and lost one.
+  const running = new Map<string, Promise<unknown>>();
+  function serialized<T>(key: string, task: () => Promise<T>): Promise<T> {
+    const previous = running.get(key) ?? Promise.resolve();
+    const next = previous.catch(() => undefined).then(task);
+    running.set(key, next);
+    void next.catch(() => undefined).finally(() => { if (running.get(key) === next) running.delete(key); });
+    return next;
+  }
+
   return {
     async setup(actor: string, draftId: string): Promise<ManagedPublisherResult> {
       const draft = await options.draftStore.get(actor, draftId);
@@ -217,77 +311,8 @@ export function createManagedPublisher(options: {
           : !record.state.walletAddress ? "setup_managed_publisher"
             : !record.state.approvedAt ? "approve_managed_listing" : "continue_managed_listing");
     },
-    async advance(actor: string, draftId: string): Promise<ManagedPublisherResult> {
-      let record = await getRecord(actor, draftId);
-      const state = record.state;
-      if (state.reference) return view(record, "published", "wait_for_automatic_certification", state.publishTxHash);
-      if (!state.walletAddress || !state.walletId) return view(record, "needs_attention", "setup_managed_publisher");
-      if (!state.approvedAt) return view(record, "review_terms", "approve_managed_listing");
-      const [identityCode, serviceCode, writerReady] = await Promise.all([
-        options.chain.hasCode(options.identityRegistry), options.chain.hasCode(options.serviceRegistry), options.publicationReady(),
-      ]);
-      if (!identityCode || !serviceCode || !writerReady) {
-        return view(record, "needs_attention", "Identity registration and publication are paused until the configured Arc contracts and AGON writer are ready.");
-      }
-
-      if (!state.agentId) {
-        const uri = identityUri(record);
-        const callData = encodeFunctionData({ abi: identityAbi, functionName: "register", args: [uri] });
-        const submitted = await submit(record, "register", options.identityRegistry, callData);
-        if ("status" in submitted) return submitted;
-        record = submitted;
-        const confirmed = await confirmedTransaction(record, record.state.registerTxId!, options.identityRegistry, callData);
-        if ("status" in confirmed) return confirmed;
-        const matches = confirmed.receipt.logs.filter((log) => sameAddress(log.address, options.identityRegistry)).flatMap((log) => {
-          try {
-            const event = decodeEventLog({ abi: identityAbi, data: log.data, topics: log.topics, strict: true });
-            return event.eventName === "Transfer" && sameAddress(event.args.from, "0x0000000000000000000000000000000000000000")
-              && sameAddress(event.args.to, state.walletAddress!) ? [event.args.tokenId] : [];
-          } catch { return []; }
-        });
-        if (matches.length !== 1) throw new Error("Identity receipt lacks one matching mint Transfer event");
-        const [owner, onchainUri] = await Promise.all([options.chain.ownerOf(matches[0]!), options.chain.agentURI(matches[0]!)]);
-        if (!sameAddress(owner, state.walletAddress!) || onchainUri !== uri) throw new Error("Registered identity owner or URI does not match the publisher wallet");
-        record = await save(record, { ...record.state, agentId: matches[0]!.toString(), registerTxHash: confirmed.hash });
-      }
-
-      if (!record.state.operationId) {
-        const draft = await options.draftStore.get(actor, draftId);
-        if (!draft) throw new Error("Publisher draft disappeared");
-        const started = await options.access.startListing(record.state.walletAddress!, draft.draft);
-        if (!started.ok) throw new Error(started.message);
-        if (started.value.draftId !== draftId) throw new Error("Managed draft digest differs from the approved draft");
-        const compiled = await options.access.compileListing(record.state.walletAddress!, { draftId, agentId: record.state.agentId });
-        if (!compiled.ok || !compiled.value.manifestUri) throw new Error(compiled.ok ? "Hosted manifest unavailable" : compiled.message);
-        const prepared = await options.access.publishListing(record.state.walletAddress!, { draftId, approval: "approve" });
-        if (!prepared.ok || !prepared.value.operationId || !prepared.value.transaction) throw new Error(prepared.ok ? "Publication was not prepared" : prepared.message);
-        if (prepared.value.transaction.chainId !== String(chainId) || !sameAddress(prepared.value.transaction.to, options.serviceRegistry)
-          || prepared.value.transaction.functionName !== "publish") throw new Error("Publication target is not the active Arc registry");
-        record = await save(record, { ...record.state, operationId: prepared.value.operationId });
-      }
-
-      const prepared = await options.access.publishListing(record.state.walletAddress!, { draftId, approval: "approve" });
-      if (!prepared.ok) throw new Error(`Publication could not be prepared: ${prepared.message}`);
-      if (!prepared.value.transaction || !prepared.value.operationId) throw new Error("Publication was not prepared");
-      if (prepared.value.operationId !== record.state.operationId) {
-        // Once a publish transaction exists it is the only one; never switch under it.
-        if (record.state.publishTxId) throw new Error("Prepared publication changed before submission");
-        // Nothing was sent yet (for example two overlapping advances each prepared one): the latest
-        // preparation matches the current draft, so it becomes the one to send.
-        record = await save(record, { ...record.state, operationId: prepared.value.operationId });
-      }
-      const tx = prepared.value.transaction;
-      if (tx.chainId !== String(chainId) || !sameAddress(tx.to, options.serviceRegistry) || tx.functionName !== "publish") throw new Error("Publication target changed");
-      if (!/^0x(?:[0-9a-fA-F]{2})+$/.test(tx.data)) throw new Error("Prepared publication calldata is invalid");
-      const submitted = await submit(record, "publish", options.serviceRegistry, tx.data as Hash);
-      if ("status" in submitted) return submitted;
-      record = submitted;
-      const confirmed = await confirmedTransaction(record, record.state.publishTxId!, options.serviceRegistry, tx.data as Hash);
-      if ("status" in confirmed) return confirmed;
-      const published = await options.access.confirmListing(record.state.walletAddress!, { draftId, operationId: record.state.operationId, txHash: confirmed.hash });
-      if (!published.ok || published.value.status !== "published" || !published.value.reference) throw new Error(published.ok ? "Publication receipt did not reconcile" : published.message);
-      record = await save(record, { ...record.state, publishTxHash: confirmed.hash, reference: published.value.reference });
-      return view(record, "published", "wait_for_automatic_certification", confirmed.hash);
+    advance(actor: string, draftId: string): Promise<ManagedPublisherResult> {
+      return serialized(`${actor.toLowerCase()}|${draftId}`, () => advanceOnce(actor, draftId));
     },
     async publicIdentity(publicId: string): Promise<Record<string, unknown> | null> {
       const record = await options.store.getPublic(publicId);

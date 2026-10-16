@@ -239,23 +239,7 @@ export class ViemAgonWriteAdapter implements AgonWriteAdapter {
       const category = positive(request.category, "category");
       const serviceKey = bytes32(request.serviceKey, "service key");
       const manifestHash = bytes32(request.manifestHash, "manifest hash");
-      const paymentRail = request.paymentRail === "X402" ? 0 : 1;
-      const args = [agentId, serviceKey, manifestHash, request.manifestUri, category, paymentRail] as const;
-      const data = encodeFunctionData({ abi: agonServiceRegistryAbi, functionName: "publish", args });
-      const transaction: AgonTransactionIntent = {
-        chainId: request.chainId,
-        to: this.deployment.contracts.AgonServiceRegistry,
-        data,
-        functionName: "publish",
-        args: [
-          request.agentId,
-          serviceKey,
-          manifestHash,
-          request.manifestUri,
-          request.category,
-          String(paymentRail),
-        ],
-      };
+      const { args, transaction } = this.publishIntent(request, agentId, category, serviceKey, manifestHash);
       const payloadHash = intentHash(BigInt(request.chainId), actor, transaction);
       const existing = await this.operations.getByPayload(actor, "publish_listing", payloadHash);
       if (existing?.state === "confirmed") return { ok: true, value: operationView(existing) };
@@ -290,6 +274,60 @@ export class ViemAgonWriteAdapter implements AgonWriteAdapter {
       }
       return unexpectedFailure("listing preparation failed", error);
     }
+  }
+
+  /// The exact publish call Agon prepares; recovery rebuilds it from the chain event to find its operation.
+  private publishIntent(request: PublishListingRequest, agentId: bigint, category: bigint, serviceKey: `0x${string}`, manifestHash: `0x${string}`) {
+    const paymentRail = request.paymentRail === "X402" ? 0 : 1;
+    const args = [agentId, serviceKey, manifestHash, request.manifestUri, category, paymentRail] as const;
+    const data = encodeFunctionData({ abi: agonServiceRegistryAbi, functionName: "publish", args });
+    const transaction: AgonTransactionIntent = {
+      chainId: request.chainId,
+      to: this.deployment.contracts.AgonServiceRegistry,
+      data,
+      functionName: "publish",
+      args: [request.agentId, serviceKey, manifestHash, request.manifestUri, request.category, String(paymentRail)],
+    };
+    return { args, transaction };
+  }
+
+  /// Confirms a publish that is already on chain but was never confirmed (for example when the
+  /// response that carried its transaction was lost). The operation is found by rebuilding the
+  /// exact prepared intent from the ListingPublished event, so nothing is guessed and nothing is sent.
+  async confirmPublishedListing(actorInput: string, txHash: `0x${string}`): Promise<Result<SubmittedOperation, AgonServiceError>> {
+    let actor: `0x${string}`;
+    let receipt: TransactionReceipt;
+    try {
+      actor = getAddress(actorInput);
+      receipt = await this.client.getTransactionReceipt({ hash: txHash });
+    } catch {
+      return failure("receipt_unavailable", "transaction receipt is not available yet");
+    }
+    if (receipt.status !== "success") return failure("receipt_invalid", "transaction reverted on chain");
+    for (const log of matchingLogs(receipt, this.deployment.contracts.AgonServiceRegistry)) {
+      let args;
+      try {
+        const decoded = decodeEventLog({ abi: agonServiceRegistryAbi, ...log, strict: true });
+        if (decoded.eventName !== "ListingPublished") continue;
+        args = decoded.args;
+      } catch {
+        continue;
+      }
+      if (!isAddressEqual(args.providerSnapshot, actor)) continue;
+      const request: PublishListingRequest = {
+        chainId: String(this.deployment.chainId),
+        agentId: args.agentId.toString(),
+        serviceKey: args.serviceKey,
+        manifestHash: args.manifestHash,
+        manifestUri: args.manifestURI,
+        category: args.category.toString(),
+        paymentRail: args.paymentRail === 0 ? "X402" : "Escrow",
+      };
+      const { transaction } = this.publishIntent(request, args.agentId, args.category, args.serviceKey, args.manifestHash);
+      const operation = await this.operations.getByPayload(actor, "publish_listing", intentHash(BigInt(request.chainId), actor, transaction));
+      if (operation) return this.confirmOperation(actor, operation.operationId, txHash);
+    }
+    return failure("not_found", "no prepared publication matches this transaction");
   }
 
   async publishListingVersion(

@@ -227,3 +227,28 @@ test("a publication re-prepared before anything was sent is adopted instead of b
   assert.equal(published.status, "published");
   assert.equal(f.calls.length, 2, "one register, one publish");
 });
+
+test("a listing already published on chain is recovered and confirmed instead of published again", async () => {
+  const recovered: string[] = [];
+  const f = await fixture(1_000_000_000_000_000_000n, false, false, false, true, {
+    recoverPublished: async (walletAddress: string, agentId: string) => {
+      recovered.push(`${walletAddress}:${agentId}`);
+      return { reference: `5042002:${registry}:1`, txHash: `0x${"a".repeat(64)}` as `0x${string}` };
+    },
+  } as never);
+  await f.publisher.approve(actor, draftId, f.setup.termsDigest, "approve");
+  const out = await f.publisher.advance(actor, draftId);
+  assert.equal(out.status, "published");
+  assert.equal(out.reference, `5042002:${registry}:1`);
+  assert.equal(f.calls.length, 1, "only the identity registration; no second publish");
+  assert.deepEqual(recovered, [`${wallet}:42`]);
+});
+
+test("two overlapping advances for one draft run one after the other and publish once", async () => {
+  const f = await fixture();
+  await f.publisher.approve(actor, draftId, f.setup.termsDigest, "approve");
+  const [a, b] = await Promise.all([f.publisher.advance(actor, draftId), f.publisher.advance(actor, draftId)]);
+  assert.equal(a.status, "published");
+  assert.equal(b.status, "published");
+  assert.equal(f.calls.length, 2, "one register, one publish");
+});
