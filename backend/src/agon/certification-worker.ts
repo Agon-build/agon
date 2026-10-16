@@ -25,6 +25,8 @@ export type CertificationWorkerRepository = {
   backfillAgonCertifications?: (limit?: number, now?: Date) => Promise<number>;
   claimAgonCertification(now?: Date): Promise<AgonCertificationJob | null>;
   deferAgonCertification(jobId: string, nextAttemptAt: Date, reason: string): Promise<void>;
+  /** Brings the next check forward so a Verified write that never reached the chain is retried soon. */
+  retryAgonCertificationVerification?: (jobId: string, at: Date) => Promise<void>;
   completeAgonCertification(jobId: string, result: PlaygroundRun): Promise<void>;
   finalizeAgonCertificationLifecycle(jobId: string, check: AgonLifecycleCheckResult): Promise<AgonLifecycleTransition>;
   recordAgonCertificationVerificationAction(input: {
@@ -70,6 +72,18 @@ export type CertificationWorkerOptions = {
 export type CertificationWorkerResult = "idle" | "completed" | "deferred" | "failed";
 
 type CertificationAlert = Parameters<NonNullable<CertificationWorkerOptions["alert"]>>[0];
+
+const VERIFICATION_RETRY_MS = 5 * 60_000;
+
+/// One sentence for people: never the raw RPC error, which can carry a private URL or a request body.
+function plainVerificationFailure(error: unknown, sent: boolean): string {
+  const message = error instanceof Error ? error.message : "";
+  const network = /unreachable|RPC|fetch failed|timeout|ECONN|socket|upstream/i.test(message);
+  if (sent) return "marketplace_state_write_failed: The Verified record was sent to Arc but not yet confirmed. Agon keeps checking it.";
+  return network
+    ? "marketplace_state_write_failed: Agon could not reach the Arc network to record Verified. It retries in 5 minutes."
+    : "marketplace_state_write_failed: Agon could not record Verified on Arc. It retries in 5 minutes.";
+}
 
 async function sendCertificationAlert(options: CertificationWorkerOptions, input: CertificationAlert): Promise<void> {
   if (!options.alert) return;
@@ -252,12 +266,16 @@ export async function runAgonCertificationOnce(options: CertificationWorkerOptio
           error: error instanceof Error ? error.message : "marketplace state write failed",
         });
       }
+      // Nothing reached the chain, so the write is safe to try again soon rather than at the next 6-hourly check.
+      const sent = error instanceof AgonListingVerificationError && Boolean(error.transactionHash);
+      if (!sent) await options.repository.retryAgonCertificationVerification?.(job.jobId, new Date(now.getTime() + VERIFICATION_RETRY_MS));
+      console.warn(`[agon-certification] verification write failed for ${job.listingReference}: ${error instanceof Error ? error.message.slice(0, 300) : "unknown"}`);
       await sendCertificationAlert(options, {
         operator: options.alertOperator ?? job.providerSnapshot,
         listingReference: job.listingReference,
         listingVersion: job.listingVersion,
         status: transition.status === "suspended" ? "suspended" : "warning",
-        reasons: [`marketplace_state_write_failed:${error instanceof Error ? error.message : "unknown"}`],
+        reasons: [plainVerificationFailure(error, sent)],
         consecutiveFailures: transition.consecutiveFailures,
       });
     }

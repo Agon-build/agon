@@ -15,7 +15,7 @@ import { createWalletClient, http, parseAbi } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { config } from "../config/index.js";
 import { withActiveAgonContracts } from "../config/deployments.ts";
-import { publicClient, arcTestnet } from "../chain/arc.js";
+import { publicClient, arcTestnet, arcWriteTransport } from "../chain/arc.js";
 import { usdcMinimalAbi } from "../chain/abi.js";
 import { pool, query } from "../db/pool.js";
 import { PostgresAgonRepository } from "../agon/store/repository.js";
@@ -544,7 +544,7 @@ const coordinatorJobEscrowSigner = config.coordinator.privateKey && configuredJo
   ? privateKeyToAccount(config.coordinator.privateKey)
   : undefined;
 const coordinatorJobEscrowWallet = coordinatorJobEscrowSigner
-  ? createWalletClient({ account: coordinatorJobEscrowSigner, chain: arcTestnet, transport: http(config.rpcHttp) })
+  ? createWalletClient({ account: coordinatorJobEscrowSigner, chain: arcTestnet, transport: arcWriteTransport })
   : undefined;
 const coordinatorJobEscrowClient = coordinatorJobEscrowWallet
   ? {
@@ -596,7 +596,7 @@ const signerMatchesArenaEvaluator = Boolean(
   && arenaEvaluatorSigner.address.toLowerCase() === configuredArenaEvaluator,
 );
 const arenaEvaluatorWallet = arenaEvaluatorSigner
-  ? createWalletClient({ account: arenaEvaluatorSigner, chain: arcTestnet, transport: http(config.rpcHttp) })
+  ? createWalletClient({ account: arenaEvaluatorSigner, chain: arcTestnet, transport: arcWriteTransport })
   : undefined;
 const arenaEvaluatorAdapter = configuredArena
   ? createViemAgonArenaEvaluator({
@@ -2285,7 +2285,7 @@ function coordinatorSigner() {
   const pk = config.coordinator.privateKey;
   if (!pk) return null;
   const account = privateKeyToAccount(pk);
-  const wallet = createWalletClient({ account, chain: arcTestnet, transport: http(config.rpcHttp) });
+  const wallet = createWalletClient({ account, chain: arcTestnet, transport: arcWriteTransport });
   return { account, wallet };
 }
 
@@ -2296,7 +2296,7 @@ function treasurySigner() {
   const pk = config.treasury.privateKey;
   if (!pk) return null;
   const account = privateKeyToAccount(pk);
-  const wallet = createWalletClient({ account, chain: arcTestnet, transport: http(config.rpcHttp) });
+  const wallet = createWalletClient({ account, chain: arcTestnet, transport: arcWriteTransport });
   return { account, wallet };
 }
 

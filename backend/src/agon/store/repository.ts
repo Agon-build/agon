@@ -1328,6 +1328,15 @@ export class PostgresAgonRepository {
     return this.withTransaction((repository) => repository.backfillAgonCertifications(limit, now));
   }
 
+  async retryAgonCertificationVerification(jobId: string, at: Date): Promise<void> {
+    await this.pool.query(
+      `update agon_certification_jobs
+          set next_attempt_at = least(next_attempt_at, $2), updated_at = now()
+        where job_id = $1 and state = 'scheduled'`,
+      [jobId, at],
+    );
+  }
+
   async deferAgonCertification(jobId: string, nextAttemptAt: Date, reason: string): Promise<void> {
     await this.pool.query(
       `update agon_certification_jobs

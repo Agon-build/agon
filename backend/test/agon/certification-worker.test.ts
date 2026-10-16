@@ -42,6 +42,8 @@ class FakeCertificationRepository {
   failed: { code: string; retryAt: Date | null } | null = null;
   endpointQa: { passed: boolean; evidenceHash: `0x${string}`; evidence: unknown } | null = null;
   checks: AgonLifecycleCheckResult[] = [];
+  verificationRetries: Date[] = [];
+  async retryAgonCertificationVerification(_jobId: string, at: Date): Promise<void> { this.verificationRetries.push(at); }
 
   constructor(value: AgonCertificationJob) {
     this.current = value;
@@ -285,4 +287,29 @@ test("certification worker backfills existing versions before processing the que
   );
   assert.equal(repository.backfillCalls, 2);
   assert.equal(repository.current?.state, "scheduled");
+});
+
+test("a Verified write that never reached the chain retries in 5 minutes, and the alert is one plain sentence", async () => {
+  const { AgonListingVerificationError } = await import("../../src/agon/execution/listing-verifier.ts");
+  const repository = new FakeCertificationRepository(job());
+  const alerts: { reasons: string[] }[] = [];
+  const result = await runAgonCertificationOnce({
+    repository,
+    playgroundStore: new InMemoryPlaygroundRunStore(),
+    providerRunner: runner(),
+    listingVerifier: {
+      enabled: true,
+      async verify() {
+        throw new AgonListingVerificationError("unknown_outcome", "marketplace verification submission is unknown: RPC Request failed. URL: https://rpc.private.example/v1/swrm_secretkey Request body: {\"method\":\"eth_sendRawTransaction\"} Details: all transaction relay upstreams are unreachable");
+      },
+      async suspend() { throw new Error("not expected"); },
+    },
+    alert: async (input) => { alerts.push(input as { reasons: string[] }); },
+    now: () => NOW,
+  });
+  assert.equal(result, "completed");
+  assert.deepEqual(repository.verificationRetries, [new Date(NOW.getTime() + 5 * 60_000)]);
+  const text = alerts.flatMap((a) => a.reasons).join(" ");
+  assert.doesNotMatch(text, /https?:|swrm_|Request body|eth_sendRawTransaction/, "no URLs, keys or request details in alerts");
+  assert.match(text, /retries in 5 minutes/);
 });

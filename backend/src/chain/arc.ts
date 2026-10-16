@@ -30,6 +30,11 @@ const httpTransports = config.rpcHttpList.map((url) =>
 );
 const httpTransport = httpTransports.length > 1 ? fallback(httpTransports) : httpTransports[0]!;
 
+/// Transactions fail over too: when the primary RPC cannot relay, the same signed transaction
+/// goes to the next configured URL (resending identical bytes cannot create a second transaction).
+const writeTransports = config.rpcHttpList.map((url) => http(url, { retryCount: 2, timeout: 20_000 }));
+export const arcWriteTransport = writeTransports.length > 1 ? fallback(writeTransports) : writeTransports[0]!;
+
 export const publicClient = createPublicClient({
   chain: arcTestnet,
   transport: httpTransport,
