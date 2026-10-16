@@ -5,6 +5,7 @@ import {
 } from "@circle-fin/developer-controlled-wallets";
 import { config } from "../config/index.js";
 import { platformTransferInput } from "./circle-transfer-input.ts";
+import { circleErrorText } from "./circle-error.ts";
 
 /// Backend integration with Circle Developer-Controlled Wallets. ArcRun email
 /// users sign in with an email, the backend mints a Circle wallet for them,
@@ -157,14 +158,20 @@ export async function executePublisherCall(input: {
   refId: string;
   fee: { gasLimit: string; gasPrice: string };
 }): Promise<{ id: string; state: string }> {
-  const response = await getClient().createContractExecutionTransaction({
-    walletId: input.walletId,
-    contractAddress: input.contractAddress,
-    callData: input.callData,
-    idempotencyKey: input.idempotencyKey,
-    refId: input.refId,
-    fee: { type: "gas", config: input.fee },
-  });
+  let response;
+  try {
+    response = await getClient().createContractExecutionTransaction({
+      walletId: input.walletId,
+      contractAddress: input.contractAddress,
+      callData: input.callData,
+      idempotencyKey: input.idempotencyKey,
+      refId: input.refId,
+      fee: { type: "gas", config: input.fee },
+    });
+  } catch (error) {
+    // Keep Circle's own reason; the SDK error alone only says the HTTP status.
+    throw new Error(circleErrorText(error));
+  }
   if (!response.data?.id) throw new Error("Circle did not return a publisher transaction ID");
   return { id: response.data.id, state: response.data.state };
 }
