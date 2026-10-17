@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { decodeEventLog, encodeFunctionData, parseAbi, type Transaction, type TransactionReceipt } from "viem";
 import type { ProviderDraftStore } from "./provider-draft-store.ts";
 import type { createMcpAccessAdapter } from "./adapter.ts";
-import { publisherKey, type ManagedPublisherRecord, type ManagedPublisherState, type ManagedPublisherStore } from "./managed-publisher-store.ts";
+import { publisherKey, type ManagedPublisherRecord, type ManagedPublisherState, type ManagedPublisherStore, type PinnedFee } from "./managed-publisher-store.ts";
 
 const identityAbi = parseAbi([
   "function register(string agentURI) returns (uint256 agentId)",
@@ -10,7 +10,12 @@ const identityAbi = parseAbi([
 ]);
 const chainId = 5042002;
 const gasSafetyMultiplier = 2n;
-const maxGasFeeWei = 500_000_000_000_000_000n; // Hard per-action Circle gas ceiling: 0.5 native USDC.
+const maxGasFeeWei = 500_000_000_000_000_000n; // Hard per-action gas ceiling: 0.5 native USDC.
+/// Arc fee rules (docs.arc.io, gas and fees): max fee twice the base fee and never under the
+/// 20 gwei floor (lower is silently dropped); a 0 to 1 gwei tip is enough for inclusion.
+const GWEI = 1_000_000_000n;
+const ARC_MIN_MAX_FEE_WEI = 20n * GWEI;
+const PRIORITY_FEE_WEI = 1n * GWEI;
 
 type Access = ReturnType<typeof createMcpAccessAdapter>;
 type Address = `0x${string}`;
@@ -18,14 +23,14 @@ type Hash = `0x${string}`;
 
 export type ManagedPublisherCircle = {
   createWallet(refId: string, idempotencyKey: string): Promise<{ walletId: string; address: Address }>;
-  execute(input: { walletId: string; contractAddress: Address; callData: Hash; idempotencyKey: string; refId: string; fee: { gasLimit: string; gasPrice: string } }): Promise<{ id: string; state: string }>;
+  execute(input: { walletId: string; contractAddress: Address; callData: Hash; idempotencyKey: string; refId: string; fee: PinnedFee }): Promise<{ id: string; state: string }>;
   transaction(id: string): Promise<{ state: string; txHash?: string | null; errorReason?: string | null }>;
 };
 
 export type ManagedPublisherChain = {
   balance(address: Address): Promise<bigint>;
   hasCode(address: Address): Promise<boolean>;
-  gasQuote(from: Address, to: Address, data: Hash): Promise<{ gasLimit: bigint; gasPriceWei: bigint }>;
+  gasQuote(from: Address, to: Address, data: Hash): Promise<{ gasLimit: bigint; baseFeeWei: bigint }>;
   receipt(hash: Hash): Promise<TransactionReceipt | null>;
   transaction(hash: Hash): Promise<Transaction>;
   ownerOf(agentId: bigint): Promise<Address>;
@@ -96,20 +101,32 @@ export function createManagedPublisher(options: {
     return saved;
   }
 
-  function feeCeiling(fee: { gasLimit: string; gasPrice: string }): bigint {
-    const [whole, fractional = ""] = fee.gasPrice.split(".");
-    if (!whole || !/^\d+$/.test(whole) || !/^\d{0,9}$/.test(fractional) || !/^\d+$/.test(fee.gasLimit)) throw new Error("Invalid pinned gas quote");
-    return BigInt(fee.gasLimit) * (BigInt(whole) * 1_000_000_000n + BigInt(fractional.padEnd(9, "0")));
+  const gweiText = (wei: bigint) => {
+    const fraction = (wei % GWEI).toString().padStart(9, "0").replace(/0+$/, "");
+    return fraction ? `${wei / GWEI}.${fraction}` : (wei / GWEI).toString();
+  };
+  const gweiWei = (text: string) => {
+    const [whole, fractional = ""] = text.split(".");
+    if (!whole || !/^\d+$/.test(whole) || !/^\d{0,9}$/.test(fractional)) throw new Error("Invalid pinned gas quote");
+    return BigInt(whole) * GWEI + BigInt(fractional.padEnd(9, "0"));
+  };
+  /// A fee pinned before the switch to EIP-1559 fees (gasLimit with gasPrice) is never sent.
+  const isPinnedFee = (fee: unknown): fee is PinnedFee =>
+    Boolean(fee && typeof fee === "object" && "maxFee" in fee && "priorityFee" in fee && "gasLimit" in fee);
+
+  /// The most this write can ever cost: every unit of its gas limit at its max fee.
+  function feeCeiling(fee: PinnedFee): bigint {
+    if (!/^\d+$/.test(fee.gasLimit)) throw new Error("Invalid pinned gas quote");
+    return BigInt(fee.gasLimit) * gweiWei(fee.maxFee);
   }
 
-  async function quoteFee(wallet: Address, to: Address, data: Hash): Promise<{ gasLimit: string; gasPrice: string }> {
+  async function quoteFee(wallet: Address, to: Address, data: Hash): Promise<PinnedFee> {
     const quote = await options.chain.gasQuote(wallet, to, data);
     const gasLimit = quote.gasLimit * gasSafetyMultiplier;
-    const gasPriceWei = quote.gasPriceWei * gasSafetyMultiplier;
-    if (gasLimit <= 0n || gasPriceWei <= 0n || gasLimit * gasPriceWei > maxGasFeeWei) throw new Error("Gas quote exceeds the managed publisher limit");
-    const whole = gasPriceWei / 1_000_000_000n;
-    const fraction = (gasPriceWei % 1_000_000_000n).toString().padStart(9, "0").replace(/0+$/, "");
-    return { gasLimit: gasLimit.toString(), gasPrice: fraction ? `${whole}.${fraction}` : whole.toString() };
+    const doubled = quote.baseFeeWei * 2n;
+    const maxFeeWei = (doubled > ARC_MIN_MAX_FEE_WEI ? doubled : ARC_MIN_MAX_FEE_WEI) + PRIORITY_FEE_WEI;
+    if (gasLimit <= 0n || quote.baseFeeWei < 0n || gasLimit * maxFeeWei > maxGasFeeWei) throw new Error("Gas quote exceeds the managed publisher limit");
+    return { gasLimit: gasLimit.toString(), maxFee: gweiText(maxFeeWei), priorityFee: gweiText(PRIORITY_FEE_WEI) };
   }
 
   async function view(record: ManagedPublisherRecord, status: ManagedPublisherResult["status"], nextAction: string, txHash: Hash | null = null): Promise<ManagedPublisherResult> {
@@ -134,8 +151,8 @@ export function createManagedPublisher(options: {
     }
     // Pin the Circle fee parameters before submission so a lost response can be retried
     // with the same idempotency key and the same bounded transaction body.
-    if (!state[feeField]) {
-      let fee: { gasLimit: string; gasPrice: string };
+    if (!isPinnedFee(state[feeField])) {
+      let fee: PinnedFee;
       try { fee = await quoteFee(state.walletAddress, to, data); }
       catch (error) {
         if (error instanceof Error && /insufficient funds|not enough funds/i.test(error.message)) {

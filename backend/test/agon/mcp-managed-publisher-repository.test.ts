@@ -27,7 +27,7 @@ test("managed publisher wallet binding persists, scopes by actor and rejects sta
   assert.equal((await firstStore.getPublic(first.publicId))?.actor, actor);
   const updated = await firstStore.save(first, {
     ...first.state, walletId: "circle-wallet-1", walletAddress: `0x${"d".repeat(40)}`,
-    registerFee: { gasLimit: "200000", gasPrice: "0.02" },
+    registerFee: { gasLimit: "200000", maxFee: "41", priorityFee: "1" },
   });
   assert.ok(updated);
   assert.equal(await firstStore.save(first, first.state), null);
@@ -35,6 +35,6 @@ test("managed publisher wallet binding persists, scopes by actor and rejects sta
   const recovered = await restarted.create(actor, draftId, digest);
   assert.equal(recovered.publicId, first.publicId);
   assert.equal(recovered.state.walletId, "circle-wallet-1");
-  assert.deepEqual(recovered.state.registerFee, { gasLimit: "200000", gasPrice: "0.02" });
+  assert.deepEqual(recovered.state.registerFee, { gasLimit: "200000", maxFee: "41", priorityFee: "1" });
   await assert.rejects(restarted.create(actor, draftId, `0x${"e".repeat(64)}` as `0x${string}`), /conflicts/);
 });

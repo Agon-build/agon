@@ -157,11 +157,11 @@ export async function executePublisherCall(input: {
   callData: `0x${string}`;
   idempotencyKey: string;
   refId: string;
-  fee: { gasLimit: string; gasPrice: string };
+  fee: { gasLimit: string; maxFee: string; priorityFee: string };
 }): Promise<{ id: string; state: string }> {
   let response;
   try {
-    // input.fee is the publisher's own affordability estimate; Circle sets the actual fee.
+    // input.fee is the publisher's own capped EIP-1559 fee; Circle sends it as given.
     response = await getClient().createContractExecutionTransaction(publisherExecutionInput(input));
   } catch (error) {
     // Keep Circle's own reason; the SDK error alone only says the HTTP status.

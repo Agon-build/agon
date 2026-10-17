@@ -1,6 +1,9 @@
 import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 
+/// The EIP-1559 fee a publisher write is sent with: gas units, then max fee and tip in gwei.
+export type PinnedFee = { gasLimit: string; maxFee: string; priorityFee: string };
+
 export type ManagedPublisherState = {
   draftDigest: `0x${string}`;
   walletId: string | null;
@@ -9,11 +12,11 @@ export type ManagedPublisherState = {
   agentId: string | null;
   registerTxId: string | null;
   registerTxHash: `0x${string}` | null;
-  registerFee: { gasLimit: string; gasPrice: string } | null;
+  registerFee: PinnedFee | null;
   operationId: string | null;
   publishTxId: string | null;
   publishTxHash: `0x${string}` | null;
-  publishFee: { gasLimit: string; gasPrice: string } | null;
+  publishFee: PinnedFee | null;
   reference: string | null;
 };
 

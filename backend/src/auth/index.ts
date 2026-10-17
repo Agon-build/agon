@@ -776,11 +776,12 @@ const agonManagedPublisher = config.agon.managedPublisherEnabled
           return Boolean(code && code !== "0x");
         },
         async gasQuote(from, to, data) {
-          const [gas, price] = await Promise.all([
+          const [gas, block] = await Promise.all([
             publicClient.estimateGas({ account: from, to, data }),
-            publicClient.getGasPrice(),
+            publicClient.getBlock(),
           ]);
-          return { gasLimit: gas, gasPriceWei: price };
+          if (block.baseFeePerGas == null) throw new Error("Arc block has no base fee");
+          return { gasLimit: gas, baseFeeWei: block.baseFeePerGas };
         },
         async receipt(hash) {
           try { return await publicClient.getTransactionReceipt({ hash }); }

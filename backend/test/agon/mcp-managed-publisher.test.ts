@@ -27,11 +27,11 @@ const draft: ProviderDraftInput = {
 };
 const draftId = `draft-${createHash("sha256").update(JSON.stringify(draft)).digest("hex").slice(0, 24)}`;
 
-async function fixture(balance = 1_000_000_000_000_000_000n, badTransaction = false, uncertainOnce = false, highFee = false, writerReady = true, extra: { checksPassed?: (a: string, d: string) => Promise<boolean> } = {}) {
+async function fixture(balance = 1_000_000_000_000_000_000n, badTransaction = false, uncertainOnce = false, highFee = false, writerReady = true, extra: { checksPassed?: (a: string, d: string) => Promise<boolean>; baseFeeWei?: bigint } = {}) {
   const store = createMemoryManagedPublisherStore();
   const draftStore = createMemoryProviderDraftStore();
   await draftStore.create(actor, draftId, draft);
-  const calls: Array<{ to: `0x${string}`; data: `0x${string}`; hash: `0x${string}`; key: string; fee: { gasLimit: string; gasPrice: string } }> = [];
+  const calls: Array<{ to: `0x${string}`; data: `0x${string}`; hash: `0x${string}`; key: string; fee: { gasLimit: string; maxFee: string; priorityFee: string } }> = [];
   let walletCreates = 0;
   let lostResponse = false;
   const circle: ManagedPublisherCircle = {
@@ -52,7 +52,7 @@ async function fixture(balance = 1_000_000_000_000_000_000n, badTransaction = fa
   const chain: ManagedPublisherChain = {
     async balance() { return balance; },
     async hasCode() { return true; },
-    async gasQuote() { return { gasLimit: 100_000n, gasPriceWei: highFee ? 2_000_000_000_000n : 10_000_000n }; },
+    async gasQuote() { return { gasLimit: 100_000n, baseFeeWei: highFee ? 2_000_000_000_000n : extra.baseFeeWei ?? 20_000_000_000n }; },
     async transaction(hash) {
       const call = calls.find((item) => item.hash === hash)!;
       return { from: wallet, to: badTransaction ? actor : call.to, input: call.data } as Transaction;
@@ -85,11 +85,12 @@ async function fixture(balance = 1_000_000_000_000_000_000n, badTransaction = fa
       return { ok: true, value: { status: "published", reference: `5042002:${registry}:7` } };
     },
   } as unknown as ReturnType<typeof createMcpAccessAdapter>;
+  const { baseFeeWei: _baseFee, ...options } = extra;
   const make = () => createManagedPublisher({
     store, draftStore, access, circle, chain, identityRegistry: identity,
     serviceRegistry: registry, publicApiUrl: "https://api.example.com/",
     publicationReady: async () => writerReady,
-    ...extra,
+    ...options,
   });
   const publisher = make();
   const setup = await publisher.setup(actor, draftId);
@@ -122,6 +123,30 @@ test("an excessive gas quote is refused before Circle receives any write", async
   await f.publisher.approve(actor, draftId, f.setup.termsDigest, "approve");
   await assert.rejects(f.publisher.advance(actor, draftId), /gas quote exceeds the managed publisher limit/i);
   assert.equal(f.calls.length, 0);
+});
+
+test("each write carries Arc's fee: twice the base fee plus a 1 gwei tip, never under Arc's 20 gwei floor", async () => {
+  // Arc docs: maxFeePerGas = 2 x base fee, at least 20 gwei; a 0 to 1 gwei tip is enough.
+  const f = await fixture();
+  await f.publisher.approve(actor, draftId, f.setup.termsDigest, "approve");
+  await f.publisher.advance(actor, draftId);
+  assert.deepEqual(f.calls.map((c) => c.fee), [
+    { gasLimit: "200000", maxFee: "41", priorityFee: "1" },
+    { gasLimit: "200000", maxFee: "41", priorityFee: "1" },
+  ]);
+  const low = await fixture(1_000_000_000_000_000_000n, false, false, false, true, { baseFeeWei: 5_000_000_000n });
+  await low.publisher.approve(actor, draftId, low.setup.termsDigest, "approve");
+  await low.publisher.advance(actor, draftId);
+  assert.deepEqual(low.calls[0]!.fee, { gasLimit: "200000", maxFee: "21", priorityFee: "1" });
+});
+
+test("a fee pinned in the old gasPrice shape is quoted again, never sent", async () => {
+  const f = await fixture();
+  await f.publisher.approve(actor, draftId, f.setup.termsDigest, "approve");
+  const record = (await f.store.get(actor, draftId))!;
+  await f.store.save(record, { ...record.state, registerFee: { gasLimit: "200000", gasPrice: "0.02" } as never });
+  await f.publisher.advance(actor, draftId);
+  assert.deepEqual(f.calls[0]!.fee, { gasLimit: "200000", maxFee: "41", priorityFee: "1" });
 });
 
 test("registry or writer unavailability prevents identity registration", async () => {
