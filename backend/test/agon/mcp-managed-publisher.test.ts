@@ -27,16 +27,24 @@ const draft: ProviderDraftInput = {
 };
 const draftId = `draft-${createHash("sha256").update(JSON.stringify(draft)).digest("hex").slice(0, 24)}`;
 
-async function fixture(balance = 1_000_000_000_000_000_000n, badTransaction = false, uncertainOnce = false, highFee = false, writerReady = true, extra: { checksPassed?: (a: string, d: string) => Promise<boolean>; baseFeeWei?: bigint } = {}) {
+async function fixture(balance = 1_000_000_000_000_000_000n, badTransaction = false, uncertainOnce = false, highFee = false, writerReady = true, extra: { checksPassed?: (a: string, d: string) => Promise<boolean>; refuseFees?: number } = {}) {
   const store = createMemoryManagedPublisherStore();
   const draftStore = createMemoryProviderDraftStore();
   await draftStore.create(actor, draftId, draft);
   const calls: Array<{ to: `0x${string}`; data: `0x${string}`; hash: `0x${string}`; key: string; fee: { gasLimit: string; maxFee: string; priorityFee: string } }> = [];
   let walletCreates = 0;
   let lostResponse = false;
+  let refusals = extra.refuseFees ?? 0;
+  const estimates: string[] = [];
   const circle: ManagedPublisherCircle = {
     async createWallet(_ref, _key) { walletCreates++; return { walletId: "wallet-one", address: wallet }; },
+    async estimateFee() {
+      estimates.push("low");
+      // Circle's LOW tier on Arc (17 Oct 2026): tip in the hundreds of gwei over a 20 gwei base fee.
+      return highFee ? { gasLimit: "200000", maxFee: "5000", priorityFee: "4960" } : { gasLimit: "100000", maxFee: "568.71", priorityFee: "528.71" };
+    },
     async execute(input) {
+      if (refusals > 0) { refusals--; throw new Error("Circle rejected the request (HTTP 400, code 2): API parameter invalid"); }
       const existing = calls.find((call) => call.key === input.idempotencyKey);
       if (existing) return { id: `circle-${calls.indexOf(existing)}`, state: "INITIATED" };
       const hash = `0x${(calls.length + 1).toString(16).padStart(64, "0")}` as const;
@@ -52,7 +60,6 @@ async function fixture(balance = 1_000_000_000_000_000_000n, badTransaction = fa
   const chain: ManagedPublisherChain = {
     async balance() { return balance; },
     async hasCode() { return true; },
-    async gasQuote() { return { gasLimit: 100_000n, baseFeeWei: highFee ? 2_000_000_000_000n : extra.baseFeeWei ?? 20_000_000_000n }; },
     async transaction(hash) {
       const call = calls.find((item) => item.hash === hash)!;
       return { from: wallet, to: badTransaction ? actor : call.to, input: call.data } as Transaction;
@@ -85,7 +92,7 @@ async function fixture(balance = 1_000_000_000_000_000_000n, badTransaction = fa
       return { ok: true, value: { status: "published", reference: `5042002:${registry}:7` } };
     },
   } as unknown as ReturnType<typeof createMcpAccessAdapter>;
-  const { baseFeeWei: _baseFee, ...options } = extra;
+  const { refuseFees: _refuse, ...options } = extra;
   const make = () => createManagedPublisher({
     store, draftStore, access, circle, chain, identityRegistry: identity,
     serviceRegistry: registry, publicApiUrl: "https://api.example.com/",
@@ -95,7 +102,7 @@ async function fixture(balance = 1_000_000_000_000_000_000n, badTransaction = fa
   const publisher = make();
   const setup = await publisher.setup(actor, draftId);
   storePublicId = (await store.get(actor, draftId))!.publicId;
-  return { publisher, make, setup, calls, access, store, publicId: storePublicId, walletCreates: () => walletCreates };
+  return { publisher, make, setup, calls, access, store, estimates, publicId: storePublicId, walletCreates: () => walletCreates };
 }
 
 test("a new draft gets one Circle wallet and requires an exact approval before writes", async () => {
@@ -125,28 +132,44 @@ test("an excessive gas quote is refused before Circle receives any write", async
   assert.equal(f.calls.length, 0);
 });
 
-test("each write carries Arc's fee: twice the base fee plus a 1 gwei tip, never under Arc's 20 gwei floor", async () => {
-  // Arc docs: maxFeePerGas = 2 x base fee, at least 20 gwei; a 0 to 1 gwei tip is enough.
+test("each write carries Circle's live LOW fee and gas limit for Arc", async () => {
+  // Circle refuses any tip under its own floating minimum on Arc (probed 17 Oct 2026), so the
+  // publisher pins Circle's estimate and caps gasLimit x maxFee instead of computing its own fee.
   const f = await fixture();
   await f.publisher.approve(actor, draftId, f.setup.termsDigest, "approve");
   await f.publisher.advance(actor, draftId);
   assert.deepEqual(f.calls.map((c) => c.fee), [
-    { gasLimit: "200000", maxFee: "41", priorityFee: "1" },
-    { gasLimit: "200000", maxFee: "41", priorityFee: "1" },
+    { gasLimit: "100000", maxFee: "568.71", priorityFee: "528.71" },
+    { gasLimit: "100000", maxFee: "568.71", priorityFee: "528.71" },
   ]);
-  const low = await fixture(1_000_000_000_000_000_000n, false, false, false, true, { baseFeeWei: 5_000_000_000n });
-  await low.publisher.approve(actor, draftId, low.setup.termsDigest, "approve");
-  await low.publisher.advance(actor, draftId);
-  assert.deepEqual(low.calls[0]!.fee, { gasLimit: "200000", maxFee: "21", priorityFee: "1" });
 });
 
-test("a fee pinned in the old gasPrice shape is quoted again, never sent", async () => {
-  const f = await fixture();
+test("a fee Circle refuses is estimated again and sent once more; nothing counts as sent until Circle accepts", async () => {
+  const f = await fixture(1_000_000_000_000_000_000n, false, false, false, true, { refuseFees: 1 });
   await f.publisher.approve(actor, draftId, f.setup.termsDigest, "approve");
-  const record = (await f.store.get(actor, draftId))!;
-  await f.store.save(record, { ...record.state, registerFee: { gasLimit: "200000", gasPrice: "0.02" } as never });
-  await f.publisher.advance(actor, draftId);
-  assert.deepEqual(f.calls[0]!.fee, { gasLimit: "200000", maxFee: "41", priorityFee: "1" });
+  assert.equal((await f.publisher.advance(actor, draftId)).status, "published");
+  assert.equal(f.estimates.length, 3, "one estimate per write plus one after the refusal");
+});
+
+test("a second refusal stops with Circle's reason and leaves the write unsent", async () => {
+  const f = await fixture(1_000_000_000_000_000_000n, false, false, false, true, { refuseFees: 2 });
+  await f.publisher.approve(actor, draftId, f.setup.termsDigest, "approve");
+  await assert.rejects(f.publisher.advance(actor, draftId), /Circle refused the transaction fee twice\. Nothing was sent/);
+  const state = (await f.store.get(actor, draftId))!.state;
+  assert.equal(state.registerTxId, null);
+  assert.equal(state.registerFee, null, "the refused fee is not kept for the next try");
+  assert.equal(f.calls.length, 0);
+});
+
+test("a fee pinned in an older shape or by an older rule is estimated again, never sent", async () => {
+  for (const old of [{ gasLimit: "200000", gasPrice: "0.02" }, { gasLimit: "200000", maxFee: "41", priorityFee: "1" }]) {
+    const f = await fixture(1_000_000_000_000_000_000n, false, false, false, true, { refuseFees: 1 });
+    await f.publisher.approve(actor, draftId, f.setup.termsDigest, "approve");
+    const record = (await f.store.get(actor, draftId))!;
+    await f.store.save(record, { ...record.state, registerFee: old as never });
+    await f.publisher.advance(actor, draftId);
+    assert.deepEqual(f.calls[0]!.fee, { gasLimit: "100000", maxFee: "568.71", priorityFee: "528.71" });
+  }
 });
 
 test("registry or writer unavailability prevents identity registration", async () => {

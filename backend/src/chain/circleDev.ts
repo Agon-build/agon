@@ -6,7 +6,7 @@ import {
 import { config } from "../config/index.js";
 import { platformTransferInput } from "./circle-transfer-input.ts";
 import { circleErrorText } from "./circle-error.ts";
-import { publisherExecutionInput } from "./circle-publisher-input.ts";
+import { publisherExecutionInput, publisherFeeFromEstimate } from "./circle-publisher-input.ts";
 
 /// Backend integration with Circle Developer-Controlled Wallets. ArcRun email
 /// users sign in with an email, the backend mints a Circle wallet for them,
@@ -148,6 +148,21 @@ export async function createPublisherWallet(refId: string, idempotencyKey: strin
     throw new Error("Circle did not return a valid publisher wallet");
   }
   return { walletId: wallet.id, address: wallet.address.toLowerCase() as `0x${string}` };
+}
+
+/** Circle's current LOW fee for this exact call from this wallet; the publisher pins it before sending. */
+export async function estimatePublisherFee(input: {
+  walletId: string;
+  contractAddress: `0x${string}`;
+  callData: `0x${string}`;
+}): Promise<{ gasLimit: string; maxFee: string; priorityFee: string }> {
+  let response;
+  try {
+    response = await getClient().estimateContractExecutionFee({ source: { walletId: input.walletId }, contractAddress: input.contractAddress, callData: input.callData });
+  } catch (error) {
+    throw new Error(circleErrorText(error));
+  }
+  return publisherFeeFromEstimate(response.data);
 }
 
 /** Submit only the caller's pinned calldata. Reusing the key recovers uncertain Circle responses. */

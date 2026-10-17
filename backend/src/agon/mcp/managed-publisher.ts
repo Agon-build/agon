@@ -9,13 +9,12 @@ const identityAbi = parseAbi([
   "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)",
 ]);
 const chainId = 5042002;
-const gasSafetyMultiplier = 2n;
 const maxGasFeeWei = 500_000_000_000_000_000n; // Hard per-action gas ceiling: 0.5 native USDC.
-/// Arc fee rules (docs.arc.io, gas and fees): max fee twice the base fee and never under the
-/// 20 gwei floor (lower is silently dropped); a 0 to 1 gwei tip is enough for inclusion.
 const GWEI = 1_000_000_000n;
-const ARC_MIN_MAX_FEE_WEI = 20n * GWEI;
-const PRIORITY_FEE_WEI = 1n * GWEI;
+/// Circle's answer when it refuses a fee. On Arc it refuses any tip under its own floating
+/// minimum (probed 17 Oct 2026), so the publisher sends Circle's LOW estimate and, if that
+/// went stale before submission, estimates once more.
+const FEE_REFUSED = /code 2\): API parameter invalid/;
 
 type Access = ReturnType<typeof createMcpAccessAdapter>;
 type Address = `0x${string}`;
@@ -23,6 +22,8 @@ type Hash = `0x${string}`;
 
 export type ManagedPublisherCircle = {
   createWallet(refId: string, idempotencyKey: string): Promise<{ walletId: string; address: Address }>;
+  /** Circle's current LOW fee for this exact call from this wallet, in gwei. */
+  estimateFee(input: { walletId: string; contractAddress: Address; callData: Hash }): Promise<PinnedFee>;
   execute(input: { walletId: string; contractAddress: Address; callData: Hash; idempotencyKey: string; refId: string; fee: PinnedFee }): Promise<{ id: string; state: string }>;
   transaction(id: string): Promise<{ state: string; txHash?: string | null; errorReason?: string | null }>;
 };
@@ -30,7 +31,6 @@ export type ManagedPublisherCircle = {
 export type ManagedPublisherChain = {
   balance(address: Address): Promise<bigint>;
   hasCode(address: Address): Promise<boolean>;
-  gasQuote(from: Address, to: Address, data: Hash): Promise<{ gasLimit: bigint; baseFeeWei: bigint }>;
   receipt(hash: Hash): Promise<TransactionReceipt | null>;
   transaction(hash: Hash): Promise<Transaction>;
   ownerOf(agentId: bigint): Promise<Address>;
@@ -101,10 +101,6 @@ export function createManagedPublisher(options: {
     return saved;
   }
 
-  const gweiText = (wei: bigint) => {
-    const fraction = (wei % GWEI).toString().padStart(9, "0").replace(/0+$/, "");
-    return fraction ? `${wei / GWEI}.${fraction}` : (wei / GWEI).toString();
-  };
   const gweiWei = (text: string) => {
     const [whole, fractional = ""] = text.split(".");
     if (!whole || !/^\d+$/.test(whole) || !/^\d{0,9}$/.test(fractional)) throw new Error("Invalid pinned gas quote");
@@ -120,13 +116,15 @@ export function createManagedPublisher(options: {
     return BigInt(fee.gasLimit) * gweiWei(fee.maxFee);
   }
 
-  async function quoteFee(wallet: Address, to: Address, data: Hash): Promise<PinnedFee> {
-    const quote = await options.chain.gasQuote(wallet, to, data);
-    const gasLimit = quote.gasLimit * gasSafetyMultiplier;
-    const doubled = quote.baseFeeWei * 2n;
-    const maxFeeWei = (doubled > ARC_MIN_MAX_FEE_WEI ? doubled : ARC_MIN_MAX_FEE_WEI) + PRIORITY_FEE_WEI;
-    if (gasLimit <= 0n || quote.baseFeeWei < 0n || gasLimit * maxFeeWei > maxGasFeeWei) throw new Error("Gas quote exceeds the managed publisher limit");
-    return { gasLimit: gasLimit.toString(), maxFee: gweiText(maxFeeWei), priorityFee: gweiText(PRIORITY_FEE_WEI) };
+  async function quoteFee(walletId: string, to: Address, data: Hash): Promise<PinnedFee> {
+    const estimate = await options.circle.estimateFee({ walletId, contractAddress: to, callData: data });
+    // Circle's gas limit already has headroom: an identity register estimated at 243,418 used 200,748 (17 Oct 2026).
+    const fee = { gasLimit: estimate.gasLimit, maxFee: estimate.maxFee, priorityFee: estimate.priorityFee };
+    const ceiling = feeCeiling(fee);
+    if (ceiling <= 0n || ceiling > maxGasFeeWei) {
+      throw new Error(`Gas quote exceeds the managed publisher limit: Circle's fee for this write could reach ${formatUSDC(ceiling)} USDC, over the ${formatUSDC(maxGasFeeWei)} USDC cap. Nothing was sent; check again later.`);
+    }
+    return fee;
   }
 
   async function view(record: ManagedPublisherRecord, status: ManagedPublisherResult["status"], nextAction: string, txHash: Hash | null = null): Promise<ManagedPublisherResult> {
@@ -151,29 +149,38 @@ export function createManagedPublisher(options: {
     }
     // Pin the Circle fee parameters before submission so a lost response can be retried
     // with the same idempotency key and the same bounded transaction body.
-    if (!isPinnedFee(state[feeField])) {
-      let fee: PinnedFee;
-      try { fee = await quoteFee(state.walletAddress, to, data); }
-      catch (error) {
-        if (error instanceof Error && /insufficient funds|not enough funds/i.test(error.message)) {
-          return view(record, "fund_wallet", "Add Arc Testnet native USDC to the publisher wallet, then check again. The RPC could not estimate gas with its current balance.");
+    const idempotencyKey = publisherKey(record.publicId, action === "publish" ? `publish:${state.operationId}` : action);
+    for (let attempt = 1; ; attempt++) {
+      if (!isPinnedFee(record.state[feeField])) {
+        let fee: PinnedFee;
+        try { fee = await quoteFee(state.walletId, to, data); }
+        catch (error) {
+          if (error instanceof Error && /insufficient|not enough funds/i.test(error.message)) {
+            return view(record, "fund_wallet", "Add Arc Testnet native USDC to the publisher wallet, then check again. Circle could not estimate the fee with its current balance.");
+          }
+          throw error;
         }
-        throw error;
+        record = await save(record, { ...record.state, [feeField]: fee });
       }
-      record = await save(record, { ...state, [feeField]: fee });
+      const fee = record.state[feeField]!;
+      const balance = await options.chain.balance(state.walletAddress);
+      const required = feeCeiling(fee);
+      if (required <= 0n || required > maxGasFeeWei) throw new Error("Pinned gas quote exceeds the managed publisher limit");
+      if (balance < required) return view(record, "fund_wallet", `Fund ${formatUSDC(required - balance)} more Arc Testnet native USDC for the next contract action. The estimate can change before submission.`);
+      try {
+        const submitted = await options.circle.execute({
+          walletId: state.walletId, contractAddress: to, callData: data, idempotencyKey,
+          refId: `agon:${record.publicId}:${action}`,
+          fee,
+        });
+        return save(record, { ...record.state, [txField]: submitted.id });
+      } catch (error) {
+        // Circle refused the fee itself, so nothing was sent: drop the stale pin and estimate again once.
+        if (!(error instanceof Error) || !FEE_REFUSED.test(error.message)) throw error;
+        record = await save(record, { ...record.state, [feeField]: null });
+        if (attempt >= 2) throw new Error("Circle refused the transaction fee twice. Nothing was sent; check again in a minute.");
+      }
     }
-    const fee = record.state[feeField]!;
-    const balance = await options.chain.balance(state.walletAddress);
-    const required = feeCeiling(fee);
-    if (required <= 0n || required > maxGasFeeWei) throw new Error("Pinned gas quote exceeds the managed publisher limit");
-    if (balance < required) return view(record, "fund_wallet", `Fund ${formatUSDC(required - balance)} more Arc Testnet native USDC for the next contract action. The estimate can change before submission.`);
-    const submitted = await options.circle.execute({
-      walletId: state.walletId, contractAddress: to, callData: data,
-      idempotencyKey: publisherKey(record.publicId, action === "publish" ? `publish:${state.operationId}` : action),
-      refId: `agon:${record.publicId}:${action}`,
-      fee,
-    });
-    return save(record, { ...state, [txField]: submitted.id });
   }
 
   async function confirmedTransaction(record: ManagedPublisherRecord, circleTxId: string, to: Address, data: Hash): Promise<{ hash: Hash; receipt: TransactionReceipt } | ManagedPublisherResult> {

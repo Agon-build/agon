@@ -152,6 +152,7 @@ import {
 import {
   circleDevConfigured,
   createPublisherWallet,
+  estimatePublisherFee,
   executePublisherCall,
   createUserWallet,
   seedTestnetUsdc,
@@ -768,20 +769,12 @@ const agonManagedPublisher = config.agon.managedPublisherEnabled
       store: createPostgresManagedPublisherStore(pool),
       draftStore: agonProviderDraftStore,
       access: createMcpAccessAdapter(agonService, { providerDraftStore: agonProviderDraftStore, hostedManifestStore: agonHostedManifestStore }),
-      circle: { createWallet: createPublisherWallet, execute: executePublisherCall, transaction: getTxState },
+      circle: { createWallet: createPublisherWallet, estimateFee: estimatePublisherFee, execute: executePublisherCall, transaction: getTxState },
       chain: {
         balance: (address) => publicClient.getBalance({ address }),
         hasCode: async (address) => {
           const code = await publicClient.getBytecode({ address });
           return Boolean(code && code !== "0x");
-        },
-        async gasQuote(from, to, data) {
-          const [gas, block] = await Promise.all([
-            publicClient.estimateGas({ account: from, to, data }),
-            publicClient.getBlock(),
-          ]);
-          if (block.baseFeePerGas == null) throw new Error("Arc block has no base fee");
-          return { gasLimit: gas, baseFeeWei: block.baseFeePerGas };
         },
         async receipt(hash) {
           try { return await publicClient.getTransactionReceipt({ hash }); }

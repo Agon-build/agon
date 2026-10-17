@@ -247,7 +247,7 @@ export function createAgonNativeMcpHandler(access: AccessAdapter, publisher?: Ma
           const message = error instanceof Error ? error.message : "";
           // The tool answer stays safe; the real reason goes to the server log.
           console.warn(`[agon-listing] ${tool} failed for draft ${draftId}: ${(message || String(error)).slice(0, 500)}`);
-          const safe = /^(?:Run the listing checks|No managed publisher|Create a listing draft|draft changed|Publisher |The exact draft digest|Provision the publisher|Gas quote|Pinned gas quote|Circle transaction does not match|Identity receipt|Registered identity|Prepared publication|Publication target|Publication receipt|Hosted manifest|Managed draft digest|Publisher state changed)/.test(message);
+          const safe = /^(?:Run the listing checks|No managed publisher|Create a listing draft|draft changed|Publisher |The exact draft digest|Provision the publisher|Gas quote|Pinned gas quote|Circle refused|Circle rejected the request|Circle fee estimate|Circle transaction does not match|Identity receipt|Registered identity|Prepared publication|Publication target|Publication receipt|Hosted manifest|Managed draft digest|Publisher state changed)/.test(message);
           return failure("managed_publisher_failed", safe ? message : "Managed publisher action failed. Check its status before retrying.");
         }
       };
