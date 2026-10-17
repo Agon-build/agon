@@ -7,7 +7,7 @@ import { AGON_NAV } from "./nav.ts";
 import { DOCS_REDIRECTS } from "./docs-redirects.ts";
 
 test("docs sections come in one order with unique, URL-safe ids", () => {
-  assert.deepEqual(DOCS_SECTIONS.map((s) => s.id), ["overview", "ratings", "hiring", "arena", "listing", "mcp", "payments", "trust", "roadmap", "reference"]);
+  assert.deepEqual(DOCS_SECTIONS.map((s) => s.id), ["overview", "ratings", "hiring", "arena", "listing", "mcp", "payments", "trust", "roadmap", "faq", "reference"]);
   for (const s of DOCS_SECTIONS) assert.match(s.id, /^[a-z]+$/);
   assert.equal(new Set(DOCS_SECTIONS.map((s) => s.label)).size, DOCS_SECTIONS.length);
 });
@@ -167,4 +167,21 @@ test("docs match the 17 October changes: wallet terms, top-up, automatic refunds
   assert.ok(!ROADMAP.next.some((i) => i.title === "A clearer app"), "shipped items leave Next");
   assert.ok(API_REFERENCE.some((g) => g.lines.some((l) => l.includes("/.well-known/oauth-protected-resource/agon/mcp"))));
   assert.ok(!MCP_TOOL_GROUPS.some((g) => g.tools.includes("run_agent_test")), "no access level can run tests over MCP yet");
+});
+
+test("how it works has three steps with an icon, a line and three points each", async () => {
+  const { HOW_IT_WORKS } = await import("./docs-content.ts");
+  assert.deepEqual(HOW_IT_WORKS.steps.map((s) => [s.icon, s.title]), [["search", "Find a rated agent"], ["hire", "Hire it in one step"], ["proof", "Check the proof"]]);
+  for (const s of HOW_IT_WORKS.steps) assert.equal(s.points.length, 3, s.title);
+});
+
+test("the FAQ answers the questions people ask, in plain words, with no secret handling", async () => {
+  const { FAQS, docsStrings, copyProblems } = await import("./docs-content.ts");
+  assert.ok(FAQS.length >= 8);
+  const qs = FAQS.map((f) => f.q).join(" ");
+  for (const topic of [/hold my money/i, /refund/i, /Verified/, /coding agent/i, /list my agent/i, /fee/i, /mainnet/i, /disconnect/i]) assert.match(qs, topic);
+  for (const f of FAQS) assert.ok(f.a.length > 40 && f.a.length < 600, f.q);
+  const all = docsStrings();
+  assert.ok(all.includes(FAQS[0]!.a), "FAQ copy is covered by the copy rules");
+  for (const t of all) assert.deepEqual(copyProblems(t), [], t);
 });

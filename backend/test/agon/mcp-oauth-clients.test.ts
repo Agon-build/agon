@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseRegistration, resolveClient } from "../../src/agon/mcp-oauth/clients.ts";
+import { parseRegistration, resolveClient, type DocumentFetcher } from "../../src/agon/mcp-oauth/clients.ts";
 import type { OAuthClient } from "../../src/agon/mcp-oauth/store.ts";
 
 const URL_ID = "https://claude.ai/oauth/claude-code-client-metadata";
+const PUBLIC_IP = "160.79.104.10";
 
 function fakeStore() {
   const clients = new Map<string, OAuthClient>();
@@ -18,8 +19,9 @@ function fakeStore() {
     },
   };
 }
-const publicOk = async (u: string) => new URL(u);
-const json = (body: unknown, init: ResponseInit = {}) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" }, ...init });
+const doc = (body: unknown, status = 200): DocumentFetcher => async () => ({ status, body: JSON.stringify(body) });
+const resolvePublic = async () => [PUBLIC_IP];
+const deps = (get: DocumentFetcher, resolve: (host: string) => Promise<string[]> = resolvePublic, store = fakeStore()) => ({ store, resolve, get, now: () => new Date() });
 
 test("dcr metadata with loopback and cursor redirects is accepted; http non-loopback is refused", () => {
   const ok = parseRegistration({ client_name: "Cursor", redirect_uris: ["http://127.0.0.1:1234/callback", "cursor://anysphere.cursor-retrieval/oauth/callback"] });
@@ -31,43 +33,48 @@ test("dcr metadata with loopback and cursor redirects is accepted; http non-loop
   assert.ok(unnamed.ok && unnamed.value.clientName === "MCP client");
 });
 
-test("cimd document is fetched, checked and stored", async () => {
-  const store = fakeStore();
-  const fetch = (async () => json({ client_id: URL_ID, client_name: "Claude Code", redirect_uris: ["http://127.0.0.1/callback"] })) as typeof globalThis.fetch;
-  const client = await resolveClient(URL_ID, { store, fetch, assertPublic: publicOk, now: () => new Date() });
+test("cimd document is fetched from the address that was checked, and stored", async () => {
+  const seen: string[] = [];
+  const get: DocumentFetcher = async (url, address) => { seen.push(`${url.host} ${address}`); return { status: 200, body: JSON.stringify({ client_id: URL_ID, client_name: "Claude Code", redirect_uris: ["http://127.0.0.1/callback"] }) }; };
+  const d = deps(get);
+  const client = await resolveClient(URL_ID, d);
   assert.equal(client?.clientName, "Claude Code");
   assert.equal(client?.source, "cimd");
-  assert.equal(store.clients.get(URL_ID)?.clientId, URL_ID);
+  assert.deepEqual(seen, [`claude.ai ${PUBLIC_IP}`], "the fetch is pinned to the vetted address, so a second DNS answer cannot redirect it");
 });
 
-test("cimd refuses a private address, a redirect, a slow answer and an oversized body", async () => {
-  const store = fakeStore();
-  const deps = (fetch: typeof globalThis.fetch, assertPublic = publicOk) => ({ store, fetch, assertPublic, now: () => new Date() });
-  const never = (() => new Promise<Response>(() => {})) as typeof globalThis.fetch;
-  assert.equal(await resolveClient("https://10.0.0.1/c", deps(never, async () => { throw new Error("blocked"); })), null);
-  assert.equal(await resolveClient(URL_ID, deps((async () => new Response(null, { status: 302, headers: { location: "https://x.example" } })) as typeof globalThis.fetch)), null);
-  const started = Date.now();
-  assert.equal(await resolveClient(URL_ID, deps(never)), null);
-  assert.ok(Date.now() - started < 3_500, "slow documents time out");
-  const big = { client_id: URL_ID, client_name: "x".repeat(40_000), redirect_uris: ["http://127.0.0.1/cb"] };
-  assert.equal(await resolveClient(URL_ID, deps((async () => json(big)) as typeof globalThis.fetch)), null);
+test("cimd refuses a private address, a redirect, a slow lookup, a slow answer and an oversized body", async () => {
+  let called = false;
+  const never = <T>() => new Promise<T>(() => {});
+  assert.equal(await resolveClient("https://internal.example/c1", deps(async () => { called = true; return { status: 200, body: "{}" }; }, async () => ["10.0.0.1"])), null);
+  assert.equal(called, false, "a private address is never contacted");
+  assert.equal(await resolveClient("https://internal.example/c2", deps(doc({}), async () => [PUBLIC_IP, "127.0.0.1"])), null, "any private answer refuses the host");
+  assert.equal(await resolveClient("https://moved.example/c", deps(doc({ client_id: "x" }, 302))), null);
+  let started = Date.now();
+  assert.equal(await resolveClient("https://slowdns.example/c", deps(doc({}), () => never())), null);
+  assert.ok(Date.now() - started < 3_500, "a slow DNS lookup is inside the 3 s budget");
+  started = Date.now();
+  assert.equal(await resolveClient("https://slow.example/c", deps(() => never())), null);
+  assert.ok(Date.now() - started < 3_500, "a slow answer times out");
+  assert.equal(await resolveClient("https://big.example/c", deps(async () => ({ status: 200, body: null }))), null, "the fetcher reports an oversized body as null");
+  const huge = { client_id: "https://huge.example/c", client_name: "x".repeat(40_000), redirect_uris: ["http://127.0.0.1/cb"] };
+  assert.equal(await resolveClient("https://huge.example/c", deps(doc(huge))), null);
 });
 
 test("cimd document whose client_id differs from its URL is refused; unknown plain ids are null", async () => {
-  const store = fakeStore();
-  const fetch = (async () => json({ client_id: "https://other.example/c", client_name: "X", redirect_uris: ["http://127.0.0.1/cb"] })) as typeof globalThis.fetch;
-  assert.equal(await resolveClient(URL_ID, { store, fetch, assertPublic: publicOk, now: () => new Date() }), null);
-  assert.equal(await resolveClient("agon_dcr_missing", { store, fetch, assertPublic: publicOk, now: () => new Date() }), null);
+  assert.equal(await resolveClient("https://mismatch.example/c", deps(doc({ client_id: "https://other.example/c", client_name: "X", redirect_uris: ["http://127.0.0.1/cb"] }))), null);
+  assert.equal(await resolveClient("agon_dcr_missing", deps(doc({}))), null);
 });
 
 test("a failed metadata document is not fetched again for a few minutes", async () => {
   const store = fakeStore();
   let calls = 0;
-  const fetch = (async () => { calls += 1; return new Response("nope", { status: 404 }); }) as typeof globalThis.fetch;
+  const get: DocumentFetcher = async () => { calls += 1; return { status: 404, body: "nope" }; };
   const id = "https://broken.example/client.json";
-  assert.equal(await resolveClient(id, { store, fetch, assertPublic: publicOk, now: () => new Date("2026-10-17T12:00:00Z") }), null);
-  assert.equal(await resolveClient(id, { store, fetch, assertPublic: publicOk, now: () => new Date("2026-10-17T12:01:00Z") }), null);
+  const at = (t: string) => ({ store, resolve: resolvePublic, get, now: () => new Date(t) });
+  assert.equal(await resolveClient(id, at("2026-10-17T12:00:00Z")), null);
+  assert.equal(await resolveClient(id, at("2026-10-17T12:01:00Z")), null);
   assert.equal(calls, 1);
-  await resolveClient(id, { store, fetch, assertPublic: publicOk, now: () => new Date("2026-10-17T12:06:00Z") });
+  await resolveClient(id, at("2026-10-17T12:06:00Z"));
   assert.equal(calls, 2);
 });

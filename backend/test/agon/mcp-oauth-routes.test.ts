@@ -197,3 +197,11 @@ test("authorize is rate limited per network address", async () => {
   assert.equal(res.status, 429);
   assert.equal(res.headers.get("location"), null);
 });
+
+test("the approve endpoint only takes JSON", async () => {
+  const { app } = setup();
+  const client = await register(app);
+  const id = new URL((await app.request(authorizeUrl(client.client_id))).headers.get("location")!).searchParams.get("request")!;
+  const res = await app.request(`/oauth/requests/${id}/decision`, { method: "POST", headers: { "x-test-address": ALICE, "content-type": "text/plain" }, body: JSON.stringify({ approve: true, level: "full" }) });
+  assert.equal(res.status, 415);
+});

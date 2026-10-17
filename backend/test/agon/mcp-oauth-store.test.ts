@@ -141,3 +141,23 @@ test("database rows hold only hashes", async () => {
   const rows = JSON.stringify((await db.pool.query("select * from agon_oauth_tokens")).rows) + JSON.stringify((await db.pool.query("select * from agon_oauth_requests")).rows);
   for (const secret of [pair.accessToken, pair.refreshToken, code]) assert.equal(rows.includes(secret), false);
 });
+
+test("a code used a second time cancels the tokens it already issued", async () => {
+  const a = await approved();
+  const input = { code: a.code, clientId: a.client.clientId, redirectUri: REDIRECT, codeVerifier: VERIFIER, resource: RESOURCE, now: t0 };
+  const pair = await store.redeemCode(input);
+  assert.ok("accessToken" in pair);
+  assert.deepEqual(await store.redeemCode(input), { error: "invalid_grant" });
+  assert.equal(await store.verifyAccess(pair.accessToken, RESOURCE, at(1)), null);
+});
+
+test("last used is written at most once a minute", async () => {
+  const { pair } = await tokens();
+  const lastUsed = async () => (await db.pool.query<{ last_used_at: Date }>("select c.last_used_at from agon_oauth_tokens t join agon_oauth_connections c on c.id = t.connection_id where t.kind = 'access' and t.token_hash = encode(sha256($1::bytea), 'hex')", [pair.accessToken])).rows[0]!.last_used_at;
+  await store.verifyAccess(pair.accessToken, RESOURCE, at(1_000));
+  assert.equal((await lastUsed()).getTime(), at(1_000).getTime());
+  await store.verifyAccess(pair.accessToken, RESOURCE, at(30_000));
+  assert.equal((await lastUsed()).getTime(), at(1_000).getTime(), "no write within a minute");
+  await store.verifyAccess(pair.accessToken, RESOURCE, at(62_000));
+  assert.equal((await lastUsed()).getTime(), at(62_000).getTime());
+});

@@ -101,7 +101,14 @@ export class PostgresOAuthStore {
       [hashSecret(input.code), input.now],
     );
     const r = rows[0];
-    if (!r || r.code_expires_at <= input.now || r.client_id !== input.clientId || r.redirect_uri !== input.redirectUri || r.resource !== normalizeResource(input.resource)) return INVALID;
+    if (!r) {
+      // A code that comes back after use was stolen or replayed: cancel what it issued (RFC 6749 4.1.2).
+      const used = await this.pool.query<{ connection_id: string | null }>("select connection_id from agon_oauth_requests where code_hash = $1 and code_used_at is not null", [hashSecret(input.code)]);
+      const connectionId = used.rows[0]?.connection_id;
+      if (connectionId) await this.revokeConnection(connectionId, input.now);
+      return INVALID;
+    }
+    if (r.code_expires_at <= input.now || r.client_id !== input.clientId || r.redirect_uri !== input.redirectUri || r.resource !== normalizeResource(input.resource)) return INVALID;
     if (!verifyPkceS256(input.codeVerifier, r.code_challenge)) return INVALID;
     const conn = await this.liveConnection(r.connection_id);
     if (!conn) return INVALID;
@@ -141,7 +148,11 @@ export class PostgresOAuthStore {
     );
     const r = rows[0];
     if (!r) return null;
-    await this.pool.query("update agon_oauth_connections set last_used_at = $2 where id = $1", [r.connection_id, now]);
+    // At most one write a minute per connection, not one per MCP call.
+    await this.pool.query(
+      "update agon_oauth_connections set last_used_at = $2 where id = $1 and (last_used_at is null or last_used_at < $2::timestamptz - interval '1 minute')",
+      [r.connection_id, now],
+    );
     return { address: r.owner_address, scopes: r.scopes, clientName: r.client_name };
   }
 

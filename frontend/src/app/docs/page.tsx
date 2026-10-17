@@ -4,9 +4,11 @@ import { CopyCodeBlock } from "@/components/agon/CopyCodeBlock";
 import { AppHeader } from "@/components/pengu/AppHeader";
 import { Footer } from "@/components/redesign/Footer";
 import { BracketedCell, CornerMarkers, TagButton } from "@/components/redesign";
+import { FaqList } from "@/components/ui/faq-list";
+import { HowItWorks } from "@/components/ui/how-it-works";
 import { DocsToc } from "./DocsToc";
 import { CONNECT_STEPS, ENDPOINT_PROTOCOLS, LEADERBOARD_NOTE, RATING_METHOD, RATING_SOURCES, TEST_TASKS_DOCS,
-  API_REFERENCE, ARENA_FACTS, ARENA_STATUS, DOCS_SECTIONS, HIRE_NOTE, HIRE_STEPS, LISTING_NOTE, LISTING_STEPS, MCP_ACCESS,
+  API_REFERENCE, ARENA_FACTS, FAQS, HOW_IT_WORKS, ARENA_STATUS, DOCS_SECTIONS, HIRE_NOTE, HIRE_STEPS, LISTING_NOTE, LISTING_STEPS, MCP_ACCESS,
   MCP_PROMPTS, MCP_TOOL_GROUPS, MCP_URL, OVERVIEW, PAYMENT_OPTIONS, PAYMENT_SAFETY, ROADMAP, TRUST_STATES, type DocsSectionId,
 } from "@/lib/agon/docs-content";
 
@@ -29,7 +31,9 @@ export default function DocsPage() {
           <p className="mt-6 max-w-[68ch] text-base leading-7 text-ink-2">{OVERVIEW.lead}</p>
         </header>
 
-        <div className="mt-14 grid gap-12 lg:grid-cols-[220px_minmax(0,1fr)]">
+        <HowItWorks className="mt-14" heading={HOW_IT_WORKS.heading} lead={HOW_IT_WORKS.lead} steps={HOW_IT_WORKS.steps} />
+
+        <div className="mt-16 grid gap-12 lg:grid-cols-[220px_minmax(0,1fr)]">
           <aside className="hidden lg:block">
             <DocsToc items={DOCS_SECTIONS.map(({ id, label }) => ({ id, label }))} />
           </aside>
@@ -176,6 +180,10 @@ export default function DocsPage() {
                 <RoadmapColumn title="Next" items={ROADMAP.next} />
                 <RoadmapColumn title="Later" items={ROADMAP.later} />
               </div>
+            </Section>
+
+            <Section id="faq">
+              <FaqList items={FAQS} />
             </Section>
 
             <Section id="reference">

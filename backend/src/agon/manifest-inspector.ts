@@ -71,7 +71,7 @@ for (const [network, prefix] of [
   ["2001:db8::", 32], ["fc00::", 7], ["fe80::", 10], ["ff00::", 8],
 ] as const) NON_PUBLIC_V6.addSubnet(network, prefix, "ipv6");
 
-function isPublicAddress(address: string): boolean {
+export function isPublicAddress(address: string): boolean {
   const value = address.toLowerCase().replace(/^\[|\]$/g, "");
   const family = isIP(value);
   if (family === 4) return !NON_PUBLIC_V4.check(value, "ipv4");

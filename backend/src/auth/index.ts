@@ -22,7 +22,8 @@ import { PostgresAgonRepository } from "../agon/store/repository.js";
 import { createAgonRoutes } from "../agon/http/routes.js";
 import { clientAddress } from "../http/client-address.js";
 import { PostgresCustodyTerms } from "../agon/stage/custody-terms.js";
-import { resolveClient as resolveOAuthClient } from "../agon/mcp-oauth/clients.js";
+import { pinnedHttpsGet, resolveClient as resolveOAuthClient } from "../agon/mcp-oauth/clients.js";
+import { lookup as dnsLookup } from "node:dns/promises";
 import { createOAuthRoutes } from "../agon/mcp-oauth/routes.js";
 import { PostgresOAuthStore } from "../agon/mcp-oauth/store.js";
 import { startSeasonRuntime } from "../agon/playground/seasons/runtime.ts";
@@ -991,7 +992,7 @@ app.route("/", createOAuthRoutes({
   appUrl: config.auth.appUrl.replace(/\/+$/, ""),
   requireAuth,
   terms: custodyTerms,
-  resolveClient: (clientId) => resolveOAuthClient(clientId, { store: oauthStore, fetch, assertPublic: (url) => assertPublicHttpsDestination(url), now: () => new Date() }),
+  resolveClient: (clientId) => resolveOAuthClient(clientId, { store: oauthStore, resolve: async (host) => (await dnsLookup(host, { all: true })).map((a) => a.address), get: pinnedHttpsGet, now: () => new Date() }),
 }));
 app.route("/agon", createAgonRoutes({
   service: agonService,

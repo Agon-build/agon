@@ -148,6 +148,8 @@ export function createOAuthRoutes(deps: {
   });
 
   app.post("/oauth/requests/:id/decision", async (c) => {
+    // JSON only: a plain form post from another site cannot approve without a CORS preflight.
+    if (!(c.req.header("content-type") ?? "").toLowerCase().startsWith("application/json")) return c.json({ error: "unsupported_media_type" }, 415);
     const body = decisionBody.safeParse(await c.req.json().catch(() => null));
     if (!body.success) return c.json({ error: "invalid_body" }, 400);
     const id = c.req.param("id");

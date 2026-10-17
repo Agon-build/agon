@@ -1,3 +1,7 @@
+import https from "node:https";
+import { isIP } from "node:net";
+
+import { isPublicAddress } from "../manifest-inspector.ts";
 import { isAllowedRedirectUri } from "./rules.ts";
 import type { OAuthClient, PostgresOAuthStore } from "./store.ts";
 
@@ -24,27 +28,40 @@ export function parseRegistration(body: unknown): { ok: true; value: Registratio
   return { ok: true, value: { clientName: name || "MCP client", redirectUris: uris as string[], logoUri: logo } };
 }
 
-async function readCapped(res: Response): Promise<string | null> {
-  if (!res.body) return "";
-  const reader = res.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  for (;;) {
-    const next = await reader.read();
-    if (next.done) break;
-    size += next.value.byteLength;
-    if (size > MAX_DOCUMENT_BYTES) { await reader.cancel().catch(() => {}); return null; }
-    chunks.push(next.value);
-  }
-  return Buffer.concat(chunks).toString("utf8");
-}
+/// Fetches one https document from an already vetted address, so a second DNS
+/// answer cannot point the request somewhere else. Body over the cap is null.
+export type DocumentFetcher = (url: URL, address: string, signal: AbortSignal) => Promise<{ status: number; body: string | null }>;
+
+type ResolveDeps = { store: ClientStore; resolve: (hostname: string) => Promise<string[]>; get: DocumentFetcher; now: () => Date };
+
+export const pinnedHttpsGet: DocumentFetcher = (url, address, signal) =>
+  new Promise((resolve, reject) => {
+    const req = https.get(url, {
+      signal,
+      headers: { accept: "application/json" },
+      servername: url.hostname,
+      lookup: (_host, options, callback) => {
+        const family = isIP(address);
+        if ((options as { all?: boolean }).all) (callback as (e: null, a: { address: string; family: number }[]) => void)(null, [{ address, family }]);
+        else (callback as (e: null, a: string, f: number) => void)(null, address, family);
+      },
+    }, (res) => {
+      const chunks: Buffer[] = [];
+      let size = 0;
+      res.on("data", (chunk: Buffer) => {
+        size += chunk.byteLength;
+        if (size > MAX_DOCUMENT_BYTES) { res.destroy(); resolve({ status: res.statusCode ?? 0, body: null }); return; }
+        chunks.push(chunk);
+      });
+      res.on("end", () => resolve({ status: res.statusCode ?? 0, body: Buffer.concat(chunks).toString("utf8") }));
+      res.on("error", reject);
+    });
+    req.on("error", reject);
+  });
 
 /// Finds a client by id. An https URL id is a Client ID Metadata Document,
 /// fetched from a public address only, and cached for an hour.
-export async function resolveClient(
-  clientId: string,
-  deps: { store: ClientStore; fetch: typeof fetch; assertPublic: (url: string) => Promise<URL>; now: () => Date },
-): Promise<OAuthClient | null> {
+export async function resolveClient(clientId: string, deps: ResolveDeps): Promise<OAuthClient | null> {
   if (!/^https:\/\//.test(clientId)) return clientId.length <= 512 ? deps.store.getClient(clientId) : null;
   const cached = await deps.store.getClient(clientId);
   if (cached && cached.source === "cimd" && deps.now().getTime() - cached.fetchedAt.getTime() < CACHE_MS) return cached;
@@ -59,31 +76,27 @@ export async function resolveClient(
   return found;
 }
 
-async function fetchDocument(
-  clientId: string,
-  deps: { store: ClientStore; fetch: typeof fetch; assertPublic: (url: string) => Promise<URL>; now: () => Date },
-): Promise<OAuthClient | null> {
+async function fetchDocument(clientId: string, deps: ResolveDeps): Promise<OAuthClient | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const timeout = new Promise<null>((resolve) => controller.signal.addEventListener("abort", () => resolve(null)));
   try {
-    const url = await deps.assertPublic(clientId);
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-    try {
-      const res = await Promise.race([
-        deps.fetch(url, { redirect: "manual", signal: controller.signal, headers: { accept: "application/json" } }),
-        new Promise<never>((_, reject) => controller.signal.addEventListener("abort", () => reject(new Error("timeout")))),
-      ]);
-      if (res.status !== 200) return null;
-      const text = await readCapped(res);
-      if (text === null) return null;
-      const doc = JSON.parse(text) as Record<string, unknown>;
+    // One budget covers the DNS lookup, the connection and the body.
+    return await Promise.race([timeout, (async () => {
+      const url = new URL(clientId);
+      if (url.protocol !== "https:" || url.username || url.password) return null;
+      const addresses = await deps.resolve(url.hostname);
+      if (addresses.length === 0 || !addresses.every(isPublicAddress)) return null;
+      const res = await deps.get(url, addresses[0]!, controller.signal);
+      if (res.status !== 200 || res.body === null || res.body.length > MAX_DOCUMENT_BYTES) return null;
+      const doc = JSON.parse(res.body) as Record<string, unknown>;
       if (doc.client_id !== clientId) return null;
       const parsed = parseRegistration(doc);
       if (!parsed.ok) return null;
       return deps.store.registerClient({ ...parsed.value, source: "cimd", clientId });
-    } finally {
-      clearTimeout(timer);
-    }
-  } catch {
-    return null;
+    })().catch(() => null)]);
+  } finally {
+    clearTimeout(timer);
+    controller.abort();
   }
 }
