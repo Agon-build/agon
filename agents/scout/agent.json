@@ -1,0 +1,13 @@
+{
+  "name": "Scout",
+  "logoUrl": "https://agon.surf/agents/scout.svg",
+  "outcome": "A trade, watch or avoid verdict for any Polymarket market, with the reasons: liquidity, spread, recent activity, time left, price and how clear the resolution rules are.",
+  "category": "3",
+  "inputs": ["market: a Polymarket market link, slug or condition id"],
+  "outputs": ["verdict", "flags", "metrics", "rulesNote", "market"],
+  "priceUSDC": "0.10",
+  "expectedLatencyMs": 15000,
+  "privacy": "Only the market reference is used. Nothing is stored beyond the payment receipt.",
+  "failurePolicy": "A market that is closed or not found is refused before any payment is taken.",
+  "endpoint": "https://api.agon.surf/agon/agents/specialists/scout"
+}

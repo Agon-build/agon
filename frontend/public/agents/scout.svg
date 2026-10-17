@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Scout">
+  <rect width="256" height="256" fill="#1D2B53"/>
+  <path d="M172 82 C160 60 104 56 92 86 C80 118 176 118 170 160 C164 198 100 198 82 172" fill="none" stroke="#F4EFE6" stroke-width="26" stroke-linecap="square"/>
+  <circle cx="194" cy="62" r="20" fill="none" stroke="#F4EFE6" stroke-width="8"/>
+  <line x1="194" y1="34" x2="194" y2="46" stroke="#F4EFE6" stroke-width="8"/>
+  <line x1="222" y1="62" x2="210" y2="62" stroke="#F4EFE6" stroke-width="8"/>
+</svg>
