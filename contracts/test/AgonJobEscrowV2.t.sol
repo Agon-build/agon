@@ -150,4 +150,129 @@ contract AgonJobEscrowV2Test is Test {
         assertEq(usdc.balanceOf(treasury), 5e6);
         assertEq(escrow.escrowedAmount(jobId), 0);
     }
+
+    bytes32 internal constant REASON_HASH = keccak256("reason-v1");
+
+    function _submitted(bytes32 clientRef) internal returns (uint256 jobId) {
+        jobId = _create(clientRef);
+        vm.prank(provider);
+        escrow.acceptJob(jobId);
+        vm.prank(provider);
+        escrow.submitJob(jobId, DELIVERABLE_HASH);
+    }
+
+    function _rejected(bytes32 clientRef) internal returns (uint256 jobId) {
+        jobId = _submitted(clientRef);
+        vm.prank(buyer);
+        escrow.rejectSubmission(jobId, REASON_HASH);
+    }
+
+    function _disputed(bytes32 clientRef) internal returns (uint256 jobId) {
+        jobId = _rejected(clientRef);
+        vm.prank(provider);
+        escrow.openDispute(jobId, REASON_HASH);
+    }
+
+    function test_buyerRefundAfterRejectionWindowReturnsAmountAndFee() public {
+        uint256 jobId = _rejected(keccak256("reject-refund"));
+        uint256 before = usdc.balanceOf(buyer);
+
+        vm.warp(block.timestamp + escrow.REJECTION_WINDOW() + 1);
+        vm.prank(provider);
+        vm.expectRevert(AgonJobEscrowV2.NotBuyer.selector);
+        escrow.claimRefundAfterRejection(jobId);
+
+        vm.prank(buyer);
+        escrow.claimRefundAfterRejection(jobId);
+
+        AgonJobEscrowV2.Job memory job = escrow.getJob(jobId);
+        assertEq(uint8(job.status), uint8(AgonJobEscrowV2.Status.Failed));
+        assertEq(uint8(job.settlement), uint8(AgonJobEscrowV2.Settlement.BuyerRefunded));
+        assertEq(usdc.balanceOf(buyer), before + AMOUNT + 5e6);
+        assertEq(usdc.balanceOf(provider), 0);
+        assertEq(usdc.balanceOf(treasury), 0);
+        assertEq(usdc.balanceOf(address(escrow)), 0);
+        assertEq(escrow.escrowedAmount(jobId), 0);
+
+        vm.prank(buyer);
+        vm.expectRevert(AgonJobEscrowV2.InvalidStatus.selector);
+        escrow.claimRefundAfterRejection(jobId);
+    }
+
+    function test_refundBeforeRejectionWindowReverts() public {
+        uint256 jobId = _rejected(keccak256("reject-early"));
+        vm.warp(block.timestamp + escrow.REJECTION_WINDOW());
+        vm.prank(buyer);
+        vm.expectRevert(AgonJobEscrowV2.RejectionWindowOpen.selector);
+        escrow.claimRefundAfterRejection(jobId);
+    }
+
+    function test_disputeMustOpenInsideRejectionWindow() public {
+        uint256 jobId = _rejected(keccak256("reject-late-dispute"));
+        vm.warp(block.timestamp + escrow.REJECTION_WINDOW() + 1);
+        vm.prank(provider);
+        vm.expectRevert(AgonJobEscrowV2.RejectionWindowClosed.selector);
+        escrow.openDispute(jobId, REASON_HASH);
+    }
+
+    function test_refundAfterRejectionNotAvailableOnceDisputed() public {
+        uint256 jobId = _disputed(keccak256("disputed-no-reject-refund"));
+        vm.warp(block.timestamp + escrow.REJECTION_WINDOW() + 1);
+        vm.prank(buyer);
+        vm.expectRevert(AgonJobEscrowV2.InvalidStatus.selector);
+        escrow.claimRefundAfterRejection(jobId);
+    }
+
+    function test_staleDisputeExitRefundsBuyerForEitherParty() public {
+        uint256 jobA = _disputed(keccak256("stale-a"));
+        uint256 jobB = _disputed(keccak256("stale-b"));
+        uint256 before = usdc.balanceOf(buyer);
+
+        vm.warp(block.timestamp + escrow.RESOLVER_WINDOW());
+        vm.prank(buyer);
+        vm.expectRevert(AgonJobEscrowV2.ResolverWindowOpen.selector);
+        escrow.exitStaleDispute(jobA);
+
+        vm.warp(block.timestamp + 1);
+        vm.prank(makeAddr("stranger"));
+        vm.expectRevert(AgonJobEscrowV2.NotParty.selector);
+        escrow.exitStaleDispute(jobA);
+
+        vm.prank(buyer);
+        escrow.exitStaleDispute(jobA);
+        vm.prank(provider);
+        escrow.exitStaleDispute(jobB);
+
+        assertEq(usdc.balanceOf(buyer), before + 2 * (AMOUNT + 5e6));
+        assertEq(usdc.balanceOf(provider), 0);
+        assertEq(usdc.balanceOf(address(escrow)), 0);
+        assertEq(uint8(escrow.getJob(jobA).settlement), uint8(AgonJobEscrowV2.Settlement.BuyerRefunded));
+
+        vm.prank(buyer);
+        vm.expectRevert(AgonJobEscrowV2.InvalidStatus.selector);
+        escrow.exitStaleDispute(jobA);
+        vm.prank(resolver);
+        vm.expectRevert(AgonJobEscrowV2.InvalidStatus.selector);
+        escrow.resolveDispute(jobB, true);
+    }
+
+    function test_resolverStillSettlesInsideWindowAndNotAfter() public {
+        uint256 jobA = _disputed(keccak256("resolve-inside"));
+        uint256 jobB = _disputed(keccak256("resolve-late"));
+
+        vm.warp(block.timestamp + escrow.RESOLVER_WINDOW());
+        vm.prank(resolver);
+        escrow.resolveDispute(jobA, true);
+        assertEq(usdc.balanceOf(provider), AMOUNT);
+        assertEq(usdc.balanceOf(treasury), 5e6);
+
+        vm.prank(buyer);
+        vm.expectRevert(AgonJobEscrowV2.InvalidStatus.selector);
+        escrow.exitStaleDispute(jobA);
+
+        vm.warp(block.timestamp + 1);
+        vm.prank(resolver);
+        vm.expectRevert(AgonJobEscrowV2.ResolverWindowClosed.selector);
+        escrow.resolveDispute(jobB, true);
+    }
 }

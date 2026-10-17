@@ -22,6 +22,12 @@ contract AgonJobEscrowV2 is AccessControl, Pausable, ReentrancyGuard {
     uint64 public constant PROTOCOL_FEE_CHANGE_DELAY = 2 days;
     uint64 public constant MAX_REVIEW_HOURS = 720;
     uint64 public constant MIN_REVIEW_HOURS = 1;
+    /// @notice Time after a rejection in which either party may open a dispute.
+    /// @dev After it passes with no dispute, the buyer can take a full refund.
+    uint64 public constant REJECTION_WINDOW = 7 days;
+    /// @notice Time the dispute resolver has to settle an open dispute.
+    /// @dev After it passes, either party can exit and the buyer is refunded.
+    uint64 public constant RESOLVER_WINDOW = 14 days;
 
     enum Status {
         Created,
@@ -73,6 +79,10 @@ contract AgonJobEscrowV2 is AccessControl, Pausable, ReentrancyGuard {
     uint256 private _nextJobId = 1;
     mapping(uint256 => Job) private _jobs;
     mapping(address => mapping(bytes32 => uint256)) public jobByReference;
+    /// @notice When the buyer rejected the submission. Kept outside Job so getJob stays ABI stable.
+    mapping(uint256 => uint64) public rejectedAt;
+    /// @notice When the dispute was opened. Kept outside Job so getJob stays ABI stable.
+    mapping(uint256 => uint64) public disputedAt;
 
     event JobCreated(
         uint256 indexed jobId,
@@ -98,6 +108,8 @@ contract AgonJobEscrowV2 is AccessControl, Pausable, ReentrancyGuard {
         uint256 indexed jobId, Settlement settlement, address indexed recipient, uint256 amount, uint256 fee
     );
     event JobFailed(uint256 indexed jobId, address indexed caller, Settlement settlement);
+    event RejectionRefundClaimed(uint256 indexed jobId, address indexed buyer, uint256 total);
+    event StaleDisputeExited(uint256 indexed jobId, address indexed caller, uint256 total);
     event TreasuryUpdated(address indexed oldTreasury, address indexed newTreasury);
     event ProtocolFeeChangeScheduled(uint256 indexed oldFeeBps, uint256 indexed newFeeBps, uint64 effectiveAt);
     event ProtocolFeeChanged(uint256 indexed oldFeeBps, uint256 indexed newFeeBps);
@@ -125,6 +137,11 @@ contract AgonJobEscrowV2 is AccessControl, Pausable, ReentrancyGuard {
     error FeeChangePending();
     error NoPendingFeeChange();
     error FeeChangeTimelocked();
+    error NotParty();
+    error RejectionWindowOpen();
+    error RejectionWindowClosed();
+    error ResolverWindowOpen();
+    error ResolverWindowClosed();
 
     constructor(
         address admin,
@@ -285,22 +302,52 @@ contract AgonJobEscrowV2 is AccessControl, Pausable, ReentrancyGuard {
         if (block.timestamp > job.reviewDeadline) revert ReviewWindowClosed();
         if (reasonHash == bytes32(0)) revert ZeroHash();
         job.status = Status.Rejected;
+        rejectedAt[jobId] = uint64(block.timestamp);
         emit JobRejected(jobId, reasonHash);
     }
 
+    /// @notice Open a dispute on a rejected job. Must happen inside REJECTION_WINDOW.
     function openDispute(uint256 jobId, bytes32 reasonHash) external {
         Job storage job = _job(jobId);
         if (msg.sender != job.provider && msg.sender != job.buyer) revert NotBuyer();
         if (job.status != Status.Rejected) revert InvalidStatus();
         if (reasonHash == bytes32(0)) revert ZeroHash();
+        if (block.timestamp > uint256(rejectedAt[jobId]) + REJECTION_WINDOW) revert RejectionWindowClosed();
         job.status = Status.Disputed;
+        disputedAt[jobId] = uint64(block.timestamp);
         emit JobDisputed(jobId, msg.sender, reasonHash);
     }
 
+    /// @notice Buyer exit for a rejection that nobody disputed.
+    /// @dev Refunds amount plus fee. The fee is returned because the job never
+    ///      completed, so the protocol earned nothing. Same payout as failJob.
+    function claimRefundAfterRejection(uint256 jobId) external nonReentrant {
+        Job storage job = _job(jobId);
+        if (msg.sender != job.buyer) revert NotBuyer();
+        if (job.status != Status.Rejected) revert InvalidStatus();
+        if (block.timestamp <= uint256(rejectedAt[jobId]) + REJECTION_WINDOW) revert RejectionWindowOpen();
+        _refundBuyer(job);
+        emit RejectionRefundClaimed(jobId, msg.sender, job.amount + job.fee);
+    }
+
+    /// @notice Exit for a dispute the resolver did not settle in RESOLVER_WINDOW.
+    /// @dev Either party may call. The buyer gets amount plus fee back, since
+    ///      no ruling ever found the work acceptable.
+    function exitStaleDispute(uint256 jobId) external nonReentrant {
+        Job storage job = _job(jobId);
+        if (msg.sender != job.buyer && msg.sender != job.provider) revert NotParty();
+        if (job.status != Status.Disputed) revert InvalidStatus();
+        if (block.timestamp <= uint256(disputedAt[jobId]) + RESOLVER_WINDOW) revert ResolverWindowOpen();
+        _refundBuyer(job);
+        emit StaleDisputeExited(jobId, msg.sender, job.amount + job.fee);
+    }
+
+    /// @notice Settle an open dispute. Only valid inside RESOLVER_WINDOW.
     function resolveDispute(uint256 jobId, bool payProvider) external nonReentrant {
         if (msg.sender != disputeResolver) revert NotDisputeResolver();
         Job storage job = _job(jobId);
         if (job.status != Status.Disputed) revert InvalidStatus();
+        if (block.timestamp > uint256(disputedAt[jobId]) + RESOLVER_WINDOW) revert ResolverWindowClosed();
         if (payProvider) {
             _payProvider(job);
         } else {

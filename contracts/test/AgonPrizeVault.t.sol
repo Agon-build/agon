@@ -23,6 +23,9 @@ contract AgonPrizeVaultTest is Test {
         usdc.mint(sponsor, 2000e6);
         vm.prank(sponsor);
         usdc.approve(address(vault), type(uint256).max);
+        vm.startPrank(admin);
+        vault.grantRole(vault.POOL_OPERATOR_ROLE(), sponsor);
+        vm.stopPrank();
     }
 
     function _leaf(uint256 index, address beneficiary, uint256 amount) internal pure returns (bytes32) {
@@ -34,7 +37,7 @@ contract AgonPrizeVaultTest is Test {
     }
 
     function _fund() internal {
-        vm.prank(admin);
+        vm.prank(sponsor);
         vault.createPool(POOL, AgonPrizeVault.PoolKind.Syndicate, 7, sponsor, PRINCIPAL, 500);
     }
 
@@ -90,5 +93,112 @@ contract AgonPrizeVaultTest is Test {
         vm.prank(admin);
         vault.refundRemaining(POOL);
         assertEq(usdc.balanceOf(sponsor), 1950e6);
+    }
+
+    function test_operatorCannotPullFromApprovingSponsorWithoutConsent() public {
+        vm.prank(admin);
+        vm.expectRevert(AgonPrizeVault.SponsorMustBeCaller.selector);
+        vault.createPool(POOL, AgonPrizeVault.PoolKind.Syndicate, 7, sponsor, PRINCIPAL, 500);
+        assertEq(usdc.balanceOf(sponsor), 2000e6);
+    }
+
+    function test_sponsorConsentCannotBeReplayedIntoASecondPool() public {
+        _fund();
+        assertEq(usdc.balanceOf(sponsor), 2000e6 - 1050e6);
+        // The sponsor still has a standing allowance, but only the sponsor can spend it.
+        vm.prank(admin);
+        vm.expectRevert(AgonPrizeVault.SponsorMustBeCaller.selector);
+        vault.createPool(keccak256("syndicate-pool-2"), AgonPrizeVault.PoolKind.Syndicate, 7, sponsor, 100e6, 0);
+        vm.prank(sponsor);
+        vm.expectRevert(AgonPrizeVault.PoolAlreadyExists.selector);
+        vault.createPool(POOL, AgonPrizeVault.PoolKind.Syndicate, 7, sponsor, PRINCIPAL, 500);
+        assertEq(usdc.balanceOf(sponsor), 2000e6 - 1050e6);
+    }
+
+    function test_refundUnpublishedReturnsPrincipalAfterRootWindow() public {
+        _fund();
+        uint256 window = vault.ROOT_PUBLISH_WINDOW();
+        vm.warp(block.timestamp + window);
+        vm.expectRevert(AgonPrizeVault.RootPublishWindowOpen.selector);
+        vault.refundUnpublished(POOL);
+
+        vm.warp(block.timestamp + 1);
+        vm.prank(admin);
+        vm.expectRevert(AgonPrizeVault.RootPublishWindowClosed.selector);
+        vault.publishPayoutRoot(POOL, keccak256("root"), PRINCIPAL, uint64(block.timestamp + 7 days));
+
+        vm.prank(alice);
+        vault.refundUnpublished(POOL);
+        assertEq(usdc.balanceOf(sponsor), 2000e6 - 50e6);
+        assertEq(usdc.balanceOf(address(vault)), 0);
+        assertEq(uint8(vault.getPool(POOL).state), uint8(AgonPrizeVault.State.Closed));
+
+        vm.expectRevert(AgonPrizeVault.InvalidState.selector);
+        vault.refundUnpublished(POOL);
+    }
+
+    function test_refundUnpublishedNotAvailableAfterRootPublished() public {
+        _fund();
+        vm.prank(admin);
+        vault.publishPayoutRoot(POOL, keccak256("root"), PRINCIPAL, uint64(block.timestamp + 7 days));
+        vm.warp(block.timestamp + vault.ROOT_PUBLISH_WINDOW() + 1);
+        vm.expectRevert(AgonPrizeVault.InvalidState.selector);
+        vault.refundUnpublished(POOL);
+    }
+
+    function test_pauseExtendsRootPublishWindow() public {
+        _fund();
+        uint256 start = block.timestamp;
+        vm.warp(start + 20 days);
+        vm.prank(admin);
+        vault.pause();
+        vm.warp(start + 35 days);
+        vm.prank(admin);
+        vault.unpause();
+
+        vm.warp(start + vault.ROOT_PUBLISH_WINDOW() + 1);
+        vm.expectRevert(AgonPrizeVault.RootPublishWindowOpen.selector);
+        vault.refundUnpublished(POOL);
+        vm.warp(start + vault.ROOT_PUBLISH_WINDOW() + 15 days + 1);
+        vault.refundUnpublished(POOL);
+        assertEq(usdc.balanceOf(sponsor), 2000e6 - 50e6);
+    }
+
+    function test_pauseDoesNotEatTheClaimWindow() public {
+        _fund();
+        bytes32 aliceLeaf = _leaf(0, alice, 600e6);
+        bytes32 bobLeaf = _leaf(1, bob, 300e6);
+        uint256 start = block.timestamp;
+        uint64 deadline = uint64(start + 7 days);
+        vm.prank(admin);
+        vault.publishPayoutRoot(POOL, _root(aliceLeaf, bobLeaf), 900e6, deadline);
+
+        vm.warp(start + 3 days);
+        vm.prank(admin);
+        vault.pause();
+        vm.warp(start + 13 days);
+        vm.prank(admin);
+        vault.unpause();
+        assertEq(vault.effectiveClaimDeadline(POOL), uint256(deadline) + 10 days);
+
+        // 4 days of the original 7 were left at pause time; they are all still there.
+        vm.warp(start + 13 days + 4 days - 1);
+        bytes32[] memory aliceProof = new bytes32[](1);
+        aliceProof[0] = bobLeaf;
+        vault.claim(POOL, 0, alice, 600e6, aliceProof);
+        assertEq(usdc.balanceOf(alice), 600e6);
+
+        vm.prank(admin);
+        vm.expectRevert(AgonPrizeVault.RefundWindowOpen.selector);
+        vault.refundRemaining(POOL);
+
+        vm.warp(start + 13 days + 4 days + 1);
+        bytes32[] memory bobProof = new bytes32[](1);
+        bobProof[0] = aliceLeaf;
+        vm.expectRevert(AgonPrizeVault.ClaimWindowClosed.selector);
+        vault.claim(POOL, 1, bob, 300e6, bobProof);
+        vm.prank(admin);
+        vault.refundRemaining(POOL);
+        assertEq(usdc.balanceOf(sponsor), 2000e6 - 50e6 - 600e6);
     }
 }
