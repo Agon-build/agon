@@ -11,6 +11,8 @@ const listing = {
   providerSnapshot: `0x${"c".repeat(64)}`, status: "Listed", verification: { status: "Verified", scope: { agentId: "42", listingId: "3", version: "1", category: "3" } }, risk: { unverified: false, warning: null, quarantineReason: null }, endpointQa: { status: "passed", checkedAt: new Date().toISOString(), endpointStatus: 200, evidenceHash: `0x${"d".repeat(64)}`, reason: "ok", attempts: 1, passedAttempts: 1, successRate: 100, endpointUrl: "https://provider.example/execute" }, payment: { rail: "X402", directX402: true, escrowEligible: false }, provenance: { sourceBlockNumber: "1", sourceTxHash: `0x${"e".repeat(64)}`, sourceLogIndex: 1 },
 } as const;
 
+const VALID_DRAFT = { name: "A", logoUrl: "https://e.com/l.png", outcome: "o", category: "3", inputs: ["i"], outputs: ["o"], priceUSDC: "0.22", expectedLatencyMs: 1000, privacy: "p", failurePolicy: "f", endpoint: "https://agent.example/run" };
+
 function request(body: unknown) {
   return new Request("https://api.agon.surf/agon/mcp", {
     method: "POST",
@@ -55,7 +57,7 @@ test("native MCP refuses provider mutations without an authenticated AGON actor"
   const handler = createAgonNativeMcpHandler(access);
   const response = await handler.fetch(request({
     jsonrpc: "2.0", id: 1, method: "tools/call",
-    params: { name: "start_listing", arguments: { name: "No actor" } },
+    params: { name: "start_listing", arguments: VALID_DRAFT },
   }));
   assert.equal(response.status, 200);
   assert.match(await response.text(), /authentication_required/);
@@ -74,10 +76,12 @@ test("native MCP enforces CLI capabilities before listing or spend actions", asy
     jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args },
   });
 
-  const deniedListing = await handler.fetch(call("start_listing", {}), { authInfo: authInfo(["agon:read"]) });
+  const deniedListing = await handler.fetch(call("start_listing", VALID_DRAFT), { authInfo: authInfo(["agon:read"]) });
   assert.match(await deniedListing.text(), /scope_required/);
-  const permittedListing = await handler.fetch(call("start_listing", {}), { authInfo: authInfo(["listing:prepare"]) });
-  assert.match(await permittedListing.text(), /invalid_request/);
+  const permittedListing = await handler.fetch(call("start_listing", VALID_DRAFT), { authInfo: authInfo(["listing:prepare"]) });
+  assert.match(await permittedListing.text(), /draftId/);
+  const malformed = await handler.fetch(call("start_listing", { ...VALID_DRAFT, inputs: "text, not a list" }), { authInfo: authInfo(["listing:prepare"]) });
+  assert.match(await malformed.text(), /must be array/, "the published shape names the exact fix");
 
   const deniedSpend = await handler.fetch(call("authorize_hire", {
     hireId: "hire-1", termsDigest: `0x${"a".repeat(64)}`, approval: "approve", idempotencyKey: "approval-1",
@@ -122,7 +126,7 @@ test("a revoked or expired access token gets a message that says what to do", as
   });
   const handler = createAgonNativeMcpHandler(access);
   for (const problem of ["revoked", "expired"]) {
-    const res = await handler.fetch(request({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "start_listing", arguments: {} } }), {
+    const res = await handler.fetch(request({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "start_listing", arguments: VALID_DRAFT } }), {
       authInfo: { token: "t", clientId: "rejected", scopes: [], extra: { tokenProblem: problem } },
     });
     const text = await res.text();
@@ -168,7 +172,10 @@ test("check_listing reports the hourly limit plainly", async () => {
   const handler = createAgonNativeMcpHandler(access);
   const authInfo = { token: "v", clientId: "agon-cli", scopes: ["listing:prepare"], extra: { address: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", client: "agon-cli" } };
   const draft = { name: "A", logoUrl: "https://e.com/l.png", outcome: "o", category: "3", inputs: ["i"], outputs: ["o"], priceUSDC: "0.22", expectedLatencyMs: 1000, privacy: "p", failurePolicy: "f", endpoint: "https://agent.example/run" };
-  const res = await handler.fetch(request({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "check_listing", arguments: draft } }), { authInfo });
+  const started = await (await handler.fetch(request({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "start_listing", arguments: draft } }), { authInfo })).text();
+  const payload = JSON.parse(started.split(/\r?\n/).find((l) => l.startsWith("data:"))!.slice(5)) as { result: { content: { text: string }[] } };
+  const draftId = (JSON.parse(payload.result.content[0]!.text) as { draftId: string }).draftId;
+  const res = await handler.fetch(request({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "check_listing", arguments: { draftId } } }), { authInfo });
   assert.match(await res.text(), /rate_limited[\s\S]*10 checks an hour/);
 });
 

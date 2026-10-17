@@ -3,6 +3,7 @@ import { McpServer, createMcpHandler, fromJsonSchema, type AuthInfo } from "@mod
 import { createMcpAccessAdapter } from "./adapter.ts";
 import type { ManagedPublisher } from "./managed-publisher.ts";
 import { registerStageTools, type StageMcpDeps } from "./stage-tools.ts";
+import { LISTING_GUIDE, compileListingSchema, confirmListingSchema, confirmPauseSchema, draftOnlySchema, pauseSchema, publishSchema, startListingSchema } from "./listing-schemas.ts";
 import { adapterResult, failure, requireActor, result } from "./tool-results.ts";
 import { REFUSALS } from "../tests/routes.ts";
 import type { RunResult } from "../tests/service.ts";
@@ -15,11 +16,6 @@ export type RatingsMcpDeps = {
 };
 
 type AccessAdapter = ReturnType<typeof createMcpAccessAdapter>;
-
-const openObject = fromJsonSchema<Record<string, unknown>>({
-  type: "object",
-  additionalProperties: true,
-});
 
 const searchSchema = fromJsonSchema<Record<string, unknown>>({
   type: "object",
@@ -127,8 +123,8 @@ export function createAgonNativeMcpHandler(access: AccessAdapter, publisher?: Ma
 
     server.registerTool("start_listing", {
       title: "Start a service listing",
-      description: "Create a provider listing draft from buyer-facing service terms. This never publishes or signs anything.",
-      inputSchema: openObject,
+      description: `Create a provider listing draft from buyer-facing service terms. ${LISTING_GUIDE}`,
+      inputSchema: startListingSchema,
     }, async (input) => {
       const authenticatedActor = requireActor(context.authInfo, "listing:prepare");
       return typeof authenticatedActor === "string"
@@ -139,7 +135,7 @@ export function createAgonNativeMcpHandler(access: AccessAdapter, publisher?: Ma
     server.registerTool("check_listing", {
       title: "Check a service listing",
       description: "Run provider draft checks and identify the next safe action before a publication request is prepared.",
-      inputSchema: openObject,
+      inputSchema: draftOnlySchema,
     }, async (input) => {
       const authenticatedActor = requireActor(context.authInfo, "listing:prepare");
       return typeof authenticatedActor === "string"
@@ -150,7 +146,7 @@ export function createAgonNativeMcpHandler(access: AccessAdapter, publisher?: Ma
     server.registerTool("compile_listing", {
       title: "Compile a checked listing",
       description: "Create the immutable service record from a checked draft. This does not publish or sign anything.",
-      inputSchema: openObject,
+      inputSchema: compileListingSchema,
     }, async (input) => {
       const authenticatedActor = requireActor(context.authInfo, "listing:prepare");
       return typeof authenticatedActor === "string"
@@ -170,7 +166,7 @@ export function createAgonNativeMcpHandler(access: AccessAdapter, publisher?: Ma
     server.registerTool("prepare_listing_publication", {
       title: "Prepare listing publication",
       description: "Prepare the exact provider wallet action needed to publish a compiled listing. The provider must review and sign it separately.",
-      inputSchema: openObject,
+      inputSchema: publishSchema,
     }, async (input) => {
       const authenticatedActor = requireActor(context.authInfo, "listing:write");
       if (typeof authenticatedActor !== "string") return authenticatedActor;
@@ -181,7 +177,7 @@ export function createAgonNativeMcpHandler(access: AccessAdapter, publisher?: Ma
     server.registerTool("prepare_listing_version", {
       title: "Prepare a listing version",
       description: "Prepare publication for a checked draft that updates an existing service. The provider must review and sign it separately.",
-      inputSchema: openObject,
+      inputSchema: publishSchema,
     }, async (input) => {
       const authenticatedActor = requireActor(context.authInfo, "listing:write");
       if (typeof authenticatedActor !== "string") return authenticatedActor;
@@ -192,7 +188,7 @@ export function createAgonNativeMcpHandler(access: AccessAdapter, publisher?: Ma
     server.registerTool("pause_listing", {
       title: "Prepare a listing pause",
       description: "Prepare the provider wallet action to pause an existing service listing.",
-      inputSchema: openObject,
+      inputSchema: pauseSchema,
     }, async (input) => {
       const authenticatedActor = requireActor(context.authInfo, "listing:write");
       return typeof authenticatedActor === "string"
@@ -203,7 +199,7 @@ export function createAgonNativeMcpHandler(access: AccessAdapter, publisher?: Ma
     server.registerTool("confirm_listing", {
       title: "Confirm a signed listing action",
       description: "Verify the transaction receipt for a provider-approved listing or version. Supply a transaction hash only after the wallet has signed and broadcast it.",
-      inputSchema: openObject,
+      inputSchema: confirmListingSchema,
     }, async (input) => {
       const authenticatedActor = requireActor(context.authInfo, "listing:confirm");
       return typeof authenticatedActor === "string"
@@ -214,7 +210,7 @@ export function createAgonNativeMcpHandler(access: AccessAdapter, publisher?: Ma
     server.registerTool("confirm_pause", {
       title: "Confirm a signed listing pause",
       description: "Verify the exact prepared pause transaction and its onchain receipt after the provider wallet signs and broadcasts it.",
-      inputSchema: openObject,
+      inputSchema: confirmPauseSchema,
     }, async (input) => {
       const authenticatedActor = requireActor(context.authInfo, "listing:confirm");
       return typeof authenticatedActor === "string"
