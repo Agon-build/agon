@@ -16,6 +16,9 @@ export type ListingCheckDeps = {
 };
 
 export const CHECK_TIMEOUT_MS = 15_000;
+/// Task calls (certification and Agon tests) wait longer than the unpaid probe:
+/// a reasoning model thinks before it answers (Grok 4.7 took 21 s on 17 Oct 2026).
+export const CERTIFY_TIMEOUT_MS = 45_000;
 /// Category ids that have an automatic certification task today ("3" is Analysis).
 const CERTIFIABLE = new Set(["3"]);
 
@@ -134,7 +137,7 @@ export function defaultListingCheckDeps(network: AgonNetwork): ListingCheckDeps 
     async certify(url) {
       // The runner keys endpoints by a listing scope; a draft has none yet, so it uses a fixed placeholder scope.
       const reference = `${network.chainId}:0x0000000000000000000000000000000000000001:1`;
-      const run = await createHttpPlaygroundProviderRunner({ [`${reference}@1`]: url }, { timeoutMs: CHECK_TIMEOUT_MS }).run({
+      const run = await createHttpPlaygroundProviderRunner({ [`${reference}@1`]: url }, { timeoutMs: CERTIFY_TIMEOUT_MS }).run({
         provider: { agentId: "0", serviceKey: `0x${"0".repeat(64)}`, listingReference: reference, listingVersion: "1" },
         task: getPlaygroundTask("analysis", "evidence-under-pressure"),
         taskInput: defaultPlaygroundInput("evidence-under-pressure"),

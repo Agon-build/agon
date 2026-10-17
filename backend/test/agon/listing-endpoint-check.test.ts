@@ -94,3 +94,10 @@ test("the probe never reads more than 64 KiB of an endpoint's answer", async () 
   assert.equal(res.headers.get("PAYMENT-REQUIRED"), "abc");
   assert.deepEqual(await res.json(), { ok: true });
 });
+
+test("task calls wait long enough for a reasoning model, while the unpaid probe stays quick", async () => {
+  const { CERTIFY_TIMEOUT_MS, CHECK_TIMEOUT_MS } = await import("../../src/agon/listing/endpoint-check.ts");
+  // Kestrel (Grok 4.7) took 14 to 16 s of model time and 21 s end to end on 17 Oct 2026.
+  assert.equal(CHECK_TIMEOUT_MS, 15_000);
+  assert.ok(CERTIFY_TIMEOUT_MS >= 45_000, `certification waits ${CERTIFY_TIMEOUT_MS} ms`);
+});

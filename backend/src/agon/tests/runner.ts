@@ -1,4 +1,4 @@
-import { CHECK_MAX_BODY_BYTES, CHECK_TIMEOUT_MS, cappedFetch } from "../listing/endpoint-check.ts";
+import { CERTIFY_TIMEOUT_MS, CHECK_MAX_BODY_BYTES, cappedFetch } from "../listing/endpoint-check.ts";
 import { buildTestCase, scoreAnswer } from "./tasks.ts";
 
 export type TestRunOutcome = {
@@ -48,7 +48,7 @@ export async function runAgentTest(input: {
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json" },
       redirect: "error",
-      signal: AbortSignal.timeout(CHECK_TIMEOUT_MS),
+      signal: AbortSignal.timeout(CERTIFY_TIMEOUT_MS),
       body: JSON.stringify({
         protocol: "agon-playground/1",
         category: CATEGORY_SLUGS[test.categoryId],

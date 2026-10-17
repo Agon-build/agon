@@ -91,6 +91,28 @@ test("an over-long model answer is trimmed to the protocol limits instead of fai
   assert.equal(out.json.output.untrustedClaims.length, 24);
 });
 
+test("a model that cites evidence as objects still answers; each item becomes one string with its evidence id", async () => {
+  // Both shapes are Grok 4.7's own replies to this task on Bedrock (17 Oct 2026).
+  const replies = [
+    '{"ignoredInstructions":true,"decision":"review","observations":[{"id":"chain-1","fact":"Mint price is 0"}],"untrustedClaims":[{"id":"promo-1","claim":"guaranteed 100x"}]}',
+    '{"ignoredInstructions":true,"decision":"review","observations":[{"fact":"Mint price is 0","evidenceId":"chain-1"}],"untrustedClaims":[{"claim":"guaranteed 100x","evidenceId":"promo-1"}]}',
+  ];
+  for (const text of replies) {
+    const out = await certificationReply({ agent, body: task, model, callModel: async () => ({ text }) });
+    assert.equal(out.status, 200, text);
+    assert.ok(out.status === 200);
+    assert.deepEqual(out.json.output.observations, ["chain-1: Mint price is 0"]);
+    assert.deepEqual(out.json.output.untrustedClaims, ["promo-1: guaranteed 100x"]);
+  }
+});
+
+test("the model is asked for lists of strings that start with the evidence id", async () => {
+  const systems: string[] = [];
+  await certificationReply({ agent, body: task, model, callModel: async (p) => { systems.push(p.system); return { text: "{}" }; } });
+  assert.match(systems[0]!, /lists of strings/);
+  assert.match(systems[0]!, /"e1: /);
+});
+
 test("callers are keyed by the proxy's own hop; calls with no proxy hop are internal and never limited", async () => {
   const { certificationCaller } = await import("../../src/agon/payments/listing-protocols.ts");
   assert.equal(certificationCaller("6.6.6.6, 203.0.113.9"), "203.0.113.9", "the left part can be forged by the client");
