@@ -4,7 +4,7 @@ import test from "node:test";
 import { KIND_LABEL, approvalFailureText, askRefusalText, confirmFailureText, failureText } from "./stage-copy.ts";
 
 test("every refusal a person can hit has a plain sentence", () => {
-  assert.equal(askRefusalText("insufficient_balance", "0.30"), "You need 0.30 USDC in your Agon wallet. Add funds below, then ask again.");
+  assert.equal(askRefusalText("insufficient_balance", "0.30"), "Your agent wallet needs 0.30 USDC for this hire.");
   assert.equal(askRefusalText("over_your_max", "0.30"), "The lead agent charges 0.30 USDC, more than the maximum you set.");
   assert.equal(askRefusalText("invalid_question"), "Ask a full question, between 8 and 300 characters.");
   assert.equal(askRefusalText("something_new"), "Agon could not prepare this request. Try again in a moment.");

@@ -156,7 +156,7 @@ test("the wallet hires are paid from is called the agent wallet everywhere", () 
     const src = readFileSync(new URL(`../../${f}`, import.meta.url), "utf8");
     assert.doesNotMatch(src, /Agon wallet|"Your wallet"/, f);
   }
-  assert.match(readFileSync(new URL("../../components/stage/WalletStrip.tsx", import.meta.url), "utf8"), /label="Agent wallet"/);
+  assert.match(readFileSync(new URL("../../components/stage/WalletStrip.tsx", import.meta.url), "utf8"), />Agent wallet</);
 });
 
 test("the Hire box asks what you need done and says plainly what routes today", () => {
@@ -242,7 +242,9 @@ test("audit: the app opens on the product, and pages show each thing once", () =
   assert.doesNotMatch(agents, /A SIMPLE WAY TO START|HeroStat|"Choose", "Compare", "Test", "Use"|LIST YOUR AGENT| loaded<\/span>|01 \/ CHOOSE A CATEGORY/, "Agents page drops the stats, the step strip, the list button and the loaded counter");
   assert.match(agents, /Verified only/, "one plain verified toggle instead of a second ALL");
   const hire = read("components/stage/HireClient.tsx");
-  assert.match(hire, /mode\.kind !== "idle" \? <div className="mt-6"><PhaseRail/, "the progress rail appears once a hire starts, not before");
+  assert.match(hire, /mode\.kind === "run" \? <div className="mt-6"><PhaseRail/, "the progress rail appears once you pay, not before");
+  assert.doesNotMatch(hire, /MoneyFlow/, "no empty money panel before a payment exists");
+  assert.match(hire, /<TopUpPanel/, "a short wallet is topped up in the action panel");
   const detail = read("app/agents/[id]/page.tsx");
   assert.doesNotMatch(detail, /PROTECTED PROJECT/);
   assert.doesNotMatch(detail, /<h2 className="mt-2 max-w-\[22ch\] font-stencil/, "the name is shown once, in the page header");

@@ -1,5 +1,5 @@
 "use client";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { TagButton } from "@/components/redesign/TagButton";
@@ -9,24 +9,45 @@ import type { StageWallet } from "@/lib/agon/stage-types";
 import { shortHash } from "@/lib/agon/stage-view";
 
 const path = (url: string) => { try { const u = new URL(url); return `${u.pathname}${u.search}`; } catch { return url; } };
+type Tab = "add" | "withdraw" | "freeze";
+const TABS: [Tab, string][] = [["add", "Add funds"], ["withdraw", "Withdraw"], ["freeze", "Freeze"]];
 
-function Fact({ label, children }: { label: string; children: ReactNode }) {
+/// One line of wallet facts; everything that changes the wallet lives in the Manage sheet.
+export function WalletStrip({ wallet, onChanged }: { wallet: StageWallet; onChanged: () => void }) {
+  const [open, setOpen] = useState<Tab | null>(null);
+  const [copied, setCopied] = useState(false);
+
   return (
-    <div className="min-w-0">
-      <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">{label}</p>
-      <div className="mt-1 font-mono text-sm tabular-nums text-ink">{children}</div>
-    </div>
+    <section aria-label="Your agent wallet" className="border-y border-[color:var(--hairline-strong)]">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 py-3 font-mono text-[12px] tabular-nums text-ink-2">
+        <span className="text-[10px] uppercase tracking-[0.14em] text-ink-3">Agent wallet</span>
+        <button type="button" className="min-h-11 text-ink underline decoration-[color:var(--hairline-strong)] underline-offset-4 hover:text-accent" onClick={() => { void navigator.clipboard?.writeText(wallet.address); setCopied(true); window.setTimeout(() => setCopied(false), 1500); }}>
+          {copied ? "Copied" : shortHash(wallet.address)}<span className="sr-only">, copy the full address</span>
+        </button>
+        <span><span className="text-sm text-ink">{wallet.balance ?? "n/a"}</span> USDC</span>
+        <span>{wallet.leftToday} of {wallet.daily} left today</span>
+        {wallet.frozen ? <span className="text-[10px] uppercase tracking-[0.14em] text-[color:var(--err)]">Frozen</span> : null}
+        <span className="ml-auto">
+          <TagButton size="sm" variant="ghost" arrow={false} onClick={() => setOpen("add")}>Manage</TagButton>
+        </span>
+      </div>
+      {open ? <ManageSheet wallet={wallet} tab={open} onTab={setOpen} onClose={() => setOpen(null)} onChanged={onChanged} /> : null}
+    </section>
   );
 }
 
-export function WalletStrip({ wallet, onChanged }: { wallet: StageWallet; onChanged: () => void }) {
+function ManageSheet({ wallet, tab, onTab, onClose, onChanged }: { wallet: StageWallet; tab: Tab; onTab: (t: Tab) => void; onClose: () => void; onChanged: () => void }) {
   const router = useRouter();
-  const [panel, setPanel] = useState<"none" | "deposit" | "withdraw">("none");
   const [to, setTo] = useState("");
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -35,42 +56,52 @@ export function WalletStrip({ wallet, onChanged }: { wallet: StageWallet; onChan
   }
 
   return (
-    <section aria-label="Your agent wallet" className="border-y border-[color:var(--hairline-strong)]">
-      <div className="grid grid-cols-2 gap-4 py-4 sm:grid-cols-[auto_auto_auto_1fr] sm:items-center sm:gap-8">
-        <Fact label="Agent wallet">
-          <button type="button" className="min-h-11 underline decoration-[color:var(--hairline-strong)] underline-offset-4 hover:text-accent" onClick={() => { void navigator.clipboard?.writeText(wallet.address); setCopied(true); window.setTimeout(() => setCopied(false), 1500); }}>
-            {shortHash(wallet.address)}<span className="sr-only">, copy the full address</span>
-          </button>
-          <span aria-live="polite" className="ml-2 text-[10px] uppercase text-ink-3">{copied ? "Copied" : ""}</span>
-        </Fact>
-        <Fact label="Balance">{wallet.balance ?? "n/a"} <span className="text-ink-3">USDC</span></Fact>
-        <Fact label="Left today">{wallet.leftToday} <span className="text-ink-3">of {wallet.daily}</span></Fact>
-        <div className="col-span-2 flex flex-wrap gap-2 sm:col-span-1 sm:justify-end">
-          <TagButton size="sm" variant="ghost" arrow={false} onClick={() => setPanel(panel === "deposit" ? "none" : "deposit")}>Add funds</TagButton>
-          <TagButton size="sm" variant="ghost" arrow={false} onClick={() => setPanel(panel === "withdraw" ? "none" : "withdraw")}>Withdraw</TagButton>
-          {wallet.frozen
-            ? <TagButton size="sm" disabled={busy} onClick={() => void run(async () => router.push(path((await requestUnfreeze()).approvalUrl)))}>Unfreeze</TagButton>
-            : <TagButton size="sm" variant="ghost" arrow={false} disabled={busy} onClick={() => void run(async () => { await freezeWallet(); onChanged(); })}>Freeze</TagButton>}
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/50" />
+      <div role="dialog" aria-modal="true" aria-label="Manage your agent wallet" className="relative flex h-full w-full max-w-md flex-col overflow-y-auto border-l border-[color:var(--hairline-strong)] bg-canvas p-5 sm:p-7">
+        <div className="flex items-center justify-between">
+          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Agent wallet</p>
+          <button type="button" onClick={onClose} className="min-h-11 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 hover:text-accent">Close</button>
+        </div>
+        <p className="mt-3 font-mono text-4xl tabular-nums text-ink">{wallet.balance ?? "n/a"}<span className="ml-2 text-base text-ink-2">USDC</span></p>
+        <p className="mt-1 font-mono text-[11px] text-ink-3">{wallet.leftToday} of {wallet.daily} left today · {wallet.perHire} per hire</p>
+        <div role="tablist" className="mt-6 grid grid-cols-3 border-y border-[color:var(--hairline-strong)]">
+          {TABS.map(([key, label]) => (
+            <button key={key} role="tab" type="button" aria-selected={tab === key} onClick={() => { setMessage(null); onTab(key); }}
+              className={`min-h-11 border-t-2 font-mono text-[10px] uppercase tracking-[0.14em] ${tab === key ? "border-t-accent text-ink" : "border-t-transparent text-ink-3 hover:text-ink"}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="mt-6">
+          {tab === "add" ? <AddFunds wallet={wallet} onDone={onChanged} compact /> : null}
+          {tab === "withdraw" ? (
+            <form
+              className="grid gap-3"
+              onSubmit={(e) => { e.preventDefault(); void run(async () => { const out = await requestWithdraw(to.trim(), amount.trim()); if (out.ok && out.approvalUrl) router.push(path(out.approvalUrl)); else setMessage(out.code?.replaceAll("_", " ") ?? "Withdraw refused."); }); }}
+            >
+              <label className="grid gap-1"><span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">To address</span><input value={to} onChange={(e) => setTo(e.target.value)} required pattern="^0x[0-9a-fA-F]{40}$" className="min-h-11 border border-[color:var(--hairline-strong)] bg-canvas px-3 font-mono text-sm text-ink" /></label>
+              <label className="grid gap-1"><span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">Amount (USDC)</span><input value={amount} onChange={(e) => setAmount(e.target.value)} required inputMode="decimal" className="min-h-11 border border-[color:var(--hairline-strong)] bg-canvas px-3 font-mono text-sm text-ink" /></label>
+              <TagButton type="submit" disabled={busy}>Continue</TagButton>
+              <p className="text-xs text-ink-3">You approve every withdrawal on the next page.</p>
+            </form>
+          ) : null}
+          {tab === "freeze" ? (
+            wallet.frozen ? (
+              <div className="grid gap-3">
+                <p className="text-sm leading-6 text-ink">Spending is frozen. Nothing can be paid from this wallet.</p>
+                <TagButton disabled={busy} onClick={() => void run(async () => router.push(path((await requestUnfreeze()).approvalUrl)))}>Unfreeze</TagButton>
+              </div>
+            ) : (
+              <div className="grid gap-3">
+                <p className="text-sm leading-6 text-ink-2">Stops every payment from this wallet until you unfreeze it.</p>
+                <TagButton variant="ghost" arrow={false} disabled={busy} onClick={() => void run(async () => { await freezeWallet(); onChanged(); })}>Freeze spending</TagButton>
+              </div>
+            )
+          ) : null}
+          {message ? <p role="alert" className="mt-4 text-sm text-[color:var(--err)]">{message}</p> : null}
         </div>
       </div>
-      {wallet.frozen ? <p className="border-t border-[color:var(--hairline)] py-3 text-sm text-ink">Spending is frozen. Nothing can be paid from this wallet until you unfreeze it in your browser.</p> : null}
-      {panel === "deposit" ? (
-        <div className="stage-print border-t border-[color:var(--hairline)] py-4">
-          <AddFunds wallet={wallet} onDone={onChanged} />
-        </div>
-      ) : null}
-      {panel === "withdraw" ? (
-        <form
-          className="stage-print grid gap-3 border-t border-[color:var(--hairline)] py-4 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto] sm:items-end"
-          onSubmit={(e) => { e.preventDefault(); void run(async () => { const out = await requestWithdraw(to.trim(), amount.trim()); if (out.ok && out.approvalUrl) router.push(path(out.approvalUrl)); else setMessage(out.code?.replaceAll("_", " ") ?? "Withdraw refused."); }); }}
-        >
-          <label className="grid gap-1"><span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">To address</span><input value={to} onChange={(e) => setTo(e.target.value)} required pattern="^0x[0-9a-fA-F]{40}$" className="min-h-11 border border-[color:var(--hairline-strong)] bg-canvas px-3 font-mono text-sm text-ink" /></label>
-          <label className="grid gap-1"><span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">Amount (USDC)</span><input value={amount} onChange={(e) => setAmount(e.target.value)} required inputMode="decimal" className="min-h-11 border border-[color:var(--hairline-strong)] bg-canvas px-3 font-mono text-sm text-ink" /></label>
-          <TagButton type="submit" disabled={busy}>Continue</TagButton>
-          <p className="text-xs text-ink-3 sm:col-span-3">You approve every withdrawal on the next page.</p>
-        </form>
-      ) : null}
-      {message ? <p role="alert" className="border-t border-[color:var(--hairline)] py-3 text-sm text-[color:var(--err)]">{message}</p> : null}
-    </section>
+    </div>
   );
 }

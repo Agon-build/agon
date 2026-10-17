@@ -1,28 +1,29 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { Composer } from "@/components/stage/Composer";
-import { MoneyFlow } from "@/components/stage/MoneyFlow";
 import { PhaseRail } from "@/components/stage/PhaseRail";
 import { QuoteCard } from "@/components/stage/QuoteCard";
 import { RunView } from "@/components/stage/RunView";
 import { StageShell } from "@/components/stage/StageShell";
+import { TopUpPanel } from "@/components/stage/TopUpPanel";
 import { WalletStrip } from "@/components/stage/WalletStrip";
 import { useLiveJob } from "@/components/stage/useLiveJob";
 import { useNow } from "@/components/stage/useNow";
 import { useAuth } from "@/hooks/useAuth";
 import { askLead, confirmHire, getHistory, getLeaderboard, getStageConfig, getWallet, StageApiError } from "@/lib/agon/stage";
+import { canAfford } from "@/lib/agon/hire-panel";
 import { askRefusalText, confirmFailureText } from "@/lib/agon/stage-copy";
 import type { AskResponse, HistoryItem, LeaderboardRow, StageConfig, StageWallet } from "@/lib/agon/stage-types";
-import { beatsMarketText, moneyFlow, phaseStep } from "@/lib/agon/stage-view";
+import { beatsMarketText, phaseStep } from "@/lib/agon/stage-view";
 
 type Quote = Extract<AskResponse, { ok: true }>;
 type Mode =
   | { kind: "idle" }
   | { kind: "quoting"; question: string }
   | { kind: "quote"; question: string; quote: Quote }
-  | { kind: "refused"; question: string; code: string; amount?: string }
+  | { kind: "refused"; question: string; maxPrice: string | null; code: string; amount?: string }
   | { kind: "run"; jobId: string; question: string | null; paying: boolean; confirmError: string | null };
 
 export function HireClient() {
@@ -57,12 +58,27 @@ export function HireClient() {
     try {
       const quote = await askLead(question, maxPrice ?? undefined);
       if (quote.ok) setMode({ kind: "quote", question, quote });
-      else setMode({ kind: "refused", question, code: quote.code, amount: quote.amount });
+      else setMode({ kind: "refused", question, maxPrice, code: quote.code, amount: quote.amount });
       refreshWallet();
     } catch (e) {
-      setMode({ kind: "refused", question, code: e instanceof StageApiError ? e.code : "network_unavailable" });
+      setMode({ kind: "refused", question, maxPrice, code: e instanceof StageApiError ? e.code : "network_unavailable" });
     }
   }
+
+  // Short wallet: watch the balance, and ask again with the same question once it covers the price.
+  const shortOf = mode.kind === "refused" && mode.code === "insufficient_balance" && mode.amount ? mode.amount : null;
+  const retriedAt = useRef<string | null>(null);
+  useEffect(() => {
+    if (!shortOf) { retriedAt.current = null; return; }
+    const timer = window.setInterval(() => { getWallet().then(setWallet).catch(() => {}); }, 4_000);
+    return () => window.clearInterval(timer);
+  }, [shortOf]);
+  useEffect(() => {
+    if (mode.kind !== "refused" || !shortOf || !wallet || !canAfford(shortOf, wallet.balance)) return;
+    if (retriedAt.current === wallet.balance) return;
+    retriedAt.current = wallet.balance;
+    void ask(mode.question, mode.maxPrice);
+  }, [shortOf, wallet]);
 
   async function pay(quote: Quote, question: string) {
     if (quote.step !== "confirm_code") return;
@@ -92,21 +108,18 @@ export function HireClient() {
     <StageShell network={config?.network ?? null} preview={config?.preview}>
       <div className="mx-auto max-w-[1536px] px-4 pb-24 pt-6 sm:px-6 sm:pt-8">
         {canAct && wallet ? <WalletStrip wallet={wallet} onChanged={refreshWallet} /> : null}
-        {mode.kind !== "idle" ? <div className="mt-6"><PhaseRail step={step} working={working} /></div> : null}
+        {mode.kind === "run" ? <div className="mt-6"><PhaseRail step={step} working={working} /></div> : null}
 
         <div className="mt-10 grid gap-12 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-16">
           <div className="min-w-0">
             <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Hire{config ? ` · ${config.network}` : ""}</p>
-            <h1 className={`mt-4 font-display uppercase tracking-[-.04em] text-ink ${question ? "max-w-[22ch] text-[clamp(1.9rem,3.6vw,3.25rem)] leading-[1.02]" : "max-w-[10ch] text-[clamp(3rem,7vw,6.5rem)] leading-[.86]"}`}>
+            <h1 className={`mt-4 font-display uppercase tracking-[-.04em] text-ink ${question ? "max-w-[24ch] text-[clamp(1.6rem,2.8vw,2.5rem)] leading-[1.05]" : "max-w-[10ch] text-[clamp(3rem,7vw,6.5rem)] leading-[.86]"}`}>
               {question ?? "Describe it"}
             </h1>
             {mode.kind === "idle" || mode.kind === "quoting" ? (
               <div className="mt-10"><Composer disabled={mode.kind === "quoting"} signedIn={canAct} onSubmit={ask} /></div>
             ) : null}
-            {mode.kind === "quote" ? (
-              <div className="mt-8"><QuoteCard quote={mode.quote} nowMs={now} paying={false} onPay={() => void pay(mode.quote, mode.question)} onCancel={reset} /></div>
-            ) : null}
-            {mode.kind === "refused" ? (
+            {mode.kind === "refused" && !shortOf ? (
               <div role="alert" className="stage-print mt-8 border-y border-[color:var(--hairline-strong)] py-6">
                 <p className="text-base leading-7 text-ink">{askRefusalText(mode.code, mode.amount)}</p>
                 <button type="button" onClick={reset} className="mt-4 min-h-11 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 underline underline-offset-4 hover:text-accent">Describe something else</button>
@@ -138,7 +151,8 @@ export function HireClient() {
                 ) : null}
               </aside>
             ) : null}
-            {mode.kind === "quote" || mode.kind === "refused" ? <MoneyFlow flow={moneyFlow(null)} /> : null}
+            {mode.kind === "quote" ? <QuoteCard quote={mode.quote} nowMs={now} paying={false} onPay={() => void pay(mode.quote, mode.question)} onCancel={reset} /> : null}
+            {shortOf ? <TopUpPanel wallet={wallet} price={shortOf} onFunded={refreshWallet} onCancel={reset} /> : null}
           </div>
         </div>
 

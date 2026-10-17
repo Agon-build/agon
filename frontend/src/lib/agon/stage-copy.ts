@@ -19,7 +19,7 @@ const ASK: Record<string, string> = {
 };
 
 export function askRefusalText(code: string, amount?: string): string {
-  if (code === "insufficient_balance") return `You need ${amount ?? "more"} USDC in your Agon wallet. Add funds below, then ask again.`;
+  if (code === "insufficient_balance") return `Your agent wallet needs ${amount ?? "more"} USDC for this hire.`;
   if (code === "over_your_max") return `The lead agent charges ${amount ?? "more"} USDC, more than the maximum you set.`;
   return ASK[code] ?? "Agon could not prepare this request. Try again in a moment.";
 }
