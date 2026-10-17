@@ -1,7 +1,7 @@
 import { McpServer, createMcpHandler, fromJsonSchema, type AuthInfo } from "@modelcontextprotocol/server";
 
 import { createMcpAccessAdapter } from "./adapter.ts";
-import type { ManagedPublisher } from "./managed-publisher.ts";
+import { FEE_LIMIT_PATTERN, type ManagedPublisher } from "./managed-publisher.ts";
 import { registerStageTools, type StageMcpDeps } from "./stage-tools.ts";
 import { LISTING_GUIDE, compileListingSchema, confirmListingSchema, confirmPauseSchema, draftOnlySchema, pauseSchema, publishSchema, startListingSchema } from "./listing-schemas.ts";
 import { adapterResult, failure, requireActor, result } from "./tool-results.ts";
@@ -247,13 +247,13 @@ export function createAgonNativeMcpHandler(access: AccessAdapter, publisher?: Ma
           const message = error instanceof Error ? error.message : "";
           // The tool answer stays safe; the real reason goes to the server log.
           console.warn(`[agon-listing] ${tool} failed for draft ${draftId}: ${(message || String(error)).slice(0, 500)}`);
-          const safe = /^(?:Run the listing checks|No managed publisher|Create a listing draft|draft changed|Publisher |The exact draft digest|Provision the publisher|Gas quote|Pinned gas quote|Circle refused|Circle rejected the request|Circle fee estimate|Circle transaction does not match|Identity receipt|Registered identity|Prepared publication|Publication target|Publication receipt|Hosted manifest|Managed draft digest|Publisher state changed)/.test(message);
+          const safe = /^(?:Run the listing checks|No managed publisher|Create a listing draft|draft changed|Publisher |The exact draft digest|Provision the publisher|Gas quote|Pinned gas quote|Circle refused|Circle rejected the request|Circle fee estimate|The fee limit|Circle transaction does not match|Identity receipt|Registered identity|Prepared publication|Publication target|Publication receipt|Hosted manifest|Managed draft digest|Publisher state changed)/.test(message);
           return failure("managed_publisher_failed", safe ? message : "Managed publisher action failed. Check its status before retrying.");
         }
       };
       server.registerTool("setup_managed_publisher", {
         title: "Get a publisher wallet to fund",
-        description: "Provision one Circle-custodied Arc Testnet wallet for an existing listing draft. This does not sign or publish. Fund its address with native USDC for gas.",
+        description: "Provision one Circle-custodied Arc Testnet wallet for an existing listing draft. This does not sign or publish. Fund its address with native USDC for gas. The result shows the fee limit and the worst-case fee of the next write (nextFee) so the user can choose a limit before approving.",
         inputSchema: draftSchema,
       }, async ({ draftId }) => managed("setup_managed_publisher", draftId, "listing:prepare", (owner) => publisher.setup(owner, draftId)));
       server.registerTool("get_managed_listing", {
@@ -263,17 +263,21 @@ export function createAgonNativeMcpHandler(access: AccessAdapter, publisher?: Ma
       }, async ({ draftId }) => managed("get_managed_listing", draftId, "agon:read", (owner) => publisher.status(owner, draftId)));
       server.registerTool("approve_managed_listing", {
         title: "Approve managed identity and publication",
-        description: "After the user reviews the exact listing digest and AGON custody, approve this draft's identity registration and publication. Funding alone is not approval.",
-        inputSchema: fromJsonSchema<{ draftId: string; termsDigest: string; approval: "approve" }>({
+        description: "After the user reviews the exact listing digest and AGON custody, approve this draft's identity registration and publication. Funding alone is not approval. Ask the user for a fee limit (maxFeeUSDC): any write whose worst-case fee is above it is held, not sent. Approve again to change it.",
+        inputSchema: fromJsonSchema<{ draftId: string; termsDigest: string; approval: "approve"; maxFeeUSDC?: string }>({
           type: "object",
           properties: {
             draftId: { type: "string", minLength: 1, maxLength: 256 },
             termsDigest: { type: "string", pattern: "^0x[0-9a-fA-F]{64}$" },
             approval: { type: "string", const: "approve" },
+            maxFeeUSDC: {
+              type: "string", pattern: FEE_LIMIT_PATTERN,
+              description: "Optional. The most one write (identity registration or publication) may cost in gas, in USDC, at most 1 USDC. Leave it out for the 1 USDC cap. A publish has cost about 0.35 USDC on Arc Testnet.",
+            },
           },
           required: ["draftId", "termsDigest", "approval"], additionalProperties: false,
         }),
-      }, async ({ draftId, termsDigest, approval }) => managed("approve_managed_listing", draftId, "listing:write", (owner) => publisher.approve(owner, draftId, termsDigest, approval)));
+      }, async ({ draftId, termsDigest, approval, maxFeeUSDC }) => managed("approve_managed_listing", draftId, "listing:write", (owner) => publisher.approve(owner, draftId, termsDigest, approval, maxFeeUSDC)));
       server.registerTool("continue_managed_listing", {
         title: "Continue managed listing",
         description: "After explicit approval, advance ERC-8004 registration, hosted identity file, publication, and receipt reconciliation. Retry this tool while pending; idempotency prevents duplicate writes.",

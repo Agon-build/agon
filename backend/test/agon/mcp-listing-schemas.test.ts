@@ -7,13 +7,13 @@ import { createAgonNativeMcpHandler } from "../../src/agon/mcp/native-server.ts"
 
 type Schema = { type?: string; properties?: Record<string, { type?: string; description?: string; items?: { type?: string }; pattern?: string; enum?: unknown[] }>; required?: string[]; additionalProperties?: boolean };
 
-async function toolSchemas(): Promise<Map<string, { description: string; inputSchema: Schema }>> {
+async function toolSchemas(publisher?: Parameters<typeof createAgonNativeMcpHandler>[1]): Promise<Map<string, { description: string; inputSchema: Schema }>> {
   const access = createMcpAccessAdapter({
     async listListings() { return { ok: true as const, value: { items: [], nextCursor: null } }; },
     async getListing() { return { ok: false as const, error: { code: "not_found", message: "x" } }; },
     async prepareX402Call() { return { ok: false as const, error: { code: "disabled", message: "x" } }; },
   });
-  const res = await createAgonNativeMcpHandler(access).fetch(new Request("https://api.agon.surf/agon/mcp", {
+  const res = await createAgonNativeMcpHandler(access, publisher).fetch(new Request("https://api.agon.surf/agon/mcp", {
     method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream" },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
   }));
@@ -62,4 +62,16 @@ test("a valid example from the published shape passes the server's strict check"
     privacy: "Inputs are stored with the job receipt.", failurePolicy: "No charge if no forecast is produced.", endpoint: "https://api.agon.surf/agon/agents/house/kestrel/forecast",
   };
   assert.ok(providerDraftInput.safeParse(example).success);
+});
+
+test("approve_managed_listing offers an optional fee limit in USDC, at most 1", async () => {
+  const tools = await toolSchemas({} as Parameters<typeof createAgonNativeMcpHandler>[1]);
+  const approve = tools.get("approve_managed_listing")!;
+  const limit = approve.inputSchema.properties!.maxFeeUSDC!;
+  assert.equal(limit.type, "string");
+  assert.match(limit.description ?? "", /most.*1 USDC|1 USDC.*most/i);
+  for (const ok of ["0.25", "1", "0.000001"]) assert.match(ok, new RegExp(limit.pattern!), ok);
+  for (const bad of ["0", "1.5", "2", "abc"]) assert.doesNotMatch(bad, new RegExp(limit.pattern!), bad);
+  assert.equal((approve.inputSchema.required ?? []).includes("maxFeeUSDC"), false, "the limit is optional");
+  assert.match(approve.description, /fee limit|maxFeeUSDC/i);
 });

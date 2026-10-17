@@ -18,6 +18,9 @@ const GWEI = 1_000_000_000n;
 /// minimum (probed 17 Oct 2026), so the publisher sends Circle's LOW estimate and, if that
 /// went stale before submission, estimates once more.
 const FEE_REFUSED = /code 2\): API parameter invalid/;
+/// A builder's fee limit: a USDC amount above 0 and at most 1, with up to 6 decimals.
+export const FEE_LIMIT_PATTERN = String.raw`^(?:0\.(?!0{1,6}$)\d{1,6}|1(?:\.0{1,6})?)$`;
+const FEE_LIMIT = new RegExp(FEE_LIMIT_PATTERN);
 
 type Access = ReturnType<typeof createMcpAccessAdapter>;
 type Address = `0x${string}`;
@@ -53,6 +56,10 @@ export type ManagedPublisherResult = {
   agentId: string | null;
   reference: string | null;
   txHash: Hash | null;
+  /** The most any one write may cost: the builder's limit, or the 1 USDC hard cap. */
+  feeLimitUSDC: string;
+  /** The worst case of the next write (gas limit x max fee), when known. */
+  nextFee: { action: "register" | "publish"; worstCaseUSDC: string } | null;
 };
 
 function digest(value: unknown): Hash {
@@ -63,6 +70,11 @@ function formatUSDC(wei: bigint): string {
   const whole = wei / 1_000_000_000_000_000_000n;
   const decimal = (wei % 1_000_000_000_000_000_000n).toString().padStart(18, "0").replace(/0+$/, "");
   return decimal ? `${whole}.${decimal}` : whole.toString();
+}
+
+function usdcWei(text: string): bigint {
+  const [whole, fraction = ""] = text.split(".");
+  return BigInt(whole!) * 1_000_000_000_000_000_000n + BigInt(fraction.padEnd(18, "0"));
 }
 
 function sameAddress(a: string, b: string): boolean {
@@ -130,14 +142,20 @@ export function createManagedPublisher(options: {
     return fee;
   }
 
-  async function view(record: ManagedPublisherRecord, status: ManagedPublisherResult["status"], nextAction: string, txHash: Hash | null = null): Promise<ManagedPublisherResult> {
+  const feeLimitWei = (state: ManagedPublisherState) => state.maxFeeUSDC ? usdcWei(state.maxFeeUSDC) : maxGasFeeWei;
+
+  async function view(record: ManagedPublisherRecord, status: ManagedPublisherResult["status"], nextAction: string, txHash: Hash | null = null, nextFee?: ManagedPublisherResult["nextFee"]): Promise<ManagedPublisherResult> {
     const balance = record.state.walletAddress ? await options.chain.balance(record.state.walletAddress).catch(() => null) : null;
+    const pinned = record.state[record.state.agentId ? "publishFee" : "registerFee"];
+    const fee = nextFee !== undefined ? nextFee
+      : !record.state.reference && isPinnedFee(pinned) ? { action: record.state.agentId ? "publish" as const : "register" as const, worstCaseUSDC: formatUSDC(feeCeiling(pinned)) } : null;
     return {
       status, nextAction, draftId: record.draftId, chainId,
       fundingAddress: record.state.walletAddress, fundingAsset: "Arc Testnet native USDC",
       balanceUSDC: balance === null ? null : formatUSDC(balance), termsDigest: record.state.draftDigest,
       custody: "AGON-managed Circle developer-controlled wallet", agentId: record.state.agentId,
       reference: record.state.reference, txHash,
+      feeLimitUSDC: formatUSDC(feeLimitWei(record.state)), nextFee: fee,
     };
   }
 
@@ -163,9 +181,12 @@ export function createManagedPublisher(options: {
           }
           throw error;
         }
+        if (feeCeiling(fee) > feeLimitWei(record.state)) return overLimit(record, action, fee);
         record = await save(record, { ...record.state, [feeField]: fee });
       }
       const fee = record.state[feeField]!;
+      // A limit lowered after this fee was pinned still applies: the pin is dropped, nothing is sent.
+      if (feeCeiling(fee) > feeLimitWei(record.state)) return overLimit(await save(record, { ...record.state, [feeField]: null }), action, fee);
       const balance = await options.chain.balance(state.walletAddress);
       const required = feeCeiling(fee);
       if (required <= 0n || required > maxGasFeeWei) throw new Error("Pinned gas quote exceeds the managed publisher limit");
@@ -184,6 +205,13 @@ export function createManagedPublisher(options: {
         if (attempt >= 2) throw new Error("Circle refused the transaction fee twice. Nothing was sent; check again in a minute.");
       }
     }
+  }
+
+  function overLimit(record: ManagedPublisherRecord, action: "register" | "publish", fee: PinnedFee): Promise<ManagedPublisherResult> {
+    const worst = formatUSDC(feeCeiling(fee));
+    return view(record, "needs_attention",
+      `Circle's fee for the next ${action} could reach ${worst} USDC, above your ${formatUSDC(feeLimitWei(record.state))} USDC limit. Nothing was sent. Check again later, or approve again with a higher maxFeeUSDC (at most 1).`,
+      null, { action, worstCaseUSDC: worst });
   }
 
   async function confirmedTransaction(record: ManagedPublisherRecord, circleTxId: string, to: Address, data: Hash): Promise<{ hash: Hash; receipt: TransactionReceipt } | ManagedPublisherResult> {
@@ -327,16 +355,26 @@ export function createManagedPublisher(options: {
         const wallet = await options.circle.createWallet(`agon:${record.publicId}`, publisherKey(record.publicId, "wallet"));
         record = await save(record, { ...record.state, walletId: wallet.walletId, walletAddress: wallet.address });
       }
-      return view(record, phase(record), record.state.approvedAt ? "continue_managed_listing" : "Review the draft and approve its exact terms digest before any onchain write.");
+      // Show what the first write may cost before the builder approves; an estimate failure only hides it.
+      let first: ManagedPublisherResult["nextFee"] | undefined;
+      if (!record.state.agentId && record.state.walletId) {
+        const callData = encodeFunctionData({ abi: identityAbi, functionName: "register", args: [identityUri(record)] });
+        first = await options.circle.estimateFee({ walletId: record.state.walletId, contractAddress: options.identityRegistry, callData })
+          .then((fee) => ({ action: "register" as const, worstCaseUSDC: formatUSDC(feeCeiling(fee)) }), () => undefined);
+      }
+      return view(record, phase(record), record.state.approvedAt ? "continue_managed_listing" : "Review the draft and approve its exact terms digest before any onchain write.", null, first);
     },
-    async approve(actor: string, draftId: string, termsDigest: string, approval: string): Promise<ManagedPublisherResult> {
+    async approve(actor: string, draftId: string, termsDigest: string, approval: string, maxFeeUSDC?: string): Promise<ManagedPublisherResult> {
+      if (maxFeeUSDC !== undefined && !FEE_LIMIT.test(maxFeeUSDC)) throw new Error("The fee limit must be a USDC amount above 0 and at most 1, such as 0.5.");
       const record = await getRecord(actor, draftId);
       if (approval !== "approve" || termsDigest.toLowerCase() !== record.state.draftDigest.toLowerCase()) throw new Error("The exact draft digest and explicit approval are required");
       if (!record.state.approvedAt && options.checksPassed && !(await options.checksPassed(actor, draftId))) {
         throw new Error("Run the listing checks first: publishing needs a passing check for this endpoint and price from the last 30 minutes.");
       }
       if (!record.state.walletAddress) throw new Error("Provision the publisher wallet first");
-      const updated = record.state.approvedAt ? record : await save(record, { ...record.state, approvedAt: new Date().toISOString() });
+      const limit = maxFeeUSDC === undefined ? {} : { maxFeeUSDC: formatUSDC(usdcWei(maxFeeUSDC)) };
+      const updated = record.state.approvedAt && maxFeeUSDC === undefined ? record
+        : await save(record, { ...record.state, approvedAt: record.state.approvedAt ?? new Date().toISOString(), ...limit });
       return view(updated, "ready", "continue_managed_listing");
     },
     async status(actor: string, draftId: string): Promise<ManagedPublisherResult> {

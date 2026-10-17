@@ -9,6 +9,8 @@ export type ManagedPublisherState = {
   walletId: string | null;
   walletAddress: `0x${string}` | null;
   approvedAt: string | null;
+  /** The builder's own cap on any one write's worst-case fee, in USDC; absent means the 1 USDC hard cap. */
+  maxFeeUSDC?: string | null;
   agentId: string | null;
   registerTxId: string | null;
   registerTxHash: `0x${string}` | null;

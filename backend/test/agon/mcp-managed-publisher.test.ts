@@ -154,8 +154,9 @@ test("each write carries Circle's live LOW fee and gas limit for Arc", async () 
 test("a fee Circle refuses is estimated again and sent once more; nothing counts as sent until Circle accepts", async () => {
   const f = await fixture(1_000_000_000_000_000_000n, false, false, false, true, { refuseFees: 1 });
   await f.publisher.approve(actor, draftId, f.setup.termsDigest, "approve");
+  const before = f.estimates.length;
   assert.equal((await f.publisher.advance(actor, draftId)).status, "published");
-  assert.equal(f.estimates.length, 3, "one estimate per write plus one after the refusal");
+  assert.equal(f.estimates.length - before, 3, "one estimate per write plus one after the refusal");
 });
 
 test("a second refusal stops with Circle's reason and leaves the write unsent", async () => {
@@ -198,6 +199,35 @@ test("a publish-sized write at Circle's HIGH tip fits the 1 USDC cap", async () 
   const f = await fixture(2_000_000_000_000_000_000n, false, false, false, true, { estimate: { gasLimit: "864081", maxFee: "732.51", priorityFee: "692.51" } });
   await f.publisher.approve(actor, draftId, f.setup.termsDigest, "approve");
   assert.equal((await f.publisher.advance(actor, draftId)).status, "published");
+});
+
+test("results show the fee limit and the next write's worst case before anything is approved", async () => {
+  const f = await fixture();
+  assert.equal(f.setup.feeLimitUSDC, "1", "Circle's own per-transaction limit is the default");
+  assert.deepEqual(f.setup.nextFee, { action: "register", worstCaseUSDC: "0.056871" });
+  const approved = await f.publisher.approve(actor, draftId, f.setup.termsDigest, "approve", "0.5");
+  assert.equal(approved.feeLimitUSDC, "0.5");
+});
+
+test("a write whose worst case is above the builder's fee limit is not sent, and says how to go on", async () => {
+  const f = await fixture();
+  await f.publisher.approve(actor, draftId, f.setup.termsDigest, "approve", "0.05");
+  const held = await f.publisher.advance(actor, draftId);
+  assert.equal(held.status, "needs_attention");
+  assert.match(held.nextAction, /could reach 0\.056871 USDC, above your 0\.05 USDC limit\. Nothing was sent/);
+  assert.deepEqual(held.nextFee, { action: "register", worstCaseUSDC: "0.056871" });
+  assert.equal(f.calls.length, 0);
+  assert.equal((await f.store.get(actor, draftId))!.state.registerFee, null, "a fee over the limit is never pinned");
+  await f.publisher.approve(actor, draftId, f.setup.termsDigest, "approve", "0.1");
+  assert.equal((await f.publisher.advance(actor, draftId)).status, "published");
+});
+
+test("a fee limit must be above 0 and at most 1 USDC, in plain USDC", async () => {
+  const f = await fixture();
+  for (const bad of ["0", "1.5", "abc", "0.0000001", "-1"]) {
+    await assert.rejects(f.publisher.approve(actor, draftId, f.setup.termsDigest, "approve", bad), /fee limit/i, bad);
+  }
+  assert.equal((await f.store.get(actor, draftId))!.state.approvedAt, null, "a refused limit approves nothing");
 });
 
 test("registry or writer unavailability prevents identity registration", async () => {
