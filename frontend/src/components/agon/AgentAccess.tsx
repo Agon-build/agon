@@ -2,7 +2,9 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { TagButton } from "@/components/redesign/TagButton";
-import { ACCESS_LEVELS, EXPIRY_DAYS, setupSnippets } from "@/lib/agon/access-setup";
+import { ACCESS_LEVELS, EXPIRY_DAYS, setupSnippets, tokenSnippets } from "@/lib/agon/access-setup";
+import { disconnectConnection, listConnections, type Connection } from "@/lib/agon/connect-api";
+import { LEVELS } from "@/lib/agon/connect-view";
 import { createToken, listTokens, revokeToken, type TokenRow } from "@/lib/agon/builder-api";
 import { MCP_URL } from "@/lib/agon/docs-content";
 import { StageApiError } from "@/lib/agon/stage";
@@ -10,8 +12,73 @@ import { StageApiError } from "@/lib/agon/stage";
 const INPUT = "min-h-11 w-full border border-[color:var(--hairline-strong)] bg-canvas px-3 font-mono text-sm text-ink";
 const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "Never");
 
-/// Account, Agent access: named tokens for coding agents, shown once, revocable.
+const TAB = (on: boolean) => `min-h-11 border px-3 font-mono text-[10px] uppercase tracking-[0.12em] ${on ? "border-ink bg-ink text-[color:var(--canvas)]" : "border-[color:var(--hairline-strong)] text-ink-2"}`;
+
+/// Account, Connected agents: one-line setup, the apps you approved on the
+/// Connect page with Disconnect, and personal tokens for agents without a browser.
 export function AgentAccess() {
+  const [connections, setConnections] = useState<Connection[] | null>(null);
+  const [tab, setTab] = useState(0);
+  const [copied, setCopied] = useState(false);
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const load = useCallback(() => { void listConnections().then((r) => setConnections(r.connections)).catch(() => setConnections([])); }, []);
+  useEffect(load, [load]);
+  const snippets = setupSnippets(MCP_URL);
+
+  return (
+    <div className="grid gap-8">
+      <div className="grid gap-3">
+        <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">Add Agon to your agent</p>
+        <div role="tablist" aria-label="Client" className="flex flex-wrap gap-2">
+          {snippets.map((s, i) => <button key={s.label} type="button" role="tab" aria-selected={tab === i} onClick={() => setTab(i)} className={TAB(tab === i)}>{s.label}</button>)}
+        </div>
+        <div className="flex flex-wrap items-start gap-3">
+          <pre className="min-w-0 flex-1 overflow-x-auto bg-canvas-2 p-3 font-mono text-xs leading-5 text-ink">{snippets[tab]!.code}</pre>
+          <TagButton size="sm" variant="ghost" arrow={false} onClick={() => { void navigator.clipboard?.writeText(snippets[tab]!.code); setCopied(true); window.setTimeout(() => setCopied(false), 1500); }}>{copied ? "Copied" : "Copy"}</TagButton>
+        </div>
+        <p className="text-sm leading-6 text-ink-2">The first time your agent uses Agon, a page opens here to confirm what it may do.</p>
+      </div>
+
+      <div className="overflow-x-auto">
+        <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">Connected agents</p>
+        {connections === null ? <p className="text-sm text-ink-3">Loading</p> : connections.length === 0 ? <p className="text-sm text-ink-2">No agents connected yet.</p> : (
+          <table className="w-full min-w-[520px] text-left text-sm">
+            <thead className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3"><tr><th className="py-2">Agent</th><th>Access</th><th>Connected</th><th>Last used</th><th /></tr></thead>
+            <tbody className="divide-y divide-[color:var(--hairline)]">
+              {connections.map((c) => (
+                <tr key={c.id}>
+                  <td className="py-3 text-ink">{c.clientName}</td>
+                  <td className="text-ink-2">{LEVELS.find((l) => l.level === c.level)?.label}</td>
+                  <td className="text-ink-2">{day(c.createdAt)}</td>
+                  <td className="text-ink-2">{day(c.lastUsedAt)}</td>
+                  <td className="text-right">
+                    <button type="button" className="min-h-11 px-2 text-sm underline decoration-[color:var(--hairline-strong)] underline-offset-4 hover:text-[color:var(--err)]"
+                      onClick={() => {
+                        if (confirming !== c.id) { setConfirming(c.id); return; }
+                        setConfirming(null);
+                        void disconnectConnection(c.id).then(load).catch(() => setError("That did not go through. Try again."));
+                      }}>{confirming === c.id ? "Disconnect now?" : "Disconnect"}</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {error ? <p role="alert" className="mt-2 text-sm text-[color:var(--err)]">{error}</p> : null}
+      </div>
+
+      <details className="border-t border-[color:var(--hairline)] pt-4">
+        <summary className="min-h-11 cursor-pointer font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 hover:text-ink">Advanced: no browser</summary>
+        <p className="mt-3 text-sm leading-6 text-ink-2">For agents that run where no browser can open, such as a server or CI. Create a token and store it in the AGON_TOKEN environment variable.</p>
+        <div className="mt-4"><TokenAccess /></div>
+      </details>
+    </div>
+  );
+}
+
+/// Personal tokens: named, shown once, revocable.
+function TokenAccess() {
   const [tokens, setTokens] = useState<TokenRow[] | null>(null);
   const [name, setName] = useState("");
   const [level, setLevel] = useState<TokenRow["level"]>("listing");
@@ -27,7 +94,7 @@ export function AgentAccess() {
   useEffect(load, [load]);
 
   const copy = (label: string, text: string) => { void navigator.clipboard?.writeText(text); setCopied(label); window.setTimeout(() => setCopied(null), 1500); };
-  const snippets = setupSnippets(MCP_URL);
+  const snippets = tokenSnippets(MCP_URL);
 
   return (
     <div className="grid gap-6">

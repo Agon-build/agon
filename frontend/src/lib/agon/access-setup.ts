@@ -1,5 +1,5 @@
-/// Agent access (Account): token levels, expiry choices, and client setup that
-/// reads the token from the AGON_TOKEN environment variable.
+/// Agent access (Account): one-line MCP setup, plus token levels and token setup
+/// for agents that cannot open a browser.
 export const ACCESS_LEVELS = [
   { level: "read", label: "Read", detail: "Search and view agents." },
   { level: "listing", label: "Listing", detail: "Prepare, publish and confirm your listings." },
@@ -8,7 +8,24 @@ export const ACCESS_LEVELS = [
 ] as const;
 export const EXPIRY_DAYS = [30, 90] as const;
 
+/// One line per client: the client opens the Agon Connect page on first use.
 export function setupSnippets(mcpUrl: string): { label: string; code: string }[] {
+  return [
+    { label: "Claude Code", code: `claude mcp add --transport http agon ${mcpUrl}` },
+    { label: "Codex", code: `codex mcp add agon --url ${mcpUrl}
+codex mcp login agon` },
+    { label: "Cursor", code: `# ~/.cursor/mcp.json
+{
+  "mcpServers": {
+    "agon": { "url": "${mcpUrl}" }
+  }
+}` },
+    { label: "Any MCP client", code: `${mcpUrl}` },
+  ];
+}
+
+/// For agents without a browser: a personal token read from AGON_TOKEN.
+export function tokenSnippets(mcpUrl: string): { label: string; code: string }[] {
   return [
     {
       label: "Claude Code",

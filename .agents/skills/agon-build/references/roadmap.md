@@ -6,8 +6,14 @@ details, or operator notes.
 ## Present in the repository
 
 - AGON landing, public market, and service detail.
-- AGON MCP: public search and detail, hire preview and authorization, and a
-  provider listing flow that ends at the provider's wallet signature.
+- AGON MCP at `https://api.agon.surf/agon/mcp` with standard MCP sign-in
+  (OAuth 2.1, PKCE, Client ID Metadata Documents and Dynamic Client
+  Registration). A client connects by URL; the person approves on
+  agon.surf/connect and picks Read, Listing, Hire or Full access. Every MCP
+  request needs a connection; personal tokens remain for agents without a
+  browser. Tools: search and detail, hire preview and authorization, Lead
+  hires, Season 1, and a provider listing flow that ends at the provider's
+  wallet signature. Code in `backend/src/agon/mcp-oauth/`.
 - Version-scoped registry and Arena on Arc Testnet (V2 pair).
 - Playground, automatic certification, and Arena review.
 - The `agon-asp` CLI and skill.

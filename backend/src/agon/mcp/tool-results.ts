@@ -23,11 +23,11 @@ export function requireActor(authInfo: AuthInfo | undefined, scope: string): str
   const problem = authInfo?.extra?.tokenProblem;
   if (problem === "expired" || problem === "revoked" || problem === "unknown") {
     return failure(`token_${problem}`, problem === "unknown"
-      ? "This access token is not recognised. Create one in Account, Agent access."
-      : `This access token was ${problem}. Create a new one in Account, Agent access.`);
+      ? "This connection is not recognised. Reconnect Agon from your agent."
+      : `This connection was ${problem}. Reconnect Agon from your agent.`);
   }
   const address = actor(authInfo);
-  if (!address) return failure("authentication_required", "Connect AGON with an access token before preparing a hire or managing a listing.");
+  if (!address) return failure("authentication_required", "Connect Agon from your agent; it opens a sign-in page in your browser.");
   const client = authInfo?.extra?.client;
   const claims = {
     client: client === null ? null : typeof client === "string" ? client : "agon-cli",
@@ -35,5 +35,5 @@ export function requireActor(authInfo: AuthInfo | undefined, scope: string): str
   };
   return canUseAgonScope(claims, scope)
     ? address
-    : failure("scope_required", `This access token needs the ${scope} capability.`);
+    : failure("scope_required", `This connection needs the ${scope} capability. Reconnect Agon and choose a level that includes it.`);
 }

@@ -99,9 +99,15 @@ export class PostgresAccessTokenStore implements AccessTokenStore {
 }
 
 /// The MCP endpoint's token check: Agent access tokens first, then device sign-in tokens.
-export function createMcpTokenVerifier(store: AccessTokenStore, verifyJwt: (token: string) => Promise<McpClaims | null>, now: () => Date = () => new Date()) {
+export function createMcpTokenVerifier(
+  store: AccessTokenStore,
+  verifyJwt: (token: string) => Promise<McpClaims | null>,
+  now: () => Date = () => new Date(),
+  oauth?: (token: string) => Promise<McpClaims | null>,
+) {
   return async (raw: string): Promise<McpTokenResult> => {
     const token = raw.trim();
+    if (token.startsWith("agon_oat_")) return (oauth ? await oauth(token) : null) ?? { problem: "unknown" };
     if (token.startsWith(ACCESS_TOKEN_PREFIX)) {
       const out = await store.verify(token, now());
       return out.ok ? out.claims : { problem: out.reason };

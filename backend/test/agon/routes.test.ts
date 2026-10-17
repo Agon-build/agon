@@ -687,8 +687,11 @@ test("MCP tools trust only verified bearer claims for an actor", async () => {
   });
   const headers = { "content-type": "application/json", accept: "application/json, text/event-stream" };
   const invalid = await app.request("/agon/mcp", { method: "POST", headers: { ...headers, authorization: "Bearer invalid" }, body });
-  assert.equal(invalid.status, 200);
-  assert.match(await invalid.text(), /authentication_required/);
+  assert.equal(invalid.status, 401, "an unverified token starts sign-in instead of reaching tools");
+  assert.match(invalid.headers.get("www-authenticate") ?? "", /error="invalid_token"/);
+  const anonymous = await app.request("/agon/mcp", { method: "POST", headers, body });
+  assert.equal(anonymous.status, 401);
+  assert.match(anonymous.headers.get("www-authenticate") ?? "", /resource_metadata="https:\/\/api\.agon\.surf\/\.well-known\/oauth-protected-resource\/agon\/mcp", scope="agon:read"/);
 
   const valid = await app.request("/agon/mcp", { method: "POST", headers: { ...headers, authorization: "Bearer valid-test-token" }, body });
   assert.equal(valid.status, 200);

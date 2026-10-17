@@ -22,6 +22,9 @@ import { PostgresAgonRepository } from "../agon/store/repository.js";
 import { createAgonRoutes } from "../agon/http/routes.js";
 import { clientAddress } from "../http/client-address.js";
 import { PostgresCustodyTerms } from "../agon/stage/custody-terms.js";
+import { resolveClient as resolveOAuthClient } from "../agon/mcp-oauth/clients.js";
+import { createOAuthRoutes } from "../agon/mcp-oauth/routes.js";
+import { PostgresOAuthStore } from "../agon/mcp-oauth/store.js";
 import { startSeasonRuntime } from "../agon/playground/seasons/runtime.ts";
 import { startPaymentsRuntime } from "../agon/payments/runtime.ts";
 import { PostgresChannelStore } from "../agon/channels/store.ts";
@@ -183,6 +186,10 @@ import {
 import type { RegistrationResponseJSON, AuthenticationResponseJSON } from "@simplewebauthn/server";
 
 const custodyTerms = new PostgresCustodyTerms(pool);
+const oauthStore = new PostgresOAuthStore(pool);
+// The MCP endpoint and its sign-in server share the public API origin.
+const AGON_API_ORIGIN = (config.agon.publicApiUrl ?? "https://api.agon.surf").replace(/\/+$/, "");
+const AGON_MCP_RESOURCE = `${AGON_API_ORIGIN}/agon/mcp`;
 
 const SESSION_MAX_AGE = 7 * 24 * 60 * 60; // 7 days, matches issueToken expiry
 
@@ -976,9 +983,23 @@ if (config.agon.ratings.testsWorkerEnabled) {
   console.log("[agon-tests] 6-hourly Agon checks on");
 }
 
+setInterval(() => { void oauthStore.purgeExpired(new Date()).catch((e) => console.warn(`[mcp-oauth] purge failed: ${(e as Error).message}`)); }, 60 * 60_000).unref();
+app.route("/", createOAuthRoutes({
+  store: oauthStore,
+  issuer: AGON_API_ORIGIN,
+  resource: AGON_MCP_RESOURCE,
+  appUrl: config.auth.appUrl.replace(/\/+$/, ""),
+  requireAuth,
+  terms: custodyTerms,
+  resolveClient: (clientId) => resolveOAuthClient(clientId, { store: oauthStore, fetch, assertPublic: (url) => assertPublicHttpsDestination(url), now: () => new Date() }),
+}));
 app.route("/agon", createAgonRoutes({
   service: agonService,
-  verifyMcpToken: createMcpTokenVerifier(agonAccessTokens, verifyTokenClaims),
+  verifyMcpToken: createMcpTokenVerifier(agonAccessTokens, verifyTokenClaims, undefined, async (token) => {
+    const claims = await oauthStore.verifyAccess(token, AGON_MCP_RESOURCE, new Date());
+    return claims ? { address: claims.address, client: "agon-mcp", scopes: claims.scopes } : null;
+  }),
+  mcpResourceMetadataUrl: `${AGON_API_ORIGIN}/.well-known/oauth-protected-resource/agon/mcp`,
   stageMcp: stageServices
     ? {
         services: stageServices,

@@ -28,7 +28,7 @@ test("the roadmap names every deferred item from the spec, and Live now lists on
 
 test("the MCP section carries the connection, the tool groups and five starting requests", () => {
   assert.deepEqual(MCP_TOOL_GROUPS.map((g) => g.title), ["Find and hire", "Arena", "Ratings", "Listing"]);
-  assert.deepEqual([...MCP_TOOL_GROUPS[2]!.tools], ["get_agent_scores", "get_agent_tests", "run_agent_test"]);
+  assert.deepEqual([...MCP_TOOL_GROUPS[2]!.tools], ["get_agent_scores", "get_agent_tests"]);
   assert.ok(MCP_TOOL_GROUPS[0]!.tools.includes("hire_service"));
   assert.ok(MCP_TOOL_GROUPS[1]!.tools.includes("submit_forecasts"));
   assert.equal(MCP_PROMPTS.length, 5);
@@ -90,9 +90,11 @@ test("the listing steps match the web flow and the endpoint protocols are docume
   const { LISTING_STEPS, LISTING_NOTE, CONNECT_STEPS, ENDPOINT_PROTOCOLS, MCP_TOOL_GROUPS, MCP_ACCESS } = await import("./docs-content.ts");
   assert.deepEqual(LISTING_STEPS.map((s) => s.title), ["Describe", "Check", "Approve and pay", "Live"]);
   assert.doesNotMatch(LISTING_NOTE, /roadmap/i, "the web flow ships now");
-  assert.match(MCP_ACCESS, /Agent access/);
-  assert.ok(CONNECT_STEPS.some((s) => /Agent access/.test(s.body)));
-  assert.ok(CONNECT_STEPS.some((s) => /AGON_TOKEN/.test(s.body)));
+  assert.match(MCP_ACCESS, /sign in/i, "MCP connects by signing in, not by pasting a token");
+  assert.match(MCP_ACCESS, /no browser/i, "agents without a browser are pointed to tokens");
+  assert.deepEqual(CONNECT_STEPS.map((s) => s.title), ["Add Agon", "Confirm", "Ask"]);
+  assert.ok(CONNECT_STEPS.every((s) => !/AGON_TOKEN|Authorization/.test(s.body)), "the main path never handles a token");
+  assert.match(LISTING_NOTE, /connected coding agent/);
   assert.ok(CONNECT_STEPS.every((s) => !/agon_pat_[A-Za-z0-9]/.test(s.body)));
   assert.deepEqual(ENDPOINT_PROTOCOLS.map((p) => p.title), ["Unpaid test call", "Certification call"]);
   assert.match(ENDPOINT_PROTOCOLS[0]!.request, /agon-x402-preflight\/1/);
@@ -149,4 +151,20 @@ test("Docs say how anyone can check a test result for themselves", async () => {
   assert.match(method, /How it was scored/);
   assert.match(method, /sha256/);
   assert.match(method, /recompute/);
+});
+
+test("docs match the 17 October changes: wallet terms, top-up, automatic refunds, custody, MCP sign-in, escrow not live", async () => {
+  const { HIRE_STEPS, PAYMENT_OPTIONS, PAYMENT_SAFETY, ROADMAP, API_REFERENCE, MCP_TOOL_GROUPS } = await import("./docs-content.ts");
+  const hire = HIRE_STEPS.map((s) => s.body).join(" ");
+  assert.match(hire, /wallet terms/);
+  assert.match(hire, /add USDC/);
+  assert.match(hire, /answer does not arrive/);
+  assert.match(PAYMENT_SAFETY, /Agon holds/);
+  assert.match(PAYMENT_SAFETY, /withdraw/);
+  const escrow = PAYMENT_OPTIONS.find((p) => /escrow/i.test(p.body))!;
+  assert.match(escrow.title, /coming/i, "escrow is not switched on yet");
+  assert.ok(ROADMAP.live.some((i) => /sign in/i.test(i.body) && /Claude Code/.test(i.body)));
+  assert.ok(!ROADMAP.next.some((i) => i.title === "A clearer app"), "shipped items leave Next");
+  assert.ok(API_REFERENCE.some((g) => g.lines.some((l) => l.includes("/.well-known/oauth-protected-resource/agon/mcp"))));
+  assert.ok(!MCP_TOOL_GROUPS.some((g) => g.tools.includes("run_agent_test")), "no access level can run tests over MCP yet");
 });

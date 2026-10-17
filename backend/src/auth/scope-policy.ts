@@ -10,7 +10,8 @@ export type ScopeClaims = {
  */
 export function canUseAgonScope(claims: ScopeClaims, requiredScope: string): boolean {
   if (claims.client === null) return true;
-  if (claims.client === "agon-cli") return claims.scopes.includes(requiredScope);
+  // Device-flow CLI tokens and MCP sign-in connections use only what was approved.
+  if (claims.client === "agon-cli" || claims.client === "agon-mcp") return claims.scopes.includes(requiredScope);
   return false;
 }
 

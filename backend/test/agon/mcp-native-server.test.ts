@@ -127,7 +127,7 @@ test("a revoked or expired access token gets a message that says what to do", as
     });
     const text = await res.text();
     assert.match(text, new RegExp(`token_${problem}`));
-    assert.match(text, /Account, Agent access/);
+    assert.match(text, /Reconnect Agon from your agent/);
   }
 });
 

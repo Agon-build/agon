@@ -8,6 +8,7 @@ import { PlaygroundRunConflictError, type PlaygroundRateLimiter, type Playground
 import { inspectManifest, ManifestInspectionError } from "../manifest-inspector.ts";
 import { clientAddress } from "../../http/client-address.ts";
 import { createMcpAccessAdapter } from "../mcp/adapter.ts";
+import { authorizeMcpRequest } from "../mcp-oauth/edge.ts";
 import { createAgonNativeMcpHandler, type RatingsMcpDeps } from "../mcp/native-server.ts";
 import type { StageMcpDeps } from "../mcp/stage-tools.ts";
 import type { ManagedPublisher } from "../mcp/managed-publisher.ts";
@@ -376,6 +377,8 @@ export type AgonMarketService = {
 export type CreateAgonRoutesOptions = {
   service: AgonMarketService;
   verifyMcpToken: (token: string) => Promise<McpTokenResult>;
+  /** Protected resource metadata URL named in MCP sign-in challenges. */
+  mcpResourceMetadataUrl?: string;
   stageMcp?: StageMcpDeps;
   /** Public scores and Playground test tools (Plan 3f). */
   ratingsMcp?: RatingsMcpDeps;
@@ -1143,29 +1146,16 @@ export function createAgonRoutes(options: CreateAgonRoutesOptions) {
     return result.ok ? context.json(result.value) : serviceErrorResponse(context, result.error);
   });
 
-  // Standards-based MCP: public discovery is available without a session.
-  // Provider and buyer tools receive an actor only after this edge validates an
-  // AGON bearer token. The tool surface then enforces the same boundaries as
-  // the task-level routes below.
+  // Standards-based MCP with sign-in: every request needs a connection. No
+  // token starts the client's sign-in (401); a tool beyond the connection's
+  // access asks the person to step up (403). Tools still check their scope.
   app.all("/mcp", async (context) => {
-    const authorization = context.req.header("authorization") ?? "";
-    const token = authorization.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
-    const verified = token ? await options.verifyMcpToken(token) : null;
-    const claims = verified && "address" in verified ? verified : null;
-    // A known-bad Agent access token gets a specific message instead of "connect a token".
-    const problem = verified && "problem" in verified ? verified.problem : null;
-    return nativeMcp.fetch(context.req.raw, {
-      authInfo: problem
-        ? { token, clientId: "rejected", scopes: [], extra: { tokenProblem: problem } }
-        : claims
-        ? {
-            token,
-            clientId: claims.client ?? claims.address,
-            scopes: claims.scopes,
-            extra: { address: claims.address, client: claims.client },
-          }
-        : undefined,
+    const auth = await authorizeMcpRequest(context.req.raw, {
+      verify: options.verifyMcpToken,
+      resourceMetadataUrl: options.mcpResourceMetadataUrl ?? "https://api.agon.surf/.well-known/oauth-protected-resource/agon/mcp",
     });
+    if (!auth.ok) return auth.response;
+    return nativeMcp.fetch(context.req.raw, { authInfo: auth.authInfo });
   });
 
   // Task-level MCP access keeps discovery and inspection public while placing

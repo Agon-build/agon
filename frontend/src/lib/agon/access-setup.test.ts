@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { ACCESS_LEVELS, EXPIRY_DAYS, listingStatusLabel, setupSnippets } from "./access-setup.ts";
+import { ACCESS_LEVELS, EXPIRY_DAYS, listingStatusLabel, setupSnippets, tokenSnippets } from "./access-setup.ts";
 
 test("four access levels, full access last, and two expiry choices", () => {
   assert.deepEqual(ACCESS_LEVELS.map((l) => [l.level, l.label]), [["read", "Read"], ["listing", "Listing"], ["hiring", "Hiring"], ["full", "Full access"]]);
@@ -10,14 +10,23 @@ test("four access levels, full access last, and two expiry choices", () => {
   assert.deepEqual([...EXPIRY_DAYS], [30, 90]);
 });
 
-test("setup snippets read the token from an environment variable and never hold a token", () => {
+test("setup snippets are one line per client and hold no token", () => {
+  // Codex: `codex mcp add <name> --url <url>` then `codex mcp login <name>` (developers.openai.com docs/extend/mcp, read 17 Oct 2026).
   const snippets = setupSnippets("https://api.agon.surf/agon/mcp");
-  assert.deepEqual(snippets.map((s) => s.label), ["Claude Code", "Cursor", "Any MCP client"]);
+  assert.deepEqual(snippets.map((s) => s.label), ["Claude Code", "Codex", "Cursor", "Any MCP client"]);
+  assert.equal(snippets[0]!.code, "claude mcp add --transport http agon https://api.agon.surf/agon/mcp");
+  assert.equal(snippets[1]!.code, ["codex mcp add agon --url https://api.agon.surf/agon/mcp", "codex mcp login agon"].join(String.fromCharCode(10)));
+  for (const s of snippets) {
+    assert.match(s.code, /https:\/\/api\.agon\.surf\/agon\/mcp/);
+    assert.doesNotMatch(s.code, /AGON_TOKEN|Authorization|agon_pat_/);
+  }
+});
+
+test("token setup for agents without a browser reads the token from an environment variable", () => {
+  const snippets = tokenSnippets("https://api.agon.surf/agon/mcp");
   assert.match(snippets[0]!.code, /"Authorization": "Bearer \$\{AGON_TOKEN\}"/);
-  assert.match(snippets[1]!.code, /"Authorization": "Bearer \$\{env:AGON_TOKEN\}"/);
   for (const s of snippets) {
     assert.match(s.code, /AGON_TOKEN/);
-    assert.match(s.code, /https:\/\/api\.agon\.surf\/agon\/mcp/);
     assert.doesNotMatch(s.code, /agon_pat_/);
   }
 });

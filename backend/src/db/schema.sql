@@ -2427,6 +2427,57 @@ create table if not exists agon_access_tokens (
   revoked_at    timestamptz
 );
 create index if not exists agon_access_tokens_owner_idx on agon_access_tokens(owner_address, created_at desc);
+
+-- MCP sign-in (OAuth). Codes and tokens are stored as sha256 hashes only.
+create table if not exists agon_oauth_clients (
+  client_id     text primary key check (char_length(client_id) between 8 and 512),
+  client_name   text not null check (char_length(client_name) between 1 and 80),
+  redirect_uris text[] not null,
+  logo_uri      text,
+  source        text not null check (source in ('dcr', 'cimd')),
+  created_at    timestamptz not null default now(),
+  fetched_at    timestamptz not null default now()
+);
+create table if not exists agon_oauth_connections (
+  id            uuid primary key,
+  owner_address text not null,
+  client_id     text not null references agon_oauth_clients(client_id),
+  level         text not null check (level in ('read', 'listing', 'hiring', 'full')),
+  created_at    timestamptz not null,
+  updated_at    timestamptz not null,
+  last_used_at  timestamptz,
+  revoked_at    timestamptz
+);
+create index if not exists agon_oauth_connections_owner_idx on agon_oauth_connections(owner_address, created_at desc);
+create table if not exists agon_oauth_requests (
+  id               uuid primary key,
+  client_id        text not null references agon_oauth_clients(client_id),
+  redirect_uri     text not null,
+  code_challenge   text not null,
+  state            text,
+  requested_scopes text[] not null default '{}',
+  resource         text not null,
+  created_at       timestamptz not null,
+  expires_at       timestamptz not null,
+  decided_at       timestamptz,
+  connection_id    uuid references agon_oauth_connections(id),
+  code_hash        text unique,
+  code_expires_at  timestamptz,
+  code_used_at     timestamptz
+);
+create table if not exists agon_oauth_tokens (
+  token_hash    text primary key,
+  kind          text not null check (kind in ('access', 'refresh')),
+  connection_id uuid not null references agon_oauth_connections(id),
+  resource      text not null,
+  scopes        text[] not null,
+  created_at    timestamptz not null,
+  expires_at    timestamptz,
+  replaced_at   timestamptz,
+  revoked_at    timestamptz
+);
+create index if not exists agon_oauth_tokens_connection_idx on agon_oauth_tokens(connection_id);
+create index if not exists agon_oauth_requests_expires_idx on agon_oauth_requests(expires_at);
 -- Full access: listing and hiring in one token.
 alter table agon_access_tokens drop constraint if exists agon_access_tokens_level_check;
 alter table agon_access_tokens add constraint agon_access_tokens_level_check check (level in ('read', 'listing', 'hiring', 'full'));
