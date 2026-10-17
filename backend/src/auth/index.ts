@@ -850,6 +850,7 @@ let stageServices: StageServices | null = null;
 if (agonPayments) {
   app.route("/agon", agonPayments.routes.payments);
   app.route("/agon/agents/house", agonPayments.routes.house);
+  app.route("/agon/agents/specialists", agonPayments.routes.specialists);
   if (agonPayments.routes.standin) app.route("/agon/standin", agonPayments.routes.standin);
   stageServices = createStageServices({
     hire: agonPayments.hire,

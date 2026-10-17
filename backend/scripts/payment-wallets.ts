@@ -1,6 +1,7 @@
 /// Usage: npx tsx scripts/payment-wallets.ts <arc-testnet|arc>
 /// Creates (or returns, by idempotency key) the lead agent wallet, the testnet
-/// stand-in seller wallet and the four house seller wallets, and prints the
+/// stand-in seller wallet, the four house seller wallets and the Pitch and Scout
+/// specialist wallets, and prints the
 /// env values. Prints ids and addresses only.
 import "dotenv/config";
 import { createAgonWallet } from "../src/chain/circleDev.ts";
@@ -20,3 +21,6 @@ console.log(`AGON_PAYMENT_NETWORK=${network.id}`);
 console.log(`AGON_LEAD_WALLET=${JSON.stringify(lead)}`);
 if (standin) console.log(`AGON_STANDIN_SELLER_WALLET=${JSON.stringify(standin)}`);
 console.log(`AGON_HOUSE_SELLER_WALLETS=${JSON.stringify(house)}`);
+const specialists: Record<string, { walletId: string; address: string }> = {};
+for (const key of ["pitch", "scout"]) specialists[key] = await make(`specialist-${key}`);
+console.log(`AGON_SPECIALIST_WALLETS=${JSON.stringify(specialists)}`);

@@ -13,6 +13,8 @@ export type PaymentSettings = {
   lead: WalletHandle;
   standin: WalletHandle | null;
   houseSellers: Record<string, WalletHandle>;
+  /** Pitch and Scout, the specialist agents Agon sells per call; empty when not set up. */
+  specialistSellers: Partial<Record<"pitch" | "scout", WalletHandle>>;
   leadPrice: bigint;
   subHireBudget: bigint;
   houseAsk: bigint;
@@ -85,6 +87,17 @@ export function resolvePaymentSettings(env: Record<string, string | undefined>):
     problems.push(`AGON_HOUSE_SELLER_WALLETS must map ${HIREABLE_HOUSE_KEYS.join(", ")} to wallet handles`);
   }
 
+  const specialistSellers: Partial<Record<"pitch" | "scout", WalletHandle>> = {};
+  try {
+    const raw = z.record(handleShape).parse(JSON.parse(env.AGON_SPECIALIST_WALLETS ?? "{}"));
+    for (const [key, value] of Object.entries(raw)) {
+      if (key !== "pitch" && key !== "scout") throw new Error(key);
+      specialistSellers[key] = { walletId: value.walletId, address: value.address.toLowerCase() as Address };
+    }
+  } catch {
+    problems.push("AGON_SPECIALIST_WALLETS must map pitch and scout to wallet handles");
+  }
+
   const leadPrice = atomic(env.AGON_LEAD_PRICE, 300_000n);
   const subHireBudget = atomic(env.AGON_LEAD_SUBHIRE_BUDGET, 250_000n);
   const houseAsk = atomic(env.AGON_HOUSE_ASK, 220_000n);
@@ -111,6 +124,6 @@ export function resolvePaymentSettings(env: Record<string, string | undefined>):
   return {
     enabled: true,
     ok: true,
-    settings: { network, publicApiUrl, lead, standin, houseSellers, leadPrice, subHireBudget, houseAsk, houseFloor, off },
+    settings: { network, publicApiUrl, lead, standin, houseSellers, specialistSellers, leadPrice, subHireBudget, houseAsk, houseFloor, off },
   };
 }

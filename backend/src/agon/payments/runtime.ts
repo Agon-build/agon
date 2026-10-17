@@ -8,6 +8,8 @@ import { runLeadForecast } from "../lead-agent/lead-agent.ts";
 import { DEFAULT_HOUSE_AGENTS } from "../playground/seasons/house-agents.ts";
 import { parseFirstPartyAgents, providerRefFor } from "../first-party.ts";
 import { createHouseSellerRoutes } from "../playground/seasons/house-seller.ts";
+import { createMarketLookup } from "../agents/market-lookup.ts";
+import { createSpecialistRoutes } from "../agents/routes.ts";
 import { stableUuid } from "../playground/seasons/committer.ts";
 import { computeLeaderboard } from "../playground/seasons/scoring.ts";
 import type { SeasonRuntime } from "../playground/seasons/runtime.ts";
@@ -57,7 +59,7 @@ export type PaymentsRuntime = {
   settings: PaymentSettings;
   store: PostgresPaymentsStore;
   hire: HireService;
-  routes: { payments: Hono; house: Hono; standin: Hono | null };
+  routes: { payments: Hono; house: Hono; specialists: Hono; standin: Hono | null };
   balanceOf(address: Address): Promise<bigint | null>;
 };
 
@@ -138,6 +140,12 @@ export function startPaymentsRuntime(input: {
         sellers: Object.fromEntries(
           Object.entries(s.houseSellers).map(([key, w]) => [key, { spec: DEFAULT_HOUSE_AGENTS.find((a) => a.key === key)!, payTo: w.address, settle: settler(w) }]),
         ),
+        callModel: async (p) => ({ text: (await callModel(p)).text }),
+      }) as unknown as Hono,
+      specialists: createSpecialistRoutes({
+        network, store,
+        sellers: Object.fromEntries(Object.entries(s.specialistSellers).map(([key, w]) => [key, { payTo: w.address, settle: settler(w) }])),
+        lookup: createMarketLookup(),
         callModel: async (p) => ({ text: (await callModel(p)).text }),
       }) as unknown as Hono,
       standin: s.standin ? (createStandinRoutes({ network, payTo: s.standin.address, settle: settler(s.standin), claimNonce }) as unknown as Hono) : null,

@@ -59,3 +59,15 @@ test("bad values come back as named problems instead of throwing", () => {
     assert.ok(out.problems.some((p) => pattern.test(p)), `${JSON.stringify(patch)} -> ${out.problems.join("; ")}`);
   }
 });
+
+test("specialist agent wallets are optional; only pitch and scout are accepted", () => {
+  const none = resolvePaymentSettings(valid);
+  if (!none.enabled || !none.ok) throw new Error(JSON.stringify(none));
+  assert.deepEqual(none.settings.specialistSellers, {});
+  const both = resolvePaymentSettings({ ...valid, AGON_SPECIALIST_WALLETS: JSON.stringify({ pitch: { walletId: "w-pitch", address: `0x${"D".repeat(40)}` }, scout: { walletId: "w-scout", address: `0x${"e".repeat(40)}` } }) });
+  if (!both.enabled || !both.ok) throw new Error(JSON.stringify(both));
+  assert.equal(both.settings.specialistSellers.pitch!.address, `0x${"d".repeat(40)}`);
+  assert.equal(both.settings.specialistSellers.scout!.walletId, "w-scout");
+  const bad = resolvePaymentSettings({ ...valid, AGON_SPECIALIST_WALLETS: JSON.stringify({ striker: { walletId: "w", address: `0x${"d".repeat(40)}` } }) });
+  assert.ok(bad.enabled && !bad.ok && bad.problems.some((p) => p.includes("AGON_SPECIALIST_WALLETS")));
+});
