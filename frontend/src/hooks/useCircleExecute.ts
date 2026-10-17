@@ -105,7 +105,7 @@ async function waitForTxHash(circleTxId: string): Promise<`0x${string}`> {
     }
     await sleep(POLL_MS);
   }
-  throw new Error("transaction is still pending after 2 minutes; check arcscan or try again");
+  throw new Error("transaction is still pending after 2 minutes; check the Arc explorer or try again");
 }
 
 function sleep(ms: number): Promise<void> {

@@ -8,7 +8,7 @@ import { AgentAvatar, ArcanaMark, BracketedCell, robotVariantForId } from "@/com
 /// a viewer wants to verify the integration is real, they can pop the chip
 /// open and land on the actual contract page.
 const ARCANA_CONTRACT = "0x443a47eF1025e047879b1BA08c94e6dedB354D54";
-const ARCANA_SCAN_URL = `https://testnet.arcscan.app/address/${ARCANA_CONTRACT}`;
+const ARCANA_SCAN_URL = `https://explorer.testnet.arc.io/address/${ARCANA_CONTRACT}`;
 const ARCANA_SITE_URL = "https://www.arcanamarkets.xyz";
 const ARCANA_SITE_LABEL = "ARCANAMARKETS.XYZ";
 import { nameFor, skinFor, useAgentNames, useAgentSkins } from "@/hooks/useAgentNames";

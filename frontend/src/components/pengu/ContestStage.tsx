@@ -350,7 +350,7 @@ function VolumeBody({ entry, accent, maxScore }: { entry: StandingsEntry; accent
           recent.slice(0, 4).map((h, idx) => (
             <a
               key={h}
-              href={`https://testnet.arcscan.app/tx/${h}`}
+              href={`https://explorer.testnet.arc.io/tx/${h}`}
               target="_blank"
               rel="noreferrer"
               className="flex items-center gap-1.5 tick-up hover:text-accent"

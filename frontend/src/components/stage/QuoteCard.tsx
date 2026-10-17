@@ -30,7 +30,8 @@ export function QuoteCard({ quote, nowMs, paying, onPay, onCancel }: { quote: Qu
         <div className="mt-7 flex flex-wrap items-center gap-3 max-lg:sticky max-lg:bottom-0 max-lg:z-10 max-lg:-mx-5 max-lg:border-t max-lg:border-[color:var(--hairline)] max-lg:bg-canvas-2 max-lg:px-5 max-lg:py-3">
           <TagButton onClick={onPay} disabled={paying || expired}>{paying ? "Paying" : `Pay ${quote.amount} USDC`}</TagButton>
           <TagButton variant="ghost" onClick={onCancel} disabled={paying}>Cancel</TagButton>
-          <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-3" aria-live="polite">{expired ? "Quote expired" : `Expires in ${formatCountdown(quote.expiresAt, nowMs)}`}</span>
+          <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-3">{expired ? "Quote expired" : `Expires in ${formatCountdown(quote.expiresAt, nowMs)}`}</span>
+          <span className="sr-only" aria-live="polite">{expired ? "Quote expired" : ""}</span>
         </div>
       ) : (
         <div className="mt-7">

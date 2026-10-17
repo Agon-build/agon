@@ -1,13 +1,8 @@
 "use client";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useAccount } from "wagmi";
-import { usePathname } from "next/navigation";
 import { fetchMe, logout, purgeLegacyToken, type Me } from "@/lib/auth";
 import { useAgonNetwork } from "@/hooks/useAgonNetwork";
-import { IS_AGON_DEPLOYMENT } from "@/lib/product";
-import { isAgonRoute } from "@/lib/agon/routes";
-import { bnbMe, bnbLogout } from "@agon/bnb/client";
-import type { BnbChain } from "@agon/bnb/types";
 
 interface AuthContextValue {
   me: Me | null; loading: boolean; settling: boolean;
@@ -20,10 +15,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
  * requests a signature; public browsing never does. */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { network } = useAgonNetwork();
-  const pathname = usePathname() ?? "/";
-  const agon = IS_AGON_DEPLOYMENT || isAgonRoute(pathname);
-  const bnb = agon && (network.chainId === 56 || network.chainId === 97) ? network.chainId as BnbChain : null;
-  const scope = bnb ?? 5042002;
+  const scope = network.chainId;
   const [state, setState] = useState<{ scope: number; me: Me | null; loading: boolean }>({ scope, me: null, loading: true });
   const [sessionEndedReason, setSessionEndedReason] = useState<string | null>(null);
   const { address: wallet, status } = useAccount();
@@ -37,18 +29,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState({ scope, me: null, loading: true });
     let next: Me | null = null;
     try {
-      if (bnb) {
-        const { session } = await bnbMe(bnb);
-        if (session) next = { address: session.address, x_handle: null, current_syndicate_id: null, walletKind: "wagmi", canEnterContests: false };
-      } else next = await fetchMe();
+      next = await fetchMe();
     } catch { /* Never carry a previous network identity through a failure. */ }
     if (request === generation.current && activeScope.current === scope) setState({ scope, me: next, loading: false });
-  }, [bnb, scope]);
+  }, [scope]);
   const signOut = useCallback(async () => {
     ++generation.current;
     setState({ scope, me: null, loading: false });
-    if (bnb) await bnbLogout(bnb); else await logout();
-  }, [bnb, scope]);
+    await logout();
+  }, [scope]);
   useEffect(() => { purgeLegacyToken(); void refresh(); return () => { ++generation.current; }; }, [refresh]);
   useEffect(() => {
     if (me?.walletKind === "wagmi" && wallet && status === "connected" && wallet.toLowerCase() !== me.address.toLowerCase()) {

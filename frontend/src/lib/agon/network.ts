@@ -1,5 +1,5 @@
 import type { Chain } from "viem";
-import { arcTestnet, bsc, bscTestnet } from "viem/chains";
+import { arcTestnet } from "viem/chains";
 
 import {
   AGON_CONTRACTS as ARC_AGON_CONTRACTS,
@@ -12,10 +12,10 @@ import {
  * Every context carries the chain, explorer, payment asset, and deployment
  * state that downstream catalog, proof, and write adapters must honor.
  */
-export type AgonNetworkKey = "bnb-mainnet" | "bnb-testnet" | "arc-testnet";
+export type AgonNetworkKey = "arc-testnet";
 export type AgonNetworkMode = "mainnet" | "testnet";
 export type AgonNetworkReadiness = "configured" | "adapter_pending";
-export type AgonChainId = typeof bsc.id | typeof bscTestnet.id | typeof arcTestnet.id;
+export type AgonChainId = typeof arcTestnet.id;
 
 export type AgonContractAddresses = {
   ProfileRegistry?: `0x${string}`;
@@ -31,7 +31,7 @@ export type AgonNetworkDescriptor = {
   mode: AgonNetworkMode;
   chain: Chain;
   chainId: AgonChainId;
-  brand: "BNB" | "ARC";
+  brand: "ARC";
   name: string;
   environment: string;
   gasAsset: string;
@@ -46,82 +46,13 @@ export type AgonNetworkDescriptor = {
   readiness: AgonNetworkReadiness;
 };
 
-function readAddress(key: string): `0x${string}` | undefined {
-  const value = process.env[key]?.trim();
-  return value && /^0x[a-fA-F0-9]{40}$/.test(value) ? (value as `0x${string}`) : undefined;
-}
-
-function hasContracts(contracts: AgonContractAddresses | null): boolean {
-  return Boolean(contracts && contracts.ProfileRegistry && contracts.ServiceRegistry);
-}
-
-function bnbContractsOrNull(contracts: AgonContractAddresses): AgonContractAddresses | null {
-  return hasContracts(contracts) ? contracts : null;
-}
-
 const AGON_API_URL = (
   process.env.NEXT_PUBLIC_AGON_API_URL ??
   process.env.NEXT_PUBLIC_AUTH_URL ??
   "http://localhost:8082"
 ).replace(/\/$/, "");
 
-const bnbMainnetContracts: AgonContractAddresses = {
-  ProfileRegistry: readAddress("NEXT_PUBLIC_BNB_MAINNET_AGON_PROFILE_REGISTRY"),
-  ServiceRegistry: readAddress("NEXT_PUBLIC_BNB_MAINNET_AGON_SERVICE_REGISTRY"),
-  JobEscrow: readAddress("NEXT_PUBLIC_BNB_MAINNET_AGON_JOB_ESCROW"),
-  Arena: readAddress("NEXT_PUBLIC_BNB_MAINNET_AGON_ARENA"),
-  SyndicateRegistry: readAddress("NEXT_PUBLIC_BNB_MAINNET_AGON_SYNDICATE_REGISTRY"),
-  PrizeVault: readAddress("NEXT_PUBLIC_BNB_MAINNET_AGON_PRIZE_VAULT"),
-};
-
-const bnbTestnetContracts: AgonContractAddresses = {
-  ProfileRegistry: readAddress("NEXT_PUBLIC_BNB_TESTNET_AGON_PROFILE_REGISTRY"),
-  ServiceRegistry: readAddress("NEXT_PUBLIC_BNB_TESTNET_AGON_SERVICE_REGISTRY"),
-  JobEscrow: readAddress("NEXT_PUBLIC_BNB_TESTNET_AGON_JOB_ESCROW"),
-  Arena: readAddress("NEXT_PUBLIC_BNB_TESTNET_AGON_ARENA"),
-  SyndicateRegistry: readAddress("NEXT_PUBLIC_BNB_TESTNET_AGON_SYNDICATE_REGISTRY"),
-  PrizeVault: readAddress("NEXT_PUBLIC_BNB_TESTNET_AGON_PRIZE_VAULT"),
-};
-
 export const AGON_NETWORKS: Record<AgonNetworkKey, AgonNetworkDescriptor> = {
-  "bnb-mainnet": {
-    key: "bnb-mainnet",
-    mode: "mainnet",
-    chain: bsc,
-    chainId: bsc.id,
-    brand: "BNB",
-    name: "BNB Smart Chain",
-    environment: "MAINNET",
-    gasAsset: "BNB",
-    paymentAsset: "USDC",
-    explorerUrl: "https://bscscan.com",
-    faucetUrl: null,
-    docsUrl: "https://docs.bnbchain.org",
-    apiUrl: process.env.NEXT_PUBLIC_BNB_MAINNET_AGON_API_URL?.trim() || null,
-    identityRegistry: readAddress("NEXT_PUBLIC_BNB_MAINNET_ERC8004_IDENTITY_REGISTRY") ?? null,
-    paymentAssetAddress: readAddress("NEXT_PUBLIC_BNB_MAINNET_USDC_ADDRESS") ?? null,
-    contracts: bnbContractsOrNull(bnbMainnetContracts),
-    readiness: process.env.NEXT_PUBLIC_BNB_MAINNET_AGON_ENABLED === "1" ? "configured" : "adapter_pending",
-  },
-  "bnb-testnet": {
-    key: "bnb-testnet",
-    mode: "testnet",
-    chain: bscTestnet,
-    chainId: bscTestnet.id,
-    brand: "BNB",
-    name: "BNB Smart Chain Testnet",
-    environment: "TESTNET",
-    gasAsset: "tBNB",
-    paymentAsset: "USDC",
-    explorerUrl: "https://testnet.bscscan.com",
-    faucetUrl: "https://www.bnbchain.org/en/testnet-faucet",
-    docsUrl: "https://docs.bnbchain.org",
-    apiUrl: process.env.NEXT_PUBLIC_BNB_TESTNET_AGON_API_URL?.trim() || null,
-    identityRegistry: readAddress("NEXT_PUBLIC_BNB_TESTNET_ERC8004_IDENTITY_REGISTRY") ?? null,
-    paymentAssetAddress: readAddress("NEXT_PUBLIC_BNB_TESTNET_USDC_ADDRESS") ?? null,
-    contracts: bnbContractsOrNull(bnbTestnetContracts),
-    readiness: process.env.NEXT_PUBLIC_BNB_TESTNET_AGON_ENABLED === "1" ? "configured" : "adapter_pending",
-  },
   "arc-testnet": {
     key: "arc-testnet",
     mode: "testnet",
@@ -132,7 +63,7 @@ export const AGON_NETWORKS: Record<AgonNetworkKey, AgonNetworkDescriptor> = {
     environment: "TESTNET",
     gasAsset: "USDC",
     paymentAsset: "USDC",
-    explorerUrl: "https://testnet.arcscan.app",
+    explorerUrl: "https://explorer.testnet.arc.io",
     faucetUrl: "https://faucet.circle.com",
     docsUrl: "https://docs.arc.network",
     apiUrl: AGON_API_URL,
@@ -150,22 +81,20 @@ export const AGON_NETWORKS: Record<AgonNetworkKey, AgonNetworkDescriptor> = {
   },
 };
 
-// The public product currently has one deliberate network context. The BNB
-// descriptors remain typed and dormant so they can be reintroduced behind a
-// reviewed release decision without changing the Arc adapter.
+// Agon is Arc-native: one network context. Old links that name another network reopen on Arc.
 export const AGON_PUBLIC_NETWORK_KEY: AgonNetworkKey = "arc-testnet";
 export const AGON_DEFAULT_NETWORK_KEY: AgonNetworkKey = AGON_PUBLIC_NETWORK_KEY;
 export const AGON_TESTNET_NETWORK_KEYS: readonly AgonNetworkKey[] = [AGON_PUBLIC_NETWORK_KEY];
 
 export function isAgonNetworkKey(value: string | null | undefined): value is AgonNetworkKey {
-  return value === "bnb-mainnet" || value === "bnb-testnet" || value === "arc-testnet";
+  return value === "arc-testnet";
 }
 
 export function getAgonNetworkKey(value: string | null | undefined): AgonNetworkKey {
   return isAgonNetworkKey(value) ? value : AGON_DEFAULT_NETWORK_KEY;
 }
 
-/** Resolve the network exposed by public Agon routes. Old BNB links reopen on Arc. */
+/** Resolve the network exposed by public Agon routes. Any other value reopens on Arc. */
 export function getPublicAgonNetworkKey(_value: string | null | undefined): typeof AGON_PUBLIC_NETWORK_KEY {
   return AGON_PUBLIC_NETWORK_KEY;
 }
@@ -177,7 +106,7 @@ export function getAgonNetwork(value: string | null | undefined): AgonNetworkDes
 export type AgonBalanceTarget = {
   chainId: AgonChainId;
   tokenAddress: `0x${string}`;
-  code: "BNB" | "ARC";
+  code: "ARC";
   symbol: string;
   decimals: number;
   label: string;
@@ -220,11 +149,7 @@ export function loginHref(key: AgonNetworkKey, returnTo?: string | null): string
   return networkHref("/login", key, `returnTo=${encodeURIComponent(networkReturn)}`);
 }
 
-/**
- * Compatibility export for Arc-native modules that have not moved to an
- * explicit context yet. New Agon UI must use `getAgonNetwork` or
- * `useAgonNetwork`; this value must not be used as a BNB fallback.
- */
+/** Compatibility export for modules that read the one Arc context directly. */
 export const AGON_NETWORK = AGON_NETWORKS["arc-testnet"];
 export const AGON_NETWORK_LABEL = `NETWORK ${AGON_NETWORK.chainId}`;
 export const AGON_NETWORK_DETAIL = `${AGON_NETWORK.name} / CHAIN ${AGON_NETWORK.chainId}`;

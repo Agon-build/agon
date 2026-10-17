@@ -65,7 +65,7 @@ export function ActivityFeed() {
                     target="_blank"
                     rel="noreferrer"
                     className="flex-none font-mono text-[11px] text-pengu-dark/35 hover:text-pengu-blue"
-                    title="view on arcscan"
+                    title="view on the Arc explorer"
                   >
                     tx ↗
                   </a>

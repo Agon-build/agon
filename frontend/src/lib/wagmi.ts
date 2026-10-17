@@ -4,8 +4,6 @@ import {
   arcTestnet,
   avalancheFuji,
   baseSepolia,
-  bsc,
-  bscTestnet,
   optimismSepolia,
   polygonAmoy,
   sepolia,
@@ -34,10 +32,7 @@ import { PRODUCT_NAME } from "./product";
 /// injected browser-wallet connector. This keeps email and extension-wallet
 /// sign-in usable without sending broken placeholder requests to Reown.
 ///
-/// BNB Testnet is Agon's default context while the product is being built.
-/// BNB Mainnet and Arc Testnet are also registered so the network selector can
-/// move a wallet to the exact context represented by the URL. Legacy ArcRun
-/// routes continue to use Arc Testnet.
+/// Arc Testnet is Agon's network. The other testnets are bridge sources only.
 ///
 /// The Arc transport is the hot path (every wallet read — balances, contract
 /// reads — goes through it), and the public Arc RPC rate-limits bursts. So it gets
@@ -66,8 +61,6 @@ export const config = getDefaultConfig({
   projectId,
   wallets,
   chains: [
-    bsc,
-    bscTestnet,
     arcTestnet,
     sepolia,
     baseSepolia,
@@ -78,8 +71,6 @@ export const config = getDefaultConfig({
     unichainSepolia,
   ],
   transports: {
-    [bsc.id]: http(),
-    [bscTestnet.id]: http(),
     [arcTestnet.id]: arcTransport,
     [sepolia.id]: http(),
     [baseSepolia.id]: http(),

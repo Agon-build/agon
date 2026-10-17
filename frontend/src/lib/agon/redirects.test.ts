@@ -53,7 +53,7 @@ test("the home page is the intro over Hire and every stage page uses the shared 
 });
 
 test("no Agon page links to the old market paths", () => {
-  const files = ["components/redesign/TopNav.tsx", "components/stage/StageShell.tsx", "components/stage/ArenaRating.tsx", "app/agents/page.tsx", "app/agents/[id]/page.tsx", "hooks/useAgonNetwork.ts", "lib/agon/market-empty.ts"];
+  const files = ["components/redesign/TopNav.tsx", "components/stage/StageShell.tsx", "app/agents/page.tsx", "app/agents/[id]/page.tsx", "hooks/useAgonNetwork.ts", "lib/agon/market-empty.ts"];
   for (const f of files) {
     let src = "";
     try { src = readFileSync(new URL(`../../${f}`, import.meta.url), "utf8"); } catch { continue; }

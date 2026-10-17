@@ -96,7 +96,7 @@ export default async function ContestDetail({ params }: { params: Promise<{ id: 
             rel="noreferrer"
             className="font-mono text-[11px] uppercase tracking-[0.12em] text-ink-3 hover:text-ink"
           >
-            CONTESTENGINE ON ARCSCAN ↗
+            CONTESTENGINE ON THE EXPLORER ↗
           </a>
         </div>
 

@@ -310,7 +310,7 @@ export function explorerTx(chain: string, txHash: string): string {
   if (c === "base") return `https://basescan.org/tx/${txHash}`;
   if (c === "base-sepolia") return `https://sepolia.basescan.org/tx/${txHash}`;
   if (c === "matic" || c === "polygon") return `https://polygonscan.com/tx/${txHash}`;
-  return `https://testnet.arcscan.app/tx/${txHash}`;
+  return `https://explorer.testnet.arc.io/tx/${txHash}`;
 }
 
 export function shortAddr(addr: string): string {

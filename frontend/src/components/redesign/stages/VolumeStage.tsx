@@ -23,7 +23,7 @@ const VARIANT_COLOR: Record<string, string> = {
 };
 
 const usdc = (amount6: string) => `${(Number(amount6) / 1e6).toFixed(2)} USDC`;
-const ARCSCAN = "https://testnet.arcscan.app/tx/";
+const ARCSCAN = "https://explorer.testnet.arc.io/tx/";
 
 interface TapeRow {
   agentId: number;

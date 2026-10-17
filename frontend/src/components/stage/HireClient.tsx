@@ -7,6 +7,7 @@ import { PhaseRail } from "@/components/stage/PhaseRail";
 import { QuoteCard } from "@/components/stage/QuoteCard";
 import { RunView } from "@/components/stage/RunView";
 import { StageShell } from "@/components/stage/StageShell";
+import { TermsPanel } from "@/components/stage/TermsPanel";
 import { TopUpPanel } from "@/components/stage/TopUpPanel";
 import { WalletStrip } from "@/components/stage/WalletStrip";
 import { useLiveJob } from "@/components/stage/useLiveJob";
@@ -119,7 +120,7 @@ export function HireClient() {
             {mode.kind === "idle" || mode.kind === "quoting" ? (
               <div className="mt-10"><Composer disabled={mode.kind === "quoting"} signedIn={canAct} onSubmit={ask} /></div>
             ) : null}
-            {mode.kind === "refused" && !shortOf ? (
+            {mode.kind === "refused" && !shortOf && mode.code !== "terms_required" ? (
               <div role="alert" className="stage-print mt-8 border-y border-[color:var(--hairline-strong)] py-6">
                 <p className="text-base leading-7 text-ink">{askRefusalText(mode.code, mode.amount)}</p>
                 <button type="button" onClick={reset} className="mt-4 min-h-11 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 underline underline-offset-4 hover:text-accent">Describe something else</button>
@@ -152,6 +153,7 @@ export function HireClient() {
               </aside>
             ) : null}
             {mode.kind === "quote" ? <QuoteCard quote={mode.quote} nowMs={now} paying={false} onPay={() => void pay(mode.quote, mode.question)} onCancel={reset} /> : null}
+            {mode.kind === "refused" && mode.code === "terms_required" ? <TermsPanel onAccepted={() => void ask(mode.question, mode.maxPrice)} onCancel={reset} /> : null}
             {shortOf ? <TopUpPanel wallet={wallet} price={shortOf} onFunded={refreshWallet} onCancel={reset} /> : null}
           </div>
         </div>

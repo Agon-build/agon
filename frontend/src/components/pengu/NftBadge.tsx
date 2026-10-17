@@ -11,7 +11,7 @@ export function NftBadge({ tokenId, className = "" }: { tokenId: bigint | number
       href={nftLink(id)}
       target="_blank"
       rel="noreferrer"
-      title="view on arcscan"
+      title="view on the Arc explorer"
       className={`inline-flex items-center gap-1.5 rounded-full border border-pengu-blue/20 bg-pengu-blue/5 px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-pengu-blue/85 hover:border-pengu-blue/40 hover:text-pengu-blue ${className}`}
     >
       <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>

@@ -151,7 +151,7 @@ function LegacyOperatorPage({ address }: { address: string }) {
             rel="noreferrer"
             className="font-mono text-[12px] uppercase tracking-[0.12em] text-ink-2 hover:text-ink"
           >
-            ARCSCAN ↗
+            EXPLORER ↗
           </a>
         </div>
 

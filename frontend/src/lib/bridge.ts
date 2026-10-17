@@ -52,7 +52,7 @@ export const BRIDGE_CHAINS: BridgeChain[] = [
     label: "Arc Testnet",
     code: "ARC",
     usdcAddress: "0x3600000000000000000000000000000000000000",
-    explorer: "https://testnet.arcscan.app",
+    explorer: "https://explorer.testnet.arc.io",
     // Arc isn't on the llamao CDN yet; we self-host the brand mark in /public.
     iconUrl: "/brands/arc.png",
     gasFaucetUrl: "https://faucet.circle.com",

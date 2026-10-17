@@ -29,7 +29,7 @@ const AGON_PRODUCT = [
 
 const NETWORK = [
   { label: "ARC NETWORK ↗", href: "https://arc.network", external: true },
-  { label: "ARC EXPLORER ↗", href: "https://testnet.arcscan.app", external: true },
+  { label: "ARC EXPLORER ↗", href: "https://explorer.testnet.arc.io", external: true },
   { label: "USDC FAUCET ↗", href: "https://faucet.circle.com", external: true },
   { label: "CIRCLE DOCS ↗", href: "https://developers.circle.com", external: true },
 ];

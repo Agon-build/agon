@@ -73,7 +73,7 @@ export async function executeCircleUserControlledContract(args: CircleWriteArgs)
     }
     await new Promise((resolve) => setTimeout(resolve, 1200));
   }
-  throw new Error("Circle transaction is still pending; check ArcScan and retry later");
+  throw new Error("Circle transaction is still pending; check the Arc explorer and retry later");
 }
 
 export type { CircleSdk };

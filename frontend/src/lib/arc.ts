@@ -6,7 +6,7 @@ import { arcTestnet } from "viem/chains";
 /// custom `defineChain` is never required.
 export { arcTestnet };
 
-export const EXPLORER = "https://testnet.arcscan.app";
+export const EXPLORER = "https://explorer.testnet.arc.io";
 
 /// Arc system contracts: the ERC-8004 IdentityRegistry mints the ERC-721 NFT
 /// that backs every ArcRun agent. The token id is stored on the agent's row in

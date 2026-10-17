@@ -23,7 +23,6 @@ import { ProductMark } from "@/components/redesign/ProductMark";
 import { IS_AGON_DEPLOYMENT, PRODUCT_NAME } from "@/lib/product";
 import { isAgonRoute } from "@/lib/agon/routes";
 import { friendlyError } from "@/lib/errors";
-import { bnbLogin } from "@agon/bnb/client";
 import { logRawError, reportEvent } from "@/lib/report";
 
 /// Login popout. Bracketed surface on a warm
@@ -199,8 +198,7 @@ export function LoginModal({ open, onClose }: { open: boolean; onClose: () => vo
     setBusy(true);
     setError(null);
     try {
-      if (targetChain === 56 || targetChain === 97) await bnbLogin(targetChain, address, (m) => signMessageAsync({ message: m }));
-      else await loginWithSigner(address, (m) => signMessageAsync({ message: m }));
+      await loginWithSigner(address, (m) => signMessageAsync({ message: m }));
       await refresh();
       reportEvent("login", { context: { method: "wallet" } });
     } catch (e) {

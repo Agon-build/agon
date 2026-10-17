@@ -36,7 +36,7 @@ export function ChainGuard() {
   const agonRoute = !isLegacyArcRunRoute(pathname) && (IS_AGON_DEPLOYMENT || isAgonRoute(pathname));
   const onBridgeRoute = NON_ARC_ROUTES.some((r) => pathname.startsWith(r));
   const targetNetwork = agonRoute ? network : getAgonNetwork("arc-testnet");
-  const targetChainId = targetNetwork.chainId as 56 | 97 | typeof arcTestnet.id;
+  const targetChainId = targetNetwork.chainId;
   const wrong = isConnected && chainId !== targetChainId && !(agonRoute ? false : onBridgeRoute);
 
   useEffect(() => {

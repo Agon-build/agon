@@ -70,7 +70,7 @@ export function friendlyError(e: unknown, fallback = "something went wrong. try 
     return "the server is briefly unavailable. try again in a moment.";
   }
   if (msg.includes("timeout") || msg.includes("timed out") || msg.includes("still pending")) {
-    return "the request timed out. it may still land; check arcscan in a minute.";
+    return "the request timed out. it may still land; check the Arc explorer in a minute.";
   }
   // viem revert errors carry the on-chain revert reason inside the message
   if (msg.includes("execution reverted") || msg.includes("contractfunctionexecutionerror")) {

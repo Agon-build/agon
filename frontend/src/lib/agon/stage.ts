@@ -71,6 +71,13 @@ export async function getStageConfig(): Promise<StageConfig> {
 export async function getWallet(): Promise<StageWallet> {
   return AGON_PREVIEW_MODE ? previewWallet : call<StageWallet>("/agon/app/wallet");
 }
+export type WalletTerms = { version: string; lines: string[]; accepted: boolean };
+export async function getTerms(): Promise<WalletTerms> {
+  return AGON_PREVIEW_MODE ? { version: "preview", lines: [], accepted: true } : call<WalletTerms>("/agon/app/terms");
+}
+export async function acceptTerms(version: string): Promise<void> {
+  if (!AGON_PREVIEW_MODE) await call("/agon/app/terms", { body: { version } });
+}
 export async function askLead(question: string, maxPrice?: string): Promise<AskResponse> {
   if (AGON_PREVIEW_MODE) return previewAsk(question);
   return call<AskResponse>("/agon/app/ask", { body: { question, ...(maxPrice ? { maxPrice } : {}) } });

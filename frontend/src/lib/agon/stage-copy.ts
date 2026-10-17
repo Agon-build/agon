@@ -16,6 +16,7 @@ const ASK: Record<string, string> = {
   unauthorized: "Sign in to ask.",
   network_unavailable: "Agon could not be reached. Check your connection.",
   busy: "Agon is busy setting up new wallets right now. Try again in a few minutes.",
+  terms_required: "Accept the agent wallet terms to continue.",
 };
 
 export function askRefusalText(code: string, amount?: string): string {

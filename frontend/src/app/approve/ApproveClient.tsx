@@ -72,7 +72,7 @@ export function ApproveClient() {
               <div className="mt-8">
                 {result?.ok ? (
                   <div role="status" className="border-l-2 border-[color:var(--ok)] pl-4">
-                    <p className="text-base text-ink">{view.action === "withdraw" ? "Withdrawal sent." : view.action === "unfreeze" ? "Your wallet is unfrozen." : "Approved and paid."}</p>
+                    <p className="text-base text-ink">{view.action === "withdraw" ? "Withdrawal started. It lands on Arc in a few seconds." : view.action === "unfreeze" ? "Your wallet is unfrozen." : "Approved and paid."}</p>
                     {result.jobId ? <a href={`/r/${result.jobId}`} className="mt-2 inline-flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.14em] text-ink hover:text-accent">Open the receipt →</a> : null}
                     {result.transferId ? <p className="mt-1 break-all font-mono text-[11px] text-ink-3">Transfer {result.transferId}</p> : null}
                   </div>
