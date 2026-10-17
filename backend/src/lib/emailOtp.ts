@@ -4,13 +4,15 @@ import { config } from "../config/index.js";
 import { query } from "../db/pool.js";
 import { sendEmail } from "../email/client.js";
 import { otpEmailTemplate } from "../email/templates.js";
+import { generateOtpCode, otpSendRefusal } from "./emailOtpLimits.js";
 
 /// Email OTP proof-of-ownership. Required at first-time signup so an
 /// attacker can't claim someone else's email and mint a Circle wallet
 /// under it. Returning passkey users skip this; the passkey itself
 /// is the proof.
 ///
-/// Code: 6 digits, 10 minute TTL, 5 attempt cap, 60s resend cooldown.
+/// Code: 6 digits, 10 minute TTL, 5 attempt cap, 60s resend cooldown,
+/// and daily send caps per email and per address (emailOtpLimits.ts).
 /// At-rest: sha256 of `${code}:${OTP_PEPPER}` so a DB dump doesn't
 /// leak live codes (the pepper lives in env, not in the DB).
 /// Verified state: a row's `verified_at` non-null within
@@ -30,20 +32,6 @@ export class OtpError extends Error {
 function hashCode(code: string): string {
   const pepper = config.auth.emailOtp.pepper ?? "dev-pepper-not-for-prod";
   return createHash("sha256").update(`${code}:${pepper}`).digest("hex");
-}
-
-function generateCode(): string {
-  // 6-digit numeric, padded. Uses crypto-grade randomness so the code
-  // isn't guessable from process timing or insertion order. Build the number
-  // with multiplication (not bit-shifts): `<<` is signed 32-bit in JS, so a
-  // high top byte made `n` negative and produced codes like "-845521" that
-  // could never verify.
-  const bytes = createHash("sha256")
-    .update(`${Date.now()}:${Math.random()}:${Math.random()}`)
-    .digest();
-  let n = 0;
-  for (let i = 0; i < 4; i++) n = (n * 256 + (bytes[i] ?? 0)) % 1_000_000;
-  return String(n).padStart(6, "0");
 }
 
 async function sendCode(email: string, code: string): Promise<void> {
@@ -66,8 +54,15 @@ async function sendCode(email: string, code: string): Promise<void> {
 /// email. Honors a 60s resend cooldown so the endpoint can't be used
 /// as a relay for outbound spam. Idempotent on email: replaces any
 /// existing pending row.
-export async function startEmailOtp(email: string): Promise<void> {
+export async function startEmailOtp(email: string, ip = "unknown"): Promise<void> {
   const normalized = email.trim().toLowerCase();
+  const counts = await query<{ email_today: string; ip_today: string }>(
+    `select count(*) filter (where email = $1) as email_today, count(*) filter (where ip = $2) as ip_today
+       from email_otp_sends where created_at > now() - interval '1 day' and (email = $1 or ip = $2)`,
+    [normalized, ip],
+  );
+  const refusal = otpSendRefusal({ emailToday: Number(counts.rows[0]?.email_today ?? 0), ipToday: Number(counts.rows[0]?.ip_today ?? 0) });
+  if (refusal) throw new OtpError(refusal, "too many codes requested today; try again tomorrow", 429);
   const { rows } = await query<{ created_at: string; verified_at: string | null }>(
     "select created_at, verified_at from email_otp where email = $1",
     [normalized],
@@ -83,7 +78,7 @@ export async function startEmailOtp(email: string): Promise<void> {
       );
     }
   }
-  const code = generateCode();
+  const code = generateOtpCode();
   const codeHash = hashCode(code);
   const expiresAt = new Date(Date.now() + OTP_TTL_MS);
   await query(
@@ -94,6 +89,7 @@ export async function startEmailOtp(email: string): Promise<void> {
                      attempts = 0, verified_at = null, created_at = now()`,
     [normalized, codeHash, expiresAt.toISOString()],
   );
+  await query("insert into email_otp_sends (email, ip) values ($1, $2)", [normalized, ip.slice(0, 80)]);
   await sendCode(normalized, code);
 }
 

@@ -224,6 +224,14 @@ export class PostgresPaymentsStore implements PaymentsStore {
     return rows.map(toJob);
   }
 
+  async listFailedJobs(providerRef: string, updatedAfter: Date, updatedBefore: Date): Promise<Job[]> {
+    const { rows } = await this.pool.query<JobRow>(
+      "select * from agon_jobs where state = 'failed' and provider_ref = $1 and parent_id is null and updated_at >= $2 and updated_at < $3 order by updated_at desc limit 50",
+      [providerRef, updatedAfter, updatedBefore],
+    );
+    return rows.map(toJob);
+  }
+
   async listJobsByBuyer(buyerRef: string, limit: number, offset = 0): Promise<Job[]> {
     const { rows } = await this.pool.query<JobRow>(
       "select * from agon_jobs where buyer_ref = $1 and parent_id is null order by created_at desc, job_id limit $2 offset $3",

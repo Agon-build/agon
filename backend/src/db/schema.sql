@@ -375,6 +375,14 @@ create table if not exists email_otp (
   verified_at  timestamptz,
   created_at   timestamptz not null default now()
 );
+-- One row per code sent, for the daily caps per email and per address.
+create table if not exists email_otp_sends (
+  email      text not null,
+  ip         text not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists email_otp_sends_email_idx on email_otp_sends(email, created_at desc);
+create index if not exists email_otp_sends_ip_idx on email_otp_sends(ip, created_at desc);
 
 create table if not exists challenges (
   id          bigint primary key,
@@ -2275,6 +2283,13 @@ create table if not exists agon_budget_wallets (
   frozen            boolean not null default false,
   created_at        timestamptz not null default now(),
   primary key (owner_ref, network)
+);
+
+-- One-time custody terms for web and MCP agent wallets (chat keeps its own terms).
+create table if not exists agon_custody_terms (
+  owner_ref   text primary key check (char_length(owner_ref) between 3 and 128),
+  version     text not null,
+  accepted_at timestamptz not null
 );
 
 create table if not exists agon_wallet_spends (

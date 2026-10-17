@@ -20,6 +20,8 @@ import { usdcMinimalAbi } from "../chain/abi.js";
 import { pool, query } from "../db/pool.js";
 import { PostgresAgonRepository } from "../agon/store/repository.js";
 import { createAgonRoutes } from "../agon/http/routes.js";
+import { clientAddress } from "../http/client-address.js";
+import { PostgresCustodyTerms } from "../agon/stage/custody-terms.js";
 import { startSeasonRuntime } from "../agon/playground/seasons/runtime.ts";
 import { startPaymentsRuntime } from "../agon/payments/runtime.ts";
 import { PostgresChannelStore } from "../agon/channels/store.ts";
@@ -179,6 +181,8 @@ import {
   hasAgentInEvent,
 } from "./loadouts.js";
 import type { RegistrationResponseJSON, AuthenticationResponseJSON } from "@simplewebauthn/server";
+
+const custodyTerms = new PostgresCustodyTerms(pool);
 
 const SESSION_MAX_AGE = 7 * 24 * 60 * 60; // 7 days, matches issueToken expiry
 
@@ -851,7 +855,7 @@ if (agonPayments) {
     newWalletAllowed: (() => { const gate = createRateLimiter({ limit: 60, windowMs: 3_600_000 }); return () => gate("new-wallet"); })(),
     now: () => new Date(),
   });
-  app.route("/agon/app", createAppRoutes({ services: stageServices, requireAuth, off: () => stage.settings.channelsOff.web }));
+  app.route("/agon/app", createAppRoutes({ services: stageServices, requireAuth, off: () => stage.settings.channelsOff.web, terms: custodyTerms }));
   app.route("/agon", createApprovalRoutes({
     gate: { payments: agonPayments.store, channels: channelStore, chatIdPepper: stage.settings.chatIdPepper, network: agonPayments.settings.network, now: () => new Date() },
     hire: agonPayments.hire,
@@ -981,6 +985,7 @@ app.route("/agon", createAgonRoutes({
         season: seasonRoutes ? { request: (path: string, init?: RequestInit) => seasonRoutes!.request(path, init) } : null,
         seasonId: agonSeason ? agonSeason.season.seasonId.toString() : "1",
         off: () => stage.settings.channelsOff.mcp,
+        terms: custodyTerms,
       }
     : undefined,
   requireAuth: createAgonAuthMiddleware(config.adminToken, requireAuth),
@@ -1151,7 +1156,7 @@ app.post("/auth/email/otp/start", async (c) => {
   const email = readEmail(body);
   if (!email) return c.json({ error: "valid email required" }, 400);
   try {
-    await startEmailOtp(email);
+    await startEmailOtp(email, clientAddress((name) => c.req.header(name)));
     return c.json({ ok: true });
   } catch (err) {
     if (err instanceof OtpError) return c.json({ error: err.message, code: err.code }, err.status as 400);
@@ -5341,6 +5346,7 @@ app.get("/admin/custom-requests", async (c) => {
 // ----- Strength breakdown (workshop panel) -----
 
 import { effectiveStrength, type ContestType, STAT_NAMES as STRENGTH_STAT_NAMES, type StatName as StrengthStatName } from "../scoring/strength.js";
+
 
 /// Returns the agent's effective-strength breakdown per contest type so
 /// the workshop can show "tier × training × traits" with the actual

@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { formatUsdc } from "../payments/bargain.ts";
 import { askJson } from "../stage/app-routes.ts";
+import type { CustodyTerms } from "../stage/custody-terms.ts";
 import { parseUsdc } from "../stage/money.ts";
 import { createRateLimiter } from "../stage/rate-limit.ts";
 import type { StageServices } from "../stage/services.ts";
@@ -14,6 +15,8 @@ export type StageMcpDeps = {
   season: { request(path: string, init?: RequestInit): Response | Promise<Response> } | null;
   seasonId: string;
   off: () => boolean;
+  /** Agent wallet terms the account owner accepts once in the browser. */
+  terms: Pick<CustodyTerms, "isAccepted">;
   /** Per-actor quote limit; true while under it. */
   limit?: (actor: string) => boolean;
 };
@@ -99,6 +102,10 @@ export function registerStageTools(server: McpServer, authInfo: () => AuthInfo |
     if (!input.success) return failure("invalid_input", "ref must be agent:lead and question must be 8 to 300 characters.");
     const maxPrice = input.data.maxPrice === undefined ? undefined : parseUsdc(input.data.maxPrice);
     if (maxPrice === null) return failure("invalid_input", "maxPrice must be a USDC amount such as 0.50.");
+    // The first quote creates the agent wallet; only the person can accept its terms, in the browser.
+    if (!(await deps.terms.isAccepted(operatorOwnerRef(who)))) {
+      return failure("terms_required", `The account owner must accept Agon's agent wallet terms once in the browser at ${deps.services.siteUrl} (Hire page) before an agent can hire.`);
+    }
     const asked = askJson(await deps.services.ask(operatorOwnerRef(who), { question: input.data.question, ...(maxPrice !== undefined ? { maxPrice } : {}) }));
     if (!asked.ok) return result(asked);
     const nextStep = asked.step === "confirm_code"

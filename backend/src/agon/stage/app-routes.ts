@@ -4,12 +4,14 @@ import type { Address } from "viem";
 
 import { formatUsdc } from "../payments/bargain.ts";
 import { parseUsdc } from "./money.ts";
+import { CUSTODY_TERMS, CUSTODY_TERMS_VERSION, type CustodyTerms } from "./custody-terms.ts";
 import { createRateLimiter } from "./rate-limit.ts";
 import type { AskResult, StageServices, WalletView } from "./services.ts";
 import { operatorOwnerRef } from "./settings.ts";
 
 const askBody = z.object({ question: z.string().max(2000), maxPrice: z.string().max(32).optional() });
 const confirmBody = z.object({ code: z.string().max(16) });
+const termsBody = z.object({ version: z.string().max(64) });
 const limitsBody = z.object({ perHire: z.string().max(32).optional(), daily: z.string().max(32).optional() });
 const withdrawBody = z.object({ to: z.string().regex(/^0x[0-9a-fA-F]{40}$/), amount: z.string().max(32) });
 
@@ -43,6 +45,7 @@ export function createAppRoutes(deps: {
   requireAuth: MiddlewareHandler<{ Variables: { address: string } }>;
   off: () => boolean;
   askLimit?: (key: string) => boolean;
+  terms: CustodyTerms;
 }): Hono {
   const app = new Hono<{ Variables: { address: string } }>();
   const askLimit = deps.askLimit ?? createRateLimiter({ limit: 10, windowMs: 60_000 });
@@ -64,6 +67,15 @@ export function createAppRoutes(deps: {
   app.use("/ask", deps.requireAuth);
   app.use("/hires/*", deps.requireAuth);
   app.use("/history", deps.requireAuth);
+  app.use("/terms", deps.requireAuth);
+
+  app.get("/terms", async (c) => c.json({ version: CUSTODY_TERMS_VERSION, lines: CUSTODY_TERMS, accepted: await deps.terms.isAccepted(owner(c)) }));
+
+  app.post("/terms", async (c) => {
+    const body = termsBody.safeParse(await readJson(c));
+    if (!body.success || !(await deps.terms.accept(owner(c), body.data.version, new Date()))) return c.json({ error: "invalid_terms_version" }, 400);
+    return c.json({ accepted: true });
+  });
 
   app.get("/wallet", async (c) => {
     // Reading never creates a wallet; the first ask does.
@@ -78,6 +90,8 @@ export function createAppRoutes(deps: {
     const maxPrice = body.data.maxPrice === undefined ? undefined : parseUsdc(body.data.maxPrice);
     if (maxPrice === null) return c.json({ error: "invalid_body" }, 400);
     if (!askLimit(c.get("address"))) return c.json({ error: "rate_limited" }, 429);
+    // The first ask creates the agent wallet, so the terms come first.
+    if (!(await deps.terms.isAccepted(owner(c)))) return c.json({ ok: false, code: "terms_required" });
     return c.json(askJson(await deps.services.ask(owner(c), { question: body.data.question, ...(maxPrice !== undefined ? { maxPrice } : {}) })));
   });
 

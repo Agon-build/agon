@@ -17,6 +17,7 @@ import * as wallets from "./budget-wallets.ts";
 import { waitForCircleTx } from "./circle-poll.ts";
 import { createCircleExactSettler } from "./exact-seller.ts";
 import { createGuardedSigner } from "./guarded-signer.ts";
+import { refundUndeliveredLeadHires } from "./auto-refund.ts";
 import { completeApprovedHire, confirmHire, quoteHire, reconcileStuckHires, type HireDeps, type HireOutcome, type HireRequest } from "./hire.ts";
 import { createPaymentRoutes } from "./routes.ts";
 import { resolvePaymentSettings, type PaymentSettings, type WalletHandle } from "./settings.ts";
@@ -108,6 +109,10 @@ export function startPaymentsRuntime(input: {
       return rankForecasters({ rows: computeLeaderboard(raw), entries, publicApiUrl: s.publicApiUrl, hireableHouseKeys: Object.keys(s.houseSellers) })
         .filter((c) => !blocked.has(c.providerRef.toLowerCase()));
     };
+    const leadRefund = async (to: Address, amount: bigint, key: string): Promise<Hex> => {
+      const t = await createPlatformUsdcTransfer({ walletId: s.lead.walletId, destinationAddress: to, amountBaseUnits: amount, idempotencyKey: stableUuid(key), refId: key, blockchain: network.circleChain });
+      return waitForCircleTx({ id: t.id, label: key, getTxState });
+    };
     const leadRun = (run: { parentJobId: string | null; payer: Address; question: string; payment?: { txHash: Hex; amount: bigint } }) =>
       runLeadForecast(
         {
@@ -117,10 +122,7 @@ export function startPaymentsRuntime(input: {
           signerFor: (payTo, maxValue, onSigned) =>
             createGuardedSigner({ address: s.lead.address, walletId: s.lead.walletId, signJson, context: () => ({ network, from: s.lead.address, payTo, maxValue, now: new Date() }), onSigned }),
           authorizationUsed: hireDeps.authorizationUsed,
-          refund: async (to, amount, key) => {
-            const t = await createPlatformUsdcTransfer({ walletId: s.lead.walletId, destinationAddress: to, amountBaseUnits: amount, idempotencyKey: stableUuid(key), refId: key, blockchain: network.circleChain });
-            return waitForCircleTx({ id: t.id, label: key, getTxState });
-          },
+          refund: leadRefund,
         },
         run,
       );
@@ -161,7 +163,11 @@ export function startPaymentsRuntime(input: {
 
     if (input.startLoops !== false) {
       setInterval(() => {
-        hire.reconcile().then((t) => (t.settled || t.released ? log(`reconciled ${JSON.stringify(t)}`) : undefined)).catch((e) => log(`reconcile failed: ${(e as Error).message}`));
+        hire.reconcile()
+          .then((t) => (t.settled || t.released ? log(`reconciled ${JSON.stringify(t)}`) : undefined))
+          .then(() => refundUndeliveredLeadHires({ store, leadAddress: s.lead.address, network: network.id, now: () => new Date(), refund: leadRefund, log }))
+          .then((r) => (r.refunded || r.skipped ? log(`automatic refunds ${JSON.stringify(r)}`) : undefined))
+          .catch((e) => log(`reconcile failed: ${(e as Error).message}`));
       }, 5 * 60_000).unref();
     }
     log(`payments on ${network.label}; lead agent ${s.lead.address}; ${Object.keys(s.houseSellers).length} house sellers`);

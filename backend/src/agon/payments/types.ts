@@ -122,6 +122,8 @@ export interface PaymentsStore {
   getJob(jobId: string): Promise<Job | null>;
   listJobTree(rootId: string): Promise<Job[]>;
   listStuckJobs(state: JobState, updatedBefore: Date): Promise<Job[]>;
+  /** Failed top-level jobs of one provider, last changed inside the window, newest first. */
+  listFailedJobs(providerRef: string, updatedAfter: Date, updatedBefore: Date): Promise<Job[]>;
   /** Root jobs this buyer started, newest first. */
   listJobsByBuyer(buyerRef: string, limit: number, offset?: number): Promise<Job[]>;
   /// Delivered jobs and their total price per provider on one network (providers with none are left out).

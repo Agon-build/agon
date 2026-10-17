@@ -140,6 +140,13 @@ async function payJob(deps: HireDeps, wallet: BudgetWallet, job: Job, perPayment
       }),
   });
 
+  if (purchase.ok && purchase.amount === 0n) {
+    // The provider answered without asking for payment: nothing moved, so the daily limit is not charged.
+    await deps.store.finishSpend(walletRef, key, { state: "failed" });
+    await deps.store.upsertJobPayment({ ...payment, status: "failed", detail: "no charge: the provider answered without payment", updatedAt: deps.now() });
+    await deps.store.updateJob(job.jobId, { state: "delivered", result: purchase.data });
+    return { ok: true, jobId: job.jobId, amount: 0n, txHash: null, result: purchase.data };
+  }
   if (purchase.ok) {
     // A provider that could not deliver and refunded the buyer (the lead agent does this) answers 200 with refunded: true.
     const refunded = (purchase.data as { ok?: unknown; refunded?: unknown } | null)?.ok === false && (purchase.data as { refunded?: unknown }).refunded === true;

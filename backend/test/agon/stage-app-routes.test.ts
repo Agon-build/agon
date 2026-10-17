@@ -3,6 +3,7 @@ import test from "node:test";
 import { Hono, type MiddlewareHandler } from "hono";
 
 import { createAppRoutes } from "../../src/agon/stage/app-routes.ts";
+import { CUSTODY_TERMS_VERSION, type CustodyTerms } from "../../src/agon/stage/custody-terms.ts";
 import { createLeaderboardReader } from "../../src/agon/stage/leaderboard.ts";
 import { createRateLimiter } from "../../src/agon/stage/rate-limit.ts";
 import { QUESTION, SITE, stageWorld } from "./stage-test-world.ts";
@@ -15,17 +16,27 @@ const requireAuth: MiddlewareHandler<{ Variables: { address: string } }> = async
   await next();
 };
 
-function setup(opts: { off?: boolean; askLimit?: (key: string) => boolean } = {}) {
+function fakeTerms(acceptedByDefault: boolean): CustodyTerms & { accepted: Set<string> } {
+  const accepted = new Set<string>();
+  return {
+    accepted,
+    isAccepted: async (ref) => acceptedByDefault || accepted.has(ref),
+    accept: async (ref, version) => { if (version !== CUSTODY_TERMS_VERSION) return false; accepted.add(ref); return true; },
+  };
+}
+
+function setup(opts: { off?: boolean; askLimit?: (key: string) => boolean; termsAccepted?: boolean } = {}) {
   const world = stageWorld();
+  const terms = fakeTerms(opts.termsAccepted ?? true);
   const app = new Hono();
-  app.route("/agon/app", createAppRoutes({ services: world.services, requireAuth, off: () => opts.off ?? false, askLimit: opts.askLimit }));
+  app.route("/agon/app", createAppRoutes({ services: world.services, requireAuth, off: () => opts.off ?? false, askLimit: opts.askLimit, terms }));
   const call = (path: string, init: { method?: string; body?: unknown; as?: string | null } = {}) =>
     app.request(`/agon/app${path}`, {
       method: init.method ?? (init.body === undefined ? "GET" : "POST"),
       headers: { "content-type": "application/json", ...(init.as === null ? {} : { "x-test-address": init.as ?? ALICE }) },
       ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
     });
-  return { ...world, app, call };
+  return { ...world, app, call, terms };
 }
 
 test("public config shows the network and the lead agent price without sign-in", async () => {
@@ -138,4 +149,19 @@ test("the leaderboard reader caches for the window and is null without a season"
   await reader(5);
   assert.equal(reads, 2);
   assert.equal(await createLeaderboardReader(null)(5), null);
+});
+
+test("a new account accepts the wallet terms once before the first hire creates its agent wallet", async () => {
+  const { call } = setup({ termsAccepted: false });
+  const terms = (await (await call("/terms")).json()) as { version: string; lines: string[]; accepted: boolean };
+  assert.equal(terms.accepted, false);
+  assert.equal(terms.version, CUSTODY_TERMS_VERSION);
+  assert.ok(terms.lines.some((l) => /withdraw/i.test(l)));
+  assert.deepEqual(await (await call("/ask", { body: { question: QUESTION } })).json(), { ok: false, code: "terms_required" });
+  assert.equal((await call("/wallet")).status, 404, "no agent wallet was created");
+  assert.equal((await call("/terms", { body: { version: "old" } })).status, 400);
+  assert.deepEqual(await (await call("/terms", { body: { version: CUSTODY_TERMS_VERSION } })).json(), { accepted: true });
+  assert.equal(((await (await call("/terms")).json()) as { accepted: boolean }).accepted, true);
+  assert.equal(((await (await call("/ask", { body: { question: QUESTION } })).json()) as { ok: boolean }).ok, true);
+  assert.equal((await call("/terms", { as: null })).status, 401);
 });

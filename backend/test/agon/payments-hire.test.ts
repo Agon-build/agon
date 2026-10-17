@@ -18,10 +18,11 @@ const LEAD = `0x${"c".repeat(40)}` as Address;
 function world(opts: { price?: bigint } = {}) {
   const store = new MemoryPaymentsStore();
   const settler = fakeSettler();
-  const state = { price: opts.price ?? 300_000n, payTo: LEAD, fail: false, refundBody: false };
+  const state = { price: opts.price ?? 300_000n, payTo: LEAD, fail: false, refundBody: false, free: false };
   const app = new Hono<{ Variables: { x402: X402Paid } }>();
   app.post(
     "/agon/agents/lead/forecast",
+    async (c, next) => (state.free ? c.json({ ok: true, probabilityBps: 5000 }) : next()),
     exactPayment({ network, payTo: LEAD, price: async () => state.price, settle: settler.settle, claimNonce: (n, p, nonce) => store.claimSellerNonce(n, p, nonce), description: "Lead" }),
     async (c) => (state.fail
       ? c.json({ error: "boom" }, 500)
@@ -237,4 +238,18 @@ test("a provider that refunds the buyer leaves the hire refunded, not delivered"
   const out = await confirmHire(deps, { ownerRef: "wa:abc", code: q.quote.code });
   assert.ok(out.ok, show(out));
   assert.equal((await store.getJob(q.quote.jobId))!.state, "refunded");
+});
+
+test("a provider that answers without charging delivers, releases the reservation and records no payment", async () => {
+  const { deps, req, state, store, settler } = world();
+  const q = await quoteHire(deps, req);
+  assert.ok(q.ok && q.quote.step === "confirm_code");
+  state.free = true;
+  const out = await confirmHire(deps, { ownerRef: "wa:abc", code: q.quote.code });
+  assert.ok(out.ok, show(out));
+  assert.equal(out.amount, 0n);
+  assert.equal(settler.calls.length, 0);
+  assert.equal((await store.getJob(q.quote.jobId))!.state, "delivered");
+  assert.equal([...store.spends.values()][0]!.state, "failed", "the daily limit is not charged");
+  assert.notEqual((await store.listJobPayments(q.quote.jobId))[0]?.status, "settled", "no settled payment is recorded");
 });

@@ -30,7 +30,7 @@ async function payload(res: Response): Promise<{ isError?: boolean; value: Recor
   return { isError: body.result.isError, value: JSON.parse(body.result.content[0]!.text) };
 }
 
-function setup(off = false, limit?: (key: string) => boolean) {
+function setup(off = false, limit?: (key: string) => boolean, termsAccepted = true) {
   const world = stageWorld();
   const seasonCalls: { path: string; body: unknown }[] = [];
   const season = new Hono();
@@ -42,7 +42,8 @@ function setup(off = false, limit?: (key: string) => boolean) {
     seasonCalls.push({ path: "/1/forecasts", body: await c.req.json() });
     return c.json({ results: [{ ok: true, duplicate: false }] });
   });
-  const stage: StageMcpDeps = { services: world.services, season: { request: (p, i) => season.request(p, i) }, seasonId: "1", off: () => off, ...(limit ? { limit } : {}) };
+  const terms = { isAccepted: async () => termsAccepted, accept: async () => true };
+  const stage: StageMcpDeps = { services: world.services, season: { request: (p, i) => season.request(p, i) }, seasonId: "1", off: () => off, terms, ...(limit ? { limit } : {}) };
   return { ...world, handler: createAgonNativeMcpHandler(access, undefined, stage), seasonCalls };
 }
 
@@ -137,4 +138,14 @@ test("hire_service is rate limited per actor", async () => {
   const refused = await payload(await handler.fetch(rpc(1, "hire_service", { ref: "agent:lead", question: QUESTION }), auth(["agon:read"])));
   assert.equal((refused.value.error as { code: string }).code, "rate_limited");
   assert.equal(store.jobs.size, 0);
+});
+
+test("an agent cannot hire until the account owner accepts the wallet terms in the browser", async () => {
+  const { handler, services } = setup(false, undefined, false);
+  const out = await payload(await handler.fetch(rpc(1, "hire_service", { ref: "agent:lead", question: QUESTION }), auth(["agon:read"])));
+  assert.equal(out.isError, true);
+  const error = (out.value as { error: { code: string; message: string } }).error;
+  assert.equal(error.code, "terms_required");
+  assert.match(error.message, /browser/);
+  assert.equal(await services.findWallet(`op:${ALICE}`), null, "no agent wallet was created");
 });
