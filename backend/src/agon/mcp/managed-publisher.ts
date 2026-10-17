@@ -9,7 +9,10 @@ const identityAbi = parseAbi([
   "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)",
 ]);
 const chainId = 5042002;
-const maxGasFeeWei = 500_000_000_000_000_000n; // Hard per-action gas ceiling: 0.5 native USDC.
+/// Hard per-action gas ceiling, checked against gasLimit x maxFee: 1 native USDC, Circle's own default
+/// per-transaction limit (error 155211). Kestrel's publish (17 Oct 2026) had a 0.474 worst case at a
+/// 528 gwei tip and paid 0.348; at Circle's HIGH tip that day (693 gwei) it would reach about 0.63.
+const maxGasFeeWei = 1_000_000_000_000_000_000n;
 const GWEI = 1_000_000_000n;
 /// Circle's answer when it refuses a fee. On Arc it refuses any tip under its own floating
 /// minimum (probed 17 Oct 2026), so the publisher sends Circle's LOW estimate and, if that
@@ -173,7 +176,7 @@ export function createManagedPublisher(options: {
           refId: `agon:${record.publicId}:${action}`,
           fee,
         });
-        return save(record, { ...record.state, [txField]: submitted.id });
+        return save(record, { ...record.state, [txField]: submitted.id, ...(action === "publish" ? { publishCallData: data } : {}) });
       } catch (error) {
         // Circle refused the fee itself, so nothing was sent: drop the stale pin and estimate again once.
         if (!(error instanceof Error) || !FEE_REFUSED.test(error.message)) throw error;
@@ -258,6 +261,10 @@ export function createManagedPublisher(options: {
       }
     }
 
+    // A publish Circle already has is confirmed from its saved calldata. Preparing it again would ask
+    // the contract to simulate a listing that already exists, which it refuses.
+    if (record.state.publishTxId && record.state.publishCallData) return finishPublish(record, draftId, record.state.publishCallData);
+
     if (!record.state.operationId) {
       const draft = await options.draftStore.get(actor, draftId);
       if (!draft) throw new Error("Publisher draft disappeared");
@@ -288,8 +295,11 @@ export function createManagedPublisher(options: {
     if (!/^0x(?:[0-9a-fA-F]{2})+$/.test(tx.data)) throw new Error("Prepared publication calldata is invalid");
     const submitted = await submit(record, "publish", options.serviceRegistry, tx.data as Hash);
     if ("status" in submitted) return submitted;
-    record = submitted;
-    const confirmed = await confirmedTransaction(record, record.state.publishTxId!, options.serviceRegistry, tx.data as Hash);
+    return finishPublish(submitted, draftId, tx.data as Hash);
+  }
+
+  async function finishPublish(record: ManagedPublisherRecord, draftId: string, data: Hash): Promise<ManagedPublisherResult> {
+    const confirmed = await confirmedTransaction(record, record.state.publishTxId!, options.serviceRegistry, data);
     if ("status" in confirmed) return confirmed;
     const published = await options.access.confirmListing(record.state.walletAddress!, { draftId, operationId: record.state.operationId, txHash: confirmed.hash });
     if (!published.ok || published.value.status !== "published" || !published.value.reference) throw new Error(published.ok ? "Publication receipt did not reconcile" : published.message);

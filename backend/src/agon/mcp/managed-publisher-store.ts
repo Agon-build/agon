@@ -17,6 +17,8 @@ export type ManagedPublisherState = {
   publishTxId: string | null;
   publishTxHash: `0x${string}` | null;
   publishFee: PinnedFee | null;
+  /** The exact publish calldata Circle was sent, so a later check confirms it without preparing again. Absent on older rows. */
+  publishCallData?: `0x${string}` | null;
   reference: string | null;
 };
 
@@ -57,7 +59,7 @@ function initial(draftDigest: `0x${string}`): ManagedPublisherState {
   return {
     draftDigest, walletId: null, walletAddress: null, approvedAt: null, agentId: null,
     registerTxId: null, registerTxHash: null, registerFee: null,
-    operationId: null, publishTxId: null, publishTxHash: null, publishFee: null, reference: null,
+    operationId: null, publishTxId: null, publishTxHash: null, publishFee: null, publishCallData: null, reference: null,
   };
 }
 

@@ -27,7 +27,7 @@ const draft: ProviderDraftInput = {
 };
 const draftId = `draft-${createHash("sha256").update(JSON.stringify(draft)).digest("hex").slice(0, 24)}`;
 
-async function fixture(balance = 1_000_000_000_000_000_000n, badTransaction = false, uncertainOnce = false, highFee = false, writerReady = true, extra: { checksPassed?: (a: string, d: string) => Promise<boolean>; refuseFees?: number } = {}) {
+async function fixture(balance = 1_000_000_000_000_000_000n, badTransaction = false, uncertainOnce = false, highFee = false, writerReady = true, extra: { checksPassed?: (a: string, d: string) => Promise<boolean>; refuseFees?: number; publishPendingOnce?: boolean; estimate?: { gasLimit: string; maxFee: string; priorityFee: string } } = {}) {
   const store = createMemoryManagedPublisherStore();
   const draftStore = createMemoryProviderDraftStore();
   await draftStore.create(actor, draftId, draft);
@@ -35,13 +35,16 @@ async function fixture(balance = 1_000_000_000_000_000_000n, badTransaction = fa
   let walletCreates = 0;
   let lostResponse = false;
   let refusals = extra.refuseFees ?? 0;
+  let publishPending = extra.publishPendingOnce ?? false;
+  let prepares = 0;
   const estimates: string[] = [];
   const circle: ManagedPublisherCircle = {
     async createWallet(_ref, _key) { walletCreates++; return { walletId: "wallet-one", address: wallet }; },
     async estimateFee() {
       estimates.push("low");
       // Circle's LOW tier on Arc (17 Oct 2026): tip in the hundreds of gwei over a 20 gwei base fee.
-      return highFee ? { gasLimit: "200000", maxFee: "5000", priorityFee: "4960" } : { gasLimit: "100000", maxFee: "568.71", priorityFee: "528.71" };
+      if (extra.estimate) return extra.estimate;
+      return highFee ? { gasLimit: "200000", maxFee: "6000", priorityFee: "5960" } : { gasLimit: "100000", maxFee: "568.71", priorityFee: "528.71" };
     },
     async execute(input) {
       if (refusals > 0) { refusals--; throw new Error("Circle rejected the request (HTTP 400, code 2): API parameter invalid"); }
@@ -54,6 +57,7 @@ async function fixture(balance = 1_000_000_000_000_000_000n, badTransaction = fa
     },
     async transaction(id) {
       const call = calls[Number(id.slice("circle-".length))];
+      if (call?.to === registry && publishPending) { publishPending = false; return { state: "SENT", txHash: null }; }
       return { state: "COMPLETE", txHash: call?.hash ?? null };
     },
   };
@@ -84,6 +88,9 @@ async function fixture(balance = 1_000_000_000_000_000_000n, badTransaction = fa
     },
     async compileListing() { return { ok: true, value: { manifestUri: "https://api.example.com/manifest.json" } }; },
     async publishListing() {
+      prepares++;
+      // Once the publish is on chain the contract refuses a second simulation (ServiceKeyAlreadyPublished).
+      if (calls.some((c) => c.to === registry)) return { ok: false, message: "listing publication simulation was refused by the contract" };
       return { ok: true, value: { status: "prepared", operationId: "operation-one", transaction: {
         chainId: "5042002", to: registry, data: "0xabcd", functionName: "publish", args: [],
       } } };
@@ -92,7 +99,7 @@ async function fixture(balance = 1_000_000_000_000_000_000n, badTransaction = fa
       return { ok: true, value: { status: "published", reference: `5042002:${registry}:7` } };
     },
   } as unknown as ReturnType<typeof createMcpAccessAdapter>;
-  const { refuseFees: _refuse, ...options } = extra;
+  const { refuseFees: _refuse, publishPendingOnce: _pending, estimate: _estimate, ...options } = extra;
   const make = () => createManagedPublisher({
     store, draftStore, access, circle, chain, identityRegistry: identity,
     serviceRegistry: registry, publicApiUrl: "https://api.example.com/",
@@ -102,7 +109,7 @@ async function fixture(balance = 1_000_000_000_000_000_000n, badTransaction = fa
   const publisher = make();
   const setup = await publisher.setup(actor, draftId);
   storePublicId = (await store.get(actor, draftId))!.publicId;
-  return { publisher, make, setup, calls, access, store, estimates, publicId: storePublicId, walletCreates: () => walletCreates };
+  return { publisher, make, setup, calls, access, store, estimates, prepares: () => prepares, publicId: storePublicId, walletCreates: () => walletCreates };
 }
 
 test("a new draft gets one Circle wallet and requires an exact approval before writes", async () => {
@@ -170,6 +177,27 @@ test("a fee pinned in an older shape or by an older rule is estimated again, nev
     await f.publisher.advance(actor, draftId);
     assert.deepEqual(f.calls[0]!.fee, { gasLimit: "100000", maxFee: "568.71", priorityFee: "528.71" });
   }
+});
+
+test("a sent publish is confirmed on a later check from its saved calldata, never prepared again", async () => {
+  // Kestrel, 17 Oct 2026: the check after Circle sent the publish re-ran the simulation, which the
+  // contract refused because the listing already existed, and failed until the indexer caught up.
+  const f = await fixture(1_000_000_000_000_000_000n, false, false, false, true, { publishPendingOnce: true });
+  await f.publisher.approve(actor, draftId, f.setup.termsDigest, "approve");
+  assert.equal((await f.publisher.advance(actor, draftId)).status, "pending");
+  const preparedBefore = f.prepares();
+  const done = await f.make().advance(actor, draftId);
+  assert.equal(done.status, "published");
+  assert.equal(done.reference, `5042002:${registry}:7`);
+  assert.equal(f.prepares(), preparedBefore, "no second preparation after the publish was sent");
+  assert.equal(f.calls.length, 2);
+});
+
+test("a publish-sized write at Circle's HIGH tip fits the 1 USDC cap", async () => {
+  // Kestrel's publish: Circle gas limit 864,081; Circle's HIGH tip reached 692.51 gwei on 17 Oct 2026.
+  const f = await fixture(2_000_000_000_000_000_000n, false, false, false, true, { estimate: { gasLimit: "864081", maxFee: "732.51", priorityFee: "692.51" } });
+  await f.publisher.approve(actor, draftId, f.setup.termsDigest, "approve");
+  assert.equal((await f.publisher.advance(actor, draftId)).status, "published");
 });
 
 test("registry or writer unavailability prevents identity registration", async () => {
