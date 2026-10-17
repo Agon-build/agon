@@ -25,7 +25,7 @@ export class ManifestInspectionError extends Error {
   }
 }
 
-function publicHttpsUri(value: string): URL {
+export function publicHttpsUri(value: string): URL {
   let uri: URL;
   try {
     uri = new URL(value);

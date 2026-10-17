@@ -27,7 +27,9 @@ import { lookup as dnsLookup } from "node:dns/promises";
 import { createOAuthRoutes } from "../agon/mcp-oauth/routes.js";
 import { PostgresOAuthStore } from "../agon/mcp-oauth/store.js";
 import { startSeasonRuntime } from "../agon/playground/seasons/runtime.ts";
-import { startPaymentsRuntime } from "../agon/payments/runtime.ts";
+import { startOutsideRuntime, startPaymentsRuntime } from "../agon/payments/runtime.ts";
+import { approvalsByNetwork, startRouting, type ListingView } from "../agon/routing/runtime.ts";
+import type { Router } from "../agon/routing/router.ts";
 import { PostgresChannelStore } from "../agon/channels/store.ts";
 import { createApprovalRoutes } from "../agon/stage/approval-routes.ts";
 import { createAppRoutes } from "../agon/stage/app-routes.ts";
@@ -847,11 +849,17 @@ const agonPayments = startPaymentsRuntime({ season: agonSeason, blockedProviders
 const channelStore = new PostgresChannelStore(pool);
 const monitorStore = new PostgresMonitorStore(pool);
 let stageServices: StageServices | null = null;
+let agonRouter: Router | null = null;
+// Circle routes pay on Arc mainnet from a slim second runtime; off unless AGON_OUTSIDE_ENABLED=true.
+const outsideRuntime = agonPayments ? startOutsideRuntime() : null;
 if (agonPayments) {
   app.route("/agon", agonPayments.routes.payments);
   app.route("/agon/agents/house", agonPayments.routes.house);
   app.route("/agon/agents/specialists", agonPayments.routes.specialists);
   if (agonPayments.routes.standin) app.route("/agon/standin", agonPayments.routes.standin);
+  // Each new owner costs a Circle wallet: at most 60 new wallets an hour across all channels and networks.
+  const newWalletGate = createRateLimiter({ limit: 60, windowMs: 3_600_000 });
+  const newWalletAllowed = () => newWalletGate("new-wallet");
   stageServices = createStageServices({
     hire: agonPayments.hire,
     store: agonPayments.store,
@@ -860,14 +868,51 @@ if (agonPayments) {
     balanceOf: agonPayments.balanceOf,
     leaderboard: createLeaderboardReader(agonSeason),
     leadPrice: async () => agonPayments.settings.leadPrice,
-    // Each new owner costs a Circle wallet: at most 60 new wallets an hour across all channels.
-    newWalletAllowed: (() => { const gate = createRateLimiter({ limit: 60, windowMs: 3_600_000 }); return () => gate("new-wallet"); })(),
+    fee: { bps: agonPayments.settings.routingFeeBps, address: agonPayments.settings.feeAddress },
+    newWalletAllowed,
     now: () => new Date(),
   });
-  app.route("/agon/app", createAppRoutes({ services: stageServices, requireAuth, off: () => stage.settings.channelsOff.web, terms: custodyTerms }));
+  const outsideServices = outsideRuntime
+    ? createStageServices({
+        hire: outsideRuntime.hire,
+        store: agonPayments.store,
+        network: outsideRuntime.hire.network,
+        siteUrl: stage.settings.siteUrl,
+        balanceOf: outsideRuntime.balanceOf,
+        leaderboard: async () => null,
+        leadPrice: async () => null,
+        newWalletAllowed,
+        now: () => new Date(),
+      })
+    : undefined;
+  const leadServices = stageServices;
+  agonRouter = startRouting({
+    listListingViews: async () => {
+      const page = await agonService.listListings({ limit: 100, cursor: null, category: null, agentId: null, includeManifest: true });
+      return page.ok ? (page.value.items as unknown as ListingView[]) : [];
+    },
+    scoreFor: async (agentId) => {
+      const res = await agonScoresRoutes.request(`/${encodeURIComponent(agentId)}`);
+      if (!res.ok) return null;
+      const body = (await res.json()) as { windows?: { all?: { score?: number | null } | null } };
+      return body.windows?.all?.score ?? null;
+    },
+    testnet: agonPayments.hire,
+    testnetBalanceOf: agonPayments.balanceOf,
+    testnetFeeAddress: agonPayments.settings.feeAddress,
+    outside: outsideRuntime,
+    feeBps: agonPayments.settings.routingFeeBps,
+    callModel: async (p) => ({ text: (await callModel(p)).text }),
+    model: stage.settings.classifierModel,
+    store: agonPayments.store,
+    approvalUrl: (token) => leadServices.approvalUrl(token),
+    newWalletAllowed,
+    leadAsk: (ownerRef, question) => leadServices.ask(ownerRef, { question }),
+  });
+  app.route("/agon/app", createAppRoutes({ services: stageServices, requireAuth, off: () => stage.settings.channelsOff.web, terms: custodyTerms, router: agonRouter, outside: outsideServices }));
   app.route("/agon", createApprovalRoutes({
     gate: { payments: agonPayments.store, channels: channelStore, chatIdPepper: stage.settings.chatIdPepper, network: agonPayments.settings.network, now: () => new Date() },
-    hire: agonPayments.hire,
+    hire: approvalsByNetwork(agonPayments.hire, outsideRuntime?.hire ?? null, agonPayments.store),
     requireAuth,
   }));
   console.log(`[stage] web app on ${agonPayments.settings.network.label}; site ${stage.settings.siteUrl}`);
@@ -876,6 +921,8 @@ if (agonPayments) {
       telegram: stage.settings.telegram,
       pepper: stage.settings.chatIdPepper,
       services: stageServices,
+      ...(agonRouter ? { router: agonRouter } : {}),
+      ...(outsideServices ? { outside: outsideServices } : {}),
       channels: channelStore,
       classify: (text) => classifyIntent(text, { callModel: async (p) => ({ text: (await callModel(p)).text }), model: stage.settings.classifierModel, log: (m) => console.warn(`[telegram] ${m}`) }),
       off: () => stage.settings.channelsOff.telegram,
@@ -1009,6 +1056,7 @@ app.route("/agon", createAgonRoutes({
         seasonId: agonSeason ? agonSeason.season.seasonId.toString() : "1",
         off: () => stage.settings.channelsOff.mcp,
         terms: custodyTerms,
+        ...(agonRouter ? { router: agonRouter } : {}),
       }
     : undefined,
   requireAuth: createAgonAuthMiddleware(config.adminToken, requireAuth),

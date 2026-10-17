@@ -79,7 +79,7 @@ export type Job = {
   updatedAt: Date;
 };
 
-export type JobPaymentKind = "hire" | "data" | "refund";
+export type JobPaymentKind = "hire" | "data" | "refund" | "fee";
 export type JobPayment = {
   idempotencyKey: string;
   jobId: string;
@@ -121,7 +121,7 @@ export interface PaymentsStore {
   updateJob(jobId: string, patch: { state?: JobState; result?: unknown; budgetAtomic?: bigint }): Promise<void>;
   getJob(jobId: string): Promise<Job | null>;
   listJobTree(rootId: string): Promise<Job[]>;
-  listStuckJobs(state: JobState, updatedBefore: Date): Promise<Job[]>;
+  listStuckJobs(state: JobState, updatedBefore: Date, network?: string): Promise<Job[]>;
   /** Failed top-level jobs of one provider, last changed inside the window, newest first. */
   listFailedJobs(providerRef: string, updatedAfter: Date, updatedBefore: Date): Promise<Job[]>;
   /** Root jobs this buyer started, newest first. */
@@ -133,4 +133,6 @@ export interface PaymentsStore {
   /** Insert or update by idempotency key; a recorded nonce is never erased. */
   upsertJobPayment(payment: JobPayment): Promise<void>;
   listJobPayments(rootId: string): Promise<JobPayment[]>;
+  /** Payments of one kind still pending and last changed before the cutoff, oldest first. */
+  listPendingPayments(kind: JobPaymentKind, updatedBefore: Date, network?: string): Promise<JobPayment[]>;
 }

@@ -20,6 +20,10 @@ export type PaymentSettings = {
   houseAsk: bigint;
   houseFloor: bigint;
   off: { all: boolean; budget: boolean; lead: boolean };
+  /** Agon routing fee in basis points of the agent price; 0 turns it off. */
+  routingFeeBps: number;
+  /** Where routing fees go on this network; null means fees are not collected. */
+  feeAddress: Address | null;
 };
 
 export type PaymentSettingsResult =
@@ -98,6 +102,18 @@ export function resolvePaymentSettings(env: Record<string, string | undefined>):
     problems.push("AGON_SPECIALIST_WALLETS must map pitch and scout to wallet handles");
   }
 
+  let routingFeeBps = 150;
+  if (env.AGON_ROUTING_FEE_BPS !== undefined && env.AGON_ROUTING_FEE_BPS.trim() !== "") {
+    const raw = env.AGON_ROUTING_FEE_BPS.trim();
+    if (/^\d{1,4}$/.test(raw) && Number(raw) <= 1000) routingFeeBps = Number(raw);
+    else problems.push("AGON_ROUTING_FEE_BPS must be a whole number of basis points from 0 to 1000");
+  }
+  let feeAddress: Address | null = null;
+  if (env.AGON_FEE_ADDRESS?.trim()) {
+    if (/^0x[0-9a-fA-F]{40}$/.test(env.AGON_FEE_ADDRESS.trim())) feeAddress = env.AGON_FEE_ADDRESS.trim().toLowerCase() as Address;
+    else problems.push("AGON_FEE_ADDRESS must be a 0x address");
+  }
+
   const leadPrice = atomic(env.AGON_LEAD_PRICE, 300_000n);
   const subHireBudget = atomic(env.AGON_LEAD_SUBHIRE_BUDGET, 250_000n);
   const houseAsk = atomic(env.AGON_HOUSE_ASK, 220_000n);
@@ -124,6 +140,29 @@ export function resolvePaymentSettings(env: Record<string, string | undefined>):
   return {
     enabled: true,
     ok: true,
-    settings: { network, publicApiUrl, lead, standin, houseSellers, specialistSellers, leadPrice, subHireBudget, houseAsk, houseFloor, off },
+    settings: { network, publicApiUrl, lead, standin, houseSellers, specialistSellers, leadPrice, subHireBudget, houseAsk, houseFloor, off, routingFeeBps, feeAddress },
   };
+}
+
+export type OutsideSettings = { network: AgonNetwork; feeAddress: Address | null; routingFeeBps: number };
+
+/// The slim Arc mainnet runtime that pays outside (Circle) services. Off unless
+/// AGON_OUTSIDE_ENABLED is exactly true; it shares the routing fee rate.
+export function resolveOutsideSettings(env: Record<string, string | undefined>): { enabled: false } | { enabled: true; ok: true; settings: OutsideSettings } | { enabled: true; ok: false; problems: string[] } {
+  if (env.AGON_OUTSIDE_ENABLED !== "true") return { enabled: false };
+  const problems: string[] = [];
+  let routingFeeBps = 150;
+  const rawBps = env.AGON_ROUTING_FEE_BPS?.trim();
+  if (rawBps) {
+    if (/^\d{1,4}$/.test(rawBps) && Number(rawBps) <= 1000) routingFeeBps = Number(rawBps);
+    else problems.push("AGON_ROUTING_FEE_BPS must be a whole number of basis points from 0 to 1000");
+  }
+  let feeAddress: Address | null = null;
+  const rawFee = env.AGON_OUTSIDE_FEE_ADDRESS?.trim();
+  if (rawFee) {
+    if (/^0x[0-9a-fA-F]{40}$/.test(rawFee)) feeAddress = rawFee.toLowerCase() as Address;
+    else problems.push("AGON_OUTSIDE_FEE_ADDRESS must be a 0x address");
+  }
+  if (problems.length > 0) return { enabled: true, ok: false, problems };
+  return { enabled: true, ok: true, settings: { network: agonNetwork("arc"), feeAddress, routingFeeBps } };
 }

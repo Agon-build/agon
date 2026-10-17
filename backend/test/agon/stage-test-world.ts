@@ -23,7 +23,7 @@ export const ATLAS_ROW: LeaderboardRow = {
 
 /// A stage stack over the in-memory store: real hire engine, real budget
 /// wallets and a lead agent endpoint that writes live events like the real one.
-export function stageWorld(opts: { price?: bigint; newWalletAllowed?: () => boolean } = {}) {
+export function stageWorld(opts: { price?: bigint; newWalletAllowed?: () => boolean; fee?: { bps: number; address: Address } } = {}) {
   const store = new MemoryPaymentsStore();
   const settler = fakeSettler();
   const buyer = privateKeyToAccount(BUYER_KEY);
@@ -94,6 +94,7 @@ export function stageWorld(opts: { price?: bigint; newWalletAllowed?: () => bool
     leaderboard: async (limit) => state.leaderboard.slice(0, limit),
     leadPrice: async () => state.price,
     ...(opts.newWalletAllowed ? { newWalletAllowed: opts.newWalletAllowed } : {}),
+    ...(opts.fee ? { fee: opts.fee } : {}),
   });
   return { store, settler, state, network, hire, services, buyer };
 }

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Composer } from "@/components/stage/Composer";
 import { PhaseRail } from "@/components/stage/PhaseRail";
 import { QuoteCard } from "@/components/stage/QuoteCard";
+import { RouteCard } from "@/components/stage/RouteCard";
 import { RunView } from "@/components/stage/RunView";
 import { StageShell } from "@/components/stage/StageShell";
 import { TermsPanel } from "@/components/stage/TermsPanel";
@@ -13,19 +14,23 @@ import { WalletStrip } from "@/components/stage/WalletStrip";
 import { useLiveJob } from "@/components/stage/useLiveJob";
 import { useNow } from "@/components/stage/useNow";
 import { useAuth } from "@/hooks/useAuth";
-import { askLead, confirmHire, getHistory, getLeaderboard, getStageConfig, getWallet, StageApiError } from "@/lib/agon/stage";
+import { confirmHire, getHistory, getLeaderboard, getStageConfig, getWallet, quoteRoute, routeRequest, StageApiError } from "@/lib/agon/stage";
 import { canAfford } from "@/lib/agon/hire-panel";
+import { mainnetInView, mergeAnswers, sourcesNote } from "@/lib/agon/route-view";
 import { askRefusalText, confirmFailureText } from "@/lib/agon/stage-copy";
-import type { AskResponse, HistoryItem, LeaderboardRow, StageConfig, StageWallet } from "@/lib/agon/stage-types";
+import type { AskResponse, HistoryItem, LeaderboardRow, RoutePick, StageConfig, StageWallet } from "@/lib/agon/stage-types";
 import { beatsMarketText, phaseStep } from "@/lib/agon/stage-view";
 
 type Quote = Extract<AskResponse, { ok: true }>;
+/// Agon's pick for a request, before the exact price is asked for.
+type Routed = { kind: "routed"; question: string; routeId: string; pick: RoutePick; alternatives: RoutePick[]; missing: string[]; prompt: string | null; busy: boolean; answers: Record<string, string>; note: string | null };
 type Mode =
   | { kind: "idle" }
   | { kind: "quoting"; question: string }
+  | Routed
   | { kind: "quote"; question: string; quote: Quote }
-  | { kind: "refused"; question: string; maxPrice: string | null; code: string; amount?: string }
-  | { kind: "run"; jobId: string; question: string | null; paying: boolean; confirmError: string | null };
+  | { kind: "refused"; question: string; maxPrice: string | null; code: string; amount?: string; network?: "arc-testnet" | "arc"; back?: Routed; note?: string | null }
+  | { kind: "run"; jobId: string; question: string | null; paying: boolean; confirmError: string | null; mainnet: boolean };
 
 export function HireClient() {
   const router = useRouter();
@@ -36,9 +41,10 @@ export function HireClient() {
   const stageQuery = params?.get("stage") === "1" ? "&stage=1" : "";
   const [config, setConfig] = useState<StageConfig | null>(null);
   const [wallet, setWallet] = useState<StageWallet | null>(null);
+  const [mainnetWallet, setMainnetWallet] = useState<StageWallet | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [best, setBest] = useState<LeaderboardRow | null>(null);
-  const [mode, setMode] = useState<Mode>(resumeJob ? { kind: "run", jobId: resumeJob, question: null, paying: false, confirmError: null } : { kind: "idle" });
+  const [mode, setMode] = useState<Mode>(resumeJob ? { kind: "run", jobId: resumeJob, question: null, paying: false, confirmError: null, mainnet: false } : { kind: "idle" });
   const { live, error: liveError } = useLiveJob(mode.kind === "run" ? mode.jobId : null, { active: mode.kind === "run" && mode.paying });
 
   const canAct = Boolean(me) || Boolean(config?.preview);
@@ -54,44 +60,91 @@ export function HireClient() {
   }, []);
   useEffect(() => { refreshWallet(); }, [refreshWallet]);
 
+  const refreshMainnet = useCallback(() => { getWallet("arc").then(setMainnetWallet).catch(() => {}); }, []);
+
+  // Agon reads the request and picks: forecasts go to the Lead, anything else to the best fit across Agon and Circle.
   async function ask(question: string, maxPrice: string | null) {
     setMode({ kind: "quoting", question });
     try {
-      const quote = await askLead(question, maxPrice ?? undefined);
-      if (quote.ok) setMode({ kind: "quote", question, quote });
-      else setMode({ kind: "refused", question, maxPrice, code: quote.code, amount: quote.amount });
+      const routed = await routeRequest(question);
+      if (routed.kind === "pick") {
+        setMode({ kind: "routed", question, routeId: routed.routeId, pick: routed.pick, alternatives: routed.alternatives, missing: [], prompt: null, busy: false, answers: {}, note: sourcesNote(routed.sources) });
+        if (routed.pick.network === "arc" || routed.alternatives.some((a) => a.network === "arc")) refreshMainnet();
+      } else if (routed.kind === "none") {
+        setMode({ kind: "refused", question, maxPrice, code: "no_match", note: sourcesNote(routed.sources) });
+      } else if (routed.kind === "lead") {
+        const quote = routed as AskResponse;
+        if (quote.ok && maxPrice && !canAfford(quote.total ?? quote.amount, maxPrice)) setMode({ kind: "refused", question, maxPrice, code: "over_your_max", amount: quote.total ?? quote.amount });
+        else if (quote.ok) setMode({ kind: "quote", question, quote });
+        else setMode({ kind: "refused", question, maxPrice, code: quote.code ?? "network_unavailable", amount: quote.amount });
+      } else {
+        setMode({ kind: "refused", question, maxPrice, code: routed.code });
+      }
       refreshWallet();
     } catch (e) {
       setMode({ kind: "refused", question, maxPrice, code: e instanceof StageApiError ? e.code : "network_unavailable" });
     }
   }
 
-  // Short wallet: watch the balance, and ask again with the same question once it covers the price.
+  // The exact price for the chosen service, with the person's answer laid over the filled input.
+  async function quoteRouted(prev: Routed, add?: Record<string, string>) {
+    // Every answer given so far goes with each quote, so a second question never undoes the first.
+    const r = { ...prev, answers: mergeAnswers(prev.answers, add), busy: false };
+    setMode({ ...r, busy: true });
+    try {
+      const quote = await quoteRoute(r.routeId, r.pick.reference, Object.keys(r.answers).length > 0 ? r.answers : undefined);
+      if (quote.ok) setMode({ kind: "quote", question: r.question, quote });
+      else if (quote.code === "missing_input") setMode({ ...r, missing: quote.missing ?? [], prompt: quote.question ?? null });
+      else setMode({ kind: "refused", question: r.question, maxPrice: null, code: quote.code, amount: quote.amount, network: quote.network, back: r });
+    } catch (e) {
+      setMode({ kind: "refused", question: r.question, maxPrice: null, code: e instanceof StageApiError ? e.code : "network_unavailable", back: r });
+    }
+    refreshWallet();
+    if (r.pick.network === "arc") refreshMainnet();
+  }
+
+  function swap(r: Routed, next: RoutePick) {
+    setMode({ ...r, pick: next, alternatives: [r.pick, ...r.alternatives.filter((a) => a.reference !== next.reference)], missing: [], prompt: null, answers: {} });
+    if (next.network === "arc") refreshMainnet();
+  }
+
+  function retry(m: Extract<Mode, { kind: "refused" }>) {
+    if (m.back) void quoteRouted(m.back);
+    else void ask(m.question, m.maxPrice);
+  }
+
+  // Short wallet: watch the balance on the hire's network, and ask again once it covers the price.
   const shortOf = mode.kind === "refused" && mode.code === "insufficient_balance" && mode.amount ? mode.amount : null;
+  const shortMainnet = mode.kind === "refused" && mode.network === "arc";
+  const shortWallet = shortMainnet ? mainnetWallet : wallet;
   const retriedAt = useRef<string | null>(null);
   useEffect(() => {
     if (!shortOf) { retriedAt.current = null; return; }
-    const timer = window.setInterval(() => { getWallet().then(setWallet).catch(() => {}); }, 4_000);
+    const poll = () => (shortMainnet ? getWallet("arc").then(setMainnetWallet) : getWallet().then(setWallet)).catch(() => {});
+    poll();
+    const timer = window.setInterval(poll, 4_000);
     return () => window.clearInterval(timer);
-  }, [shortOf]);
+  }, [shortOf, shortMainnet]);
   useEffect(() => {
-    if (mode.kind !== "refused" || !shortOf || !wallet || !canAfford(shortOf, wallet.balance)) return;
-    if (retriedAt.current === wallet.balance) return;
-    retriedAt.current = wallet.balance;
-    void ask(mode.question, mode.maxPrice);
-  }, [shortOf, wallet]);
+    if (mode.kind !== "refused" || !shortOf || !shortWallet || !canAfford(shortOf, shortWallet.balance)) return;
+    if (retriedAt.current === shortWallet.balance) return;
+    retriedAt.current = shortWallet.balance;
+    retry(mode);
+  }, [shortOf, shortWallet]);
 
   async function pay(quote: Quote, question: string) {
     if (quote.step !== "confirm_code") return;
-    setMode({ kind: "run", jobId: quote.jobId, question, paying: true, confirmError: null });
+    const mainnet = !quote.testnet;
+    setMode({ kind: "run", jobId: quote.jobId, question, paying: true, confirmError: null, mainnet });
     router.replace(`/?job=${quote.jobId}${stageQuery}`, { scroll: false });
     try {
       const out = await confirmHire(quote.jobId, quote.code);
-      setMode({ kind: "run", jobId: quote.jobId, question, paying: false, confirmError: out.ok ? null : out.code });
+      setMode({ kind: "run", jobId: quote.jobId, question, paying: false, confirmError: out.ok ? null : out.code, mainnet });
     } catch (e) {
-      setMode({ kind: "run", jobId: quote.jobId, question, paying: false, confirmError: e instanceof StageApiError ? e.code : "network_unavailable" });
+      setMode({ kind: "run", jobId: quote.jobId, question, paying: false, confirmError: e instanceof StageApiError ? e.code : "network_unavailable", mainnet });
     }
     refreshWallet();
+    if (mainnet) refreshMainnet();
   }
 
   function reset() {
@@ -103,17 +156,26 @@ export function HireClient() {
   const shown = live && mode.kind === "run" && mode.paying && live.phase === "quoted" ? { ...live, phase: "paying" as const } : live;
   const question = mode.kind === "idle" ? null : mode.kind === "run" ? (mode.question ?? live?.question ?? null) : mode.question;
   const step = mode.kind === "idle" ? 0 : mode.kind === "run" ? phaseStep(shown?.phase ?? "paying") : 1;
+  // The mainnet wallet strip shows while a mainnet service is on screen.
+  const onMainnet = mainnetInView({
+    kind: mode.kind,
+    ...(mode.kind === "routed" ? { pickNetwork: mode.pick.network } : {}),
+    ...(mode.kind === "quote" ? { testnet: mode.quote.testnet } : {}),
+    ...(mode.kind === "refused" ? { network: mode.network } : {}),
+    ...(mode.kind === "run" ? { mainnet: mode.mainnet || live?.network === "Arc" } : {}),
+  });
   const working = mode.kind === "run" && (shown ? shown.phase === "paying" || shown.phase === "working" : true);
 
   return (
     <StageShell network={config?.network ?? null} preview={config?.preview}>
       <div className="mx-auto max-w-[1536px] px-4 pb-24 pt-6 sm:px-6 sm:pt-8">
-        {canAct && wallet ? <WalletStrip wallet={wallet} onChanged={refreshWallet} /> : null}
+        {canAct && wallet && !onMainnet ? <WalletStrip wallet={wallet} onChanged={refreshWallet} /> : null}
+        {canAct && mainnetWallet && onMainnet ? <WalletStrip wallet={mainnetWallet} onChanged={refreshMainnet} /> : null}
         {mode.kind === "run" ? <div className="mt-6"><PhaseRail step={step} working={working} /></div> : null}
 
         <div className="mt-10 grid gap-12 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-16">
           <div className="min-w-0">
-            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Hire{config ? ` · ${config.network}` : ""}</p>
+            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Hire{onMainnet ? " · Arc mainnet" : config ? ` · ${config.network}` : ""}</p>
             <h1 className={`mt-4 font-display uppercase tracking-[-.04em] text-ink ${question ? "max-w-[24ch] text-[clamp(1.6rem,2.8vw,2.5rem)] leading-[1.05]" : "max-w-[10ch] text-[clamp(3rem,7vw,6.5rem)] leading-[.86]"}`}>
               {question ?? "Describe it"}
             </h1>
@@ -123,6 +185,7 @@ export function HireClient() {
             {mode.kind === "refused" && !shortOf && mode.code !== "terms_required" ? (
               <div role="alert" className="stage-print mt-8 border-y border-[color:var(--hairline-strong)] py-6">
                 <p className="text-base leading-7 text-ink">{askRefusalText(mode.code, mode.amount)}</p>
+                {mode.note ? <p className="mt-2 text-sm leading-6 text-ink-2">{mode.note}</p> : null}
                 <button type="button" onClick={reset} className="mt-4 min-h-11 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 underline underline-offset-4 hover:text-accent">Describe something else</button>
               </div>
             ) : null}
@@ -137,9 +200,9 @@ export function HireClient() {
                 <h2 id="how-heading" className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">How it works</h2>
                 <ol className="mt-4 divide-y divide-[color:var(--hairline)]">
                   {[
-                    ["01", "You ask in plain words and see the price before anything is paid."],
-                    ["02", "The Agon Lead Agent buys live data and haggles with the best Season 1 forecaster."],
-                    ["03", "Every payment lands on Arc with its transaction. If nothing can be delivered, you are refunded."],
+                    ["01", "Say what you need in plain words. Agon picks the best rated agent at a fair price, on Agon or Circle."],
+                    ["02", "You see the exact price and Agon's routing fee before anything is paid. Swap the pick if you like."],
+                    ["03", "Every payment lands on Arc with its transaction. Agon's fee is taken only when the answer arrives."],
                   ].map(([n, text]) => <li key={n} className="grid grid-cols-[2.5rem_1fr] py-3 text-sm leading-6 text-ink-2"><span className="font-mono text-[11px] text-accent">{n}</span>{text}</li>)}
                 </ol>
                 {best ? (
@@ -152,9 +215,15 @@ export function HireClient() {
                 ) : null}
               </aside>
             ) : null}
+            {mode.kind === "routed" ? (
+              <RouteCard
+                pick={mode.pick} alternatives={mode.alternatives} question={mode.prompt} missing={mode.missing} busy={mode.busy} note={mode.note}
+                onSwap={(p) => swap(mode, p)} onQuote={(answers) => void quoteRouted(mode, answers)} onCancel={reset}
+              />
+            ) : null}
             {mode.kind === "quote" ? <QuoteCard quote={mode.quote} nowMs={now} paying={false} onPay={() => void pay(mode.quote, mode.question)} onCancel={reset} /> : null}
-            {mode.kind === "refused" && mode.code === "terms_required" ? <TermsPanel onAccepted={() => void ask(mode.question, mode.maxPrice)} onCancel={reset} /> : null}
-            {shortOf ? <TopUpPanel wallet={wallet} price={shortOf} onFunded={refreshWallet} onCancel={reset} /> : null}
+            {mode.kind === "refused" && mode.code === "terms_required" ? <TermsPanel onAccepted={() => retry(mode)} onCancel={reset} /> : null}
+            {shortOf ? <TopUpPanel wallet={shortWallet} price={shortOf} onFunded={shortMainnet ? refreshMainnet : refreshWallet} onCancel={reset} /> : null}
           </div>
         </div>
 

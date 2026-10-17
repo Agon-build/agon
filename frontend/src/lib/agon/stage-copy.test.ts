@@ -5,7 +5,7 @@ import { KIND_LABEL, approvalFailureText, askRefusalText, confirmFailureText, fa
 
 test("every refusal a person can hit has a plain sentence", () => {
   assert.equal(askRefusalText("insufficient_balance", "0.30"), "Your agent wallet needs 0.30 USDC for this hire.");
-  assert.equal(askRefusalText("over_your_max", "0.30"), "The lead agent charges 0.30 USDC, more than the maximum you set.");
+  assert.equal(askRefusalText("over_your_max", "0.3045"), "This costs 0.3045 USDC in total, more than the maximum you set.");
   assert.equal(askRefusalText("terms_required"), "Accept the agent wallet terms to continue.");
   assert.equal(askRefusalText("invalid_question"), "Ask a full question, between 8 and 300 characters.");
   assert.equal(askRefusalText("something_new"), "Agon could not prepare this request. Try again in a moment.");

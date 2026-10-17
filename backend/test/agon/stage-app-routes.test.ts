@@ -3,6 +3,8 @@ import test from "node:test";
 import { Hono, type MiddlewareHandler } from "hono";
 
 import { createAppRoutes } from "../../src/agon/stage/app-routes.ts";
+import type { Router } from "../../src/agon/routing/router.ts";
+import type { StageServices } from "../../src/agon/stage/services.ts";
 import { CUSTODY_TERMS_VERSION, type CustodyTerms } from "../../src/agon/stage/custody-terms.ts";
 import { createLeaderboardReader } from "../../src/agon/stage/leaderboard.ts";
 import { createRateLimiter } from "../../src/agon/stage/rate-limit.ts";
@@ -25,11 +27,11 @@ function fakeTerms(acceptedByDefault: boolean): CustodyTerms & { accepted: Set<s
   };
 }
 
-function setup(opts: { off?: boolean; askLimit?: (key: string) => boolean; termsAccepted?: boolean } = {}) {
+function setup(opts: { off?: boolean; askLimit?: (key: string) => boolean; termsAccepted?: boolean; router?: Router; outside?: StageServices } = {}) {
   const world = stageWorld();
   const terms = fakeTerms(opts.termsAccepted ?? true);
   const app = new Hono();
-  app.route("/agon/app", createAppRoutes({ services: world.services, requireAuth, off: () => opts.off ?? false, askLimit: opts.askLimit, terms }));
+  app.route("/agon/app", createAppRoutes({ services: world.services, requireAuth, off: () => opts.off ?? false, askLimit: opts.askLimit, terms, router: opts.router, outside: opts.outside }));
   const call = (path: string, init: { method?: string; body?: unknown; as?: string | null } = {}) =>
     app.request(`/agon/app${path}`, {
       method: init.method ?? (init.body === undefined ? "GET" : "POST"),
@@ -164,4 +166,69 @@ test("a new account accepts the wallet terms once before the first hire creates 
   assert.equal(((await (await call("/terms")).json()) as { accepted: boolean }).accepted, true);
   assert.equal(((await (await call("/ask", { body: { question: QUESTION } })).json()) as { ok: boolean }).ok, true);
   assert.equal((await call("/terms", { as: null })).status, 401);
+});
+
+const PICK = {
+  source: "circle" as const, reference: "circle:https://analyst.example/ratings", name: "Analyst ratings", provider: "LoneStarOracle", category: "FINANCIAL_ANALYSIS",
+  description: "Analyst ratings", url: "https://analyst.example/ratings", method: "GET" as const, inputSchema: null, price: 10_000n, payTo: null, network: "arc" as const,
+  rating: { tier: "unrated" as const, score: null }, latencyMs: null, tags: [], fee: 150n, total: 10_150n, reason: "Not rated by Agon, from LoneStarOracle on Circle",
+};
+function fakeRouter(calls: string[]): Router {
+  return {
+    route: async () => ({ kind: "pick", routeId: "r1", intent: { kind: "market_data", query: "ratings", values: {} }, pick: PICK, alternatives: [], sources: [{ id: "agon", status: "ok" }, { id: "circle", status: "ok" }] }),
+    quote: async (_o, routeId, reference) => { calls.push(`quote:${routeId}:${reference}`); return { ok: true, step: "confirm_code", jobId: "j1", amount: 10_000n, fee: 150n, total: 10_150n, providerLabel: "Analyst ratings", network: "Arc", testnet: false, expiresAt: new Date(Date.now() + 60_000), code: "4242", input: { symbol: "AAPL" }, source: "circle", reason: PICK.reason }; },
+    confirm: async (_o, code) => { calls.push(`confirm:${code}`); return { ok: true, jobId: "j1", amount: 10_000n, txHash: null, result: { price: 1 } }; },
+  } as Router;
+}
+
+test("route returns the pick with price, fee, total, network and source", async () => {
+  const { call } = setup({ router: fakeRouter([]) });
+  const out = (await (await call("/route", { body: { request: "Analyst ratings for AAPL" } })).json()) as { kind: string; routeId: string; pick: { price: string; fee: string; total: string; network: string; source: string; reason: string; rating: { tier: string } } };
+  assert.equal(out.kind, "pick");
+  assert.deepEqual([out.pick.price, out.pick.fee, out.pick.total, out.pick.network, out.pick.source, out.pick.rating.tier], ["0.01", "0.00015", "0.01015", "arc", "circle", "unrated"]);
+});
+
+test("quote then confirm go through the router", async () => {
+  const calls: string[] = [];
+  const { call } = setup({ router: fakeRouter(calls) });
+  const q = (await (await call("/route/quote", { body: { routeId: "r1", reference: PICK.reference } })).json()) as { ok: boolean; total: string; fee: string; code: string; input: Record<string, unknown> };
+  assert.deepEqual([q.ok, q.total, q.fee, q.code, q.input.symbol], [true, "0.01015", "0.00015", "4242", "AAPL"]);
+  const c = (await (await call("/hires/j1/confirm", { body: { code: "4242" } })).json()) as { ok: boolean };
+  assert.equal(c.ok, true);
+  assert.deepEqual(calls, [`quote:r1:${PICK.reference}`, "confirm:4242"]);
+});
+
+test("route needs the wallet terms and a session; wallet with network=arc uses the outside wallet", async () => {
+  const noTerms = setup({ router: fakeRouter([]), termsAccepted: false });
+  assert.deepEqual(await (await noTerms.call("/route", { body: { request: "Analyst ratings for AAPL" } })).json(), { ok: false, code: "terms_required" });
+  assert.equal((await noTerms.call("/route", { body: { request: "x".repeat(20) }, as: null })).status, 401);
+  const outside = { findWallet: async () => ({ networkId: "arc", network: "Arc", testnet: false, explorer: "https://explorer.arc.io", address: `0x${"9".repeat(40)}`, balance: 2_000_000n, perHireCap: 250_000n, dailyCap: 1_000_000n, spentToday: 0n, leftToday: 1_000_000n, frozen: false }) } as unknown as StageServices;
+  const t = setup({ router: fakeRouter([]), outside });
+  const w = (await (await t.call("/wallet?network=arc")).json()) as { network: string; perHire: string; testnet: boolean };
+  assert.deepEqual([w.network, w.perHire, w.testnet], ["Arc", "0.25", false]);
+});
+
+test("the Lead's quote carries the routing fee as its own line and the limit counts the total", async () => {
+  const world = stageWorld({ fee: { bps: 150, address: `0x${"fe".repeat(20)}` as `0x${string}` } });
+  const app = new Hono();
+  const terms = { isAccepted: async () => true, accept: async () => true };
+  app.route("/agon/app", createAppRoutes({ services: world.services, requireAuth, off: () => false, terms }));
+  const res = await app.request("/agon/app/ask", { method: "POST", headers: { "content-type": "application/json", "x-test-address": ALICE }, body: JSON.stringify({ question: QUESTION }) });
+  const quote = (await res.json()) as { ok: boolean; amount: string; fee: string; total: string };
+  assert.deepEqual([quote.ok, quote.amount, quote.fee, quote.total], [true, "0.30", "0.0045", "0.3045"]);
+});
+
+test("final I5 and C2: a routed quote is rate limited, and confirm returns the service's answer", async () => {
+  const limited = setup({ router: fakeRouter([]), askLimit: () => false });
+  assert.equal((await limited.call("/route/quote", { body: { routeId: "r1", reference: PICK.reference } })).status, 429);
+  const { call } = setup({ router: fakeRouter([]) });
+  const c = (await (await call("/hires/j1/confirm", { body: { code: "4242" } })).json()) as { ok: boolean; result: unknown };
+  assert.deepEqual(c.result, { price: 1 });
+});
+
+test("final I1: a failed routed quote never echoes the raw network error", async () => {
+  const router = { ...fakeRouter([]), quote: async () => ({ ok: false, code: "network_error", detail: "connect ECONNREFUSED 127.0.0.1:6379" }) } as unknown as Router;
+  const { call } = setup({ router });
+  const out = (await (await call("/route/quote", { body: { routeId: "r1", reference: PICK.reference } })).json()) as Record<string, unknown>;
+  assert.deepEqual(out, { ok: false, code: "network_error" });
 });

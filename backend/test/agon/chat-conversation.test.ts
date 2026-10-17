@@ -11,7 +11,7 @@ import { QUESTION, stageWorld } from "./stage-test-world.ts";
 const PEPPER = "p".repeat(40);
 const USER = "4242";
 
-function setup(opts: { off?: boolean; acceptTerms?: boolean; limit?: (key: string) => boolean } = {}) {
+function setup(opts: { off?: boolean; acceptTerms?: boolean; limit?: (key: string) => boolean; router?: ConversationDeps["router"]; outside?: ConversationDeps["outside"] } = {}) {
   const world = stageWorld();
   const channels = new MemoryChannelStore();
   const sent: { id: number; reply: ChatReply }[] = [];
@@ -26,13 +26,15 @@ function setup(opts: { off?: boolean; acceptTerms?: boolean; limit?: (key: strin
     },
     off: () => opts.off ?? false, now: () => new Date(), pollMs: 1, sleep: () => new Promise((r) => setImmediate(r)),
     ...(opts.limit ? { limit: opts.limit } : {}),
+    ...(opts.router ? { router: opts.router } : {}),
+    ...(opts.outside ? { outside: opts.outside } : {}),
   };
   const say = (text: string, kind: "text" | "tap" | "start" | "other" = "text") => handleChatMessage(deps, { userId: USER, kind, text });
   return { ...world, channels, deps, sent, edits, say, last: () => sent.at(-1)!.reply };
 }
 
-async function accepted() {
-  const s = setup();
+async function accepted(opts: Parameters<typeof setup>[0] = {}) {
+  const s = setup(opts);
   await s.say("hi");
   await s.say("terms:accept", "tap");
   return s;
@@ -183,4 +185,77 @@ test("a chat user sending too fast is told to wait and nothing else runs", async
   assert.match(s.last().text, /quickly\. Wait a minute/);
   assert.equal(s.store.jobs.size, 0);
   assert.equal(s.channels.accounts.size, 0, "a limited message does not even create the account");
+});
+
+const CHAT_PICK = {
+  source: "circle" as const, reference: "circle:https://analyst.example/ratings", name: "Analyst ratings", provider: "LoneStarOracle", category: "FINANCIAL_ANALYSIS", description: "Analyst ratings",
+  url: "https://analyst.example/ratings", method: "GET" as const, inputSchema: null, price: 10_000n, payTo: null, network: "arc" as const, rating: { tier: "unrated" as const, score: null },
+  latencyMs: null, tags: [], fee: 150n, total: 10_150n, reason: "Not rated by Agon, from LoneStarOracle on Circle",
+};
+function chatRouter(calls: string[]) {
+  return {
+    route: async (_o: string, text: string) => { calls.push(`route:${text}`); return { kind: "pick" as const, routeId: "r1", intent: { kind: "market_data" as const, query: text, values: {} }, pick: CHAT_PICK, alternatives: [], sources: [] }; },
+    quote: async () => ({ ok: true as const, step: "confirm_code" as const, jobId: "j1", amount: 10_000n, fee: 150n, total: 10_150n, providerLabel: "Analyst ratings", network: "Arc", testnet: false, expiresAt: new Date(Date.now() + 60_000), code: "4242", input: { symbol: "AAPL" }, source: "circle" as const, reason: CHAT_PICK.reason }),
+    confirm: async (_o: string, code: string) => { calls.push(`confirm:${code}`); return { ok: true as const, jobId: "j1", amount: 10_000n, txHash: null, result: { symbol: "AAPL", signal: "BULLISH" } }; },
+  } as unknown as NonNullable<ConversationDeps["router"]>;
+}
+
+test("a research question in chat gets a pick with price, fee, total, network and a code", async () => {
+  const calls: string[] = [];
+  const s = await accepted({ router: chatRouter(calls) });
+  await s.say("Give me analyst ratings for AAPL");
+  const text = s.last().text;
+  assert.match(text, /Analyst ratings/);
+  assert.match(text, /0\.01 USDC and Agon's 0\.00015 fee, 0\.01015 USDC in total/);
+  assert.match(text, /real USDC on Arc mainnet/i);
+  assert.match(text, /Not rated by Agon/);
+  assert.match(text, /YES 4242/);
+  await s.say("yes:4242", "tap");
+  assert.ok(calls.includes("confirm:4242"));
+  assert.match(s.last().text, /BULLISH/);
+});
+
+test("wallet commands use the test wallet unless the message says mainnet", async () => {
+  const outside = { ...((await accepted()).services), wallet: async () => ({ networkId: "arc", network: "Arc", testnet: false, explorer: "https://explorer.arc.io", address: `0x${"9".repeat(40)}`, balance: 2_000_000n, perHireCap: 250_000n, dailyCap: 1_000_000n, spentToday: 0n, leftToday: 1_000_000n, frozen: false }) } as unknown as NonNullable<ConversationDeps["outside"]>;
+  const s = await accepted({ outside });
+  await s.say("balance");
+  assert.match(s.last().text, /on Arc Testnet/);
+  await s.say("/balance mainnet");
+  assert.match(s.last().text, /2\.00 USDC on Arc\./);
+});
+
+test("minor: a frozen mainnet wallet is told to unfreeze mainnet", async () => {
+  const router = { ...chatRouter([]), quote: async () => ({ ok: false as const, code: "frozen" }) } as unknown as NonNullable<ConversationDeps["router"]>;
+  const s = await accepted({ router });
+  await s.say("Give me analyst ratings for AAPL");
+  assert.match(s.last().text, /unfreeze mainnet/);
+});
+
+test("minor: a forecast found by the router is quoted once, with its fee and total", async () => {
+  const ask = { ok: true as const, step: "confirm_code" as const, jobId: "jl", amount: 300_000n, fee: 4_500n, total: 304_500n, providerLabel: "Agon Lead Agent", network: "Arc Testnet", testnet: true, expiresAt: new Date(Date.now() + 60_000), code: "7777" };
+  const router = { ...chatRouter([]), route: async () => ({ kind: "lead" as const, ask }) } as unknown as NonNullable<ConversationDeps["router"]>;
+  const s = await accepted({ router });
+  const jobs = s.store.jobs.size;
+  await s.say("Give me analyst ratings for AAPL");
+  assert.match(s.last().text, /YES 7777/);
+  assert.match(s.last().text, /0\.3045 USDC/);
+  assert.equal(s.store.jobs.size, jobs, "no second quote");
+});
+
+test("minor: when Circle cannot be reached, a request with no fit says so", async () => {
+  const router = { ...chatRouter([]), route: async () => ({ kind: "none" as const, sources: [{ id: "agon", status: "ok" }, { id: "circle", status: "unavailable" }] }) } as unknown as NonNullable<ConversationDeps["router"]>;
+  const s = await accepted({ router });
+  await s.say("Give me analyst ratings for AAPL");
+  assert.match(s.last().text, /Circle's marketplace could not be reached/);
+});
+
+test("minor: the chat terms give both wallets' limits, and mainnet limits answer with mainnet numbers", async () => {
+  const first = setup();
+  await first.say("hi");
+  assert.match(first.last().text, /0\.25 per hire and 1\.00 per day on Arc mainnet/);
+  const base = (await accepted()).services;
+  const outside = { ...base, network: { ...base.network, id: "arc", label: "Arc" }, lowerLimits: async () => ({ ok: false, code: "above_default" }) } as unknown as NonNullable<ConversationDeps["outside"]>;
+  const s = await accepted({ outside });
+  await s.say("/limits 5 per hire mainnet");
+  assert.match(s.last().text, /up to 0\.25 per hire and 1\.00 per day/);
 });

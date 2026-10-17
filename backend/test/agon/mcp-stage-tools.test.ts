@@ -30,7 +30,7 @@ async function payload(res: Response): Promise<{ isError?: boolean; value: Recor
   return { isError: body.result.isError, value: JSON.parse(body.result.content[0]!.text) };
 }
 
-function setup(off = false, limit?: (key: string) => boolean, termsAccepted = true) {
+function setup(off = false, limit?: (key: string) => boolean, termsAccepted = true, router?: StageMcpDeps["router"]) {
   const world = stageWorld();
   const seasonCalls: { path: string; body: unknown }[] = [];
   const season = new Hono();
@@ -43,7 +43,7 @@ function setup(off = false, limit?: (key: string) => boolean, termsAccepted = tr
     return c.json({ results: [{ ok: true, duplicate: false }] });
   });
   const terms = { isAccepted: async () => termsAccepted, accept: async () => true };
-  const stage: StageMcpDeps = { services: world.services, season: { request: (p, i) => season.request(p, i) }, seasonId: "1", off: () => off, terms, ...(limit ? { limit } : {}) };
+  const stage: StageMcpDeps = { services: world.services, season: { request: (p, i) => season.request(p, i) }, seasonId: "1", off: () => off, terms, ...(limit ? { limit } : {}), ...(router ? { router } : {}) };
   return { ...world, handler: createAgonNativeMcpHandler(access, undefined, stage), seasonCalls };
 }
 
@@ -148,4 +148,49 @@ test("an agent cannot hire until the account owner accepts the wallet terms in t
   assert.equal(error.code, "terms_required");
   assert.match(error.message, /browser/);
   assert.equal(await services.findWallet(`op:${ALICE}`), null, "no agent wallet was created");
+});
+
+const ROUTED = {
+  source: "circle" as const, reference: "circle:https://analyst.example/ratings", name: "Analyst ratings", provider: "LoneStarOracle", category: "FINANCIAL_ANALYSIS", description: "Analyst ratings",
+  url: "https://analyst.example/ratings", method: "GET" as const, inputSchema: null, price: 10_000n, payTo: null, network: "arc" as const, rating: { tier: "unrated" as const, score: null },
+  latencyMs: null, tags: [], fee: 150n, total: 10_150n, reason: "Not rated by Agon, from LoneStarOracle on Circle",
+};
+function mcpRouter(calls: string[]) {
+  return {
+    route: async (_o: string, need: string, opts?: { quoteLead?: boolean }) => { calls.push(`route:${need}:${opts?.quoteLead}`); return { kind: "pick" as const, routeId: "r1", intent: { kind: "market_data" as const, query: need, values: {} }, pick: ROUTED, alternatives: [], sources: [{ id: "agon", status: "ok" as const }] }; },
+    quote: async (_o: string, routeId: string, reference: string) => { calls.push(`quote:${routeId}:${reference}`); return { ok: true as const, step: "confirm_code" as const, jobId: "00000000-0000-4000-8000-000000000001", amount: 10_000n, fee: 150n, total: 10_150n, providerLabel: "Analyst ratings", network: "Arc", testnet: false, expiresAt: new Date(Date.now() + 60_000), code: "4242", input: { symbol: "AAPL" }, source: "circle" as const, reason: ROUTED.reason }; },
+    confirm: async (_o: string, code: string) => { calls.push(`confirm:${code}`); return { ok: true as const, jobId: "00000000-0000-4000-8000-000000000001", amount: 10_000n, txHash: null, result: { price: 1 } }; },
+  } as unknown as NonNullable<StageMcpDeps["router"]>;
+}
+
+test("find_service with a need returns Agon's pick and how to hire it, without quoting", async () => {
+  const calls: string[] = [];
+  const { handler } = setup(false, undefined, true, mcpRouter(calls));
+  const { value } = await payload(await handler.fetch(rpc(1, "find_service", { need: "analyst ratings for AAPL" }), auth(["agon:read"])));
+  assert.equal((value.pick as { reference: string; total: string }).reference, ROUTED.reference);
+  assert.equal((value.pick as { total: string }).total, "0.01015");
+  assert.equal(value.routeId, "r1");
+  assert.match(String(value.howToHire), /hire_service with routeId and reference/);
+  assert.deepEqual(calls, ["route:analyst ratings for AAPL:false"]);
+});
+
+test("hire_service quotes a routed pick and confirm_hire confirms through the router", async () => {
+  const calls: string[] = [];
+  const { handler } = setup(false, undefined, true, mcpRouter(calls));
+  const q = await payload(await handler.fetch(rpc(1, "hire_service", { routeId: "r1", reference: ROUTED.reference }), auth(["agon:read"])));
+  assert.deepEqual([q.value.ok, q.value.total, q.value.code], [true, "0.01015", "4242"]);
+  const c = await payload(await handler.fetch(rpc(2, "confirm_hire", { jobId: "00000000-0000-4000-8000-000000000001", code: "4242" }), auth(["wallet:execute"])));
+  assert.equal(c.value.ok, true);
+  assert.deepEqual(calls, [`quote:r1:${ROUTED.reference}`, "confirm:4242"]);
+});
+
+test("final I5 and C2: find_service with a need is rate limited, and confirm_hire returns the routed answer", async () => {
+  const calls: string[] = [];
+  const limited = setup(false, () => false, true, mcpRouter(calls));
+  const refused = await payload(await limited.handler.fetch(rpc(1, "find_service", { need: "analyst ratings for AAPL" }), auth(["agon:read"])));
+  assert.equal((refused.value.error as { code: string }).code, "rate_limited");
+  assert.deepEqual(calls, []);
+  const { handler } = setup(false, undefined, true, mcpRouter(calls));
+  const done = await payload(await handler.fetch(rpc(2, "confirm_hire", { jobId: "00000000-0000-4000-8000-000000000001", code: "4242" }), auth(["agon:read", "wallet:execute"])));
+  assert.deepEqual(done.value.result, { price: 1 });
 });

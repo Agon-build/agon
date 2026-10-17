@@ -112,8 +112,8 @@ export class MemoryPaymentsStore implements PaymentsStore {
   async listJobTree(rootId: string) {
     return [...this.jobs.values()].filter((j) => j.rootId === rootId).sort((a, b) => a.depth - b.depth);
   }
-  async listStuckJobs(state: JobState, updatedBefore: Date) {
-    return [...this.jobs.values()].filter((j) => j.state === state && j.updatedAt < updatedBefore);
+  async listStuckJobs(state: JobState, updatedBefore: Date, network?: string) {
+    return [...this.jobs.values()].filter((j) => j.state === state && j.updatedAt < updatedBefore && (!network || j.network === network));
   }
   async listFailedJobs(providerRef: string, updatedAfter: Date, updatedBefore: Date) {
     return [...this.jobs.values()].filter((j) => j.state === "failed" && j.providerRef === providerRef && j.parentId === null && j.updatedAt >= updatedAfter && j.updatedAt < updatedBefore);
@@ -144,6 +144,9 @@ export class MemoryPaymentsStore implements PaymentsStore {
     this.payments.set(p.idempotencyKey, prev
       ? { ...prev, status: p.status, txHash: p.txHash ?? prev.txHash, detail: p.detail ?? prev.detail, authNonce: prev.authNonce ?? p.authNonce, authValidBefore: prev.authValidBefore ?? p.authValidBefore, updatedAt: new Date() }
       : { ...p });
+  }
+  async listPendingPayments(kind: JobPayment["kind"], updatedBefore: Date, network?: string) {
+    return [...this.payments.values()].filter((p) => p.kind === kind && p.status === "pending" && p.updatedAt < updatedBefore && (!network || p.network === network));
   }
   async listJobPayments(rootId: string) {
     const ids = new Set([...this.jobs.values()].filter((j) => j.rootId === rootId).map((j) => j.jobId));

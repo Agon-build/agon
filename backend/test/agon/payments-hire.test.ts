@@ -18,8 +18,21 @@ const LEAD = `0x${"c".repeat(40)}` as Address;
 function world(opts: { price?: bigint } = {}) {
   const store = new MemoryPaymentsStore();
   const settler = fakeSettler();
-  const state = { price: opts.price ?? 300_000n, payTo: LEAD, fail: false, refundBody: false, free: false };
+  const state = { price: opts.price ?? 300_000n, payTo: LEAD, fail: false, refundBody: false, free: false, transferFails: 0 };
+  const transfers: { destinationAddress: string; amountBaseUnits: bigint; idempotencyKey: string }[] = [];
+  const seen: { method: string; url: string; body: string }[] = [];
   const app = new Hono<{ Variables: { x402: X402Paid } }>();
+  app.get(
+    "/agon/data/ticker",
+    async (c, next) => { seen.push({ method: c.req.method, url: c.req.url, body: await c.req.text() }); return next(); },
+    exactPayment({ network, payTo: LEAD, price: async () => 10_000n, settle: settler.settle, claimNonce: (n, p, nonce) => store.claimSellerNonce(n, p, nonce), description: "Ticker" }),
+    async (c) => c.json({ ticker: c.req.query("ticker"), price: 1.23 }),
+  );
+  app.get(
+    "/agon/data/text",
+    exactPayment({ network, payTo: LEAD, price: async () => 10_000n, settle: settler.settle, claimNonce: (n, p, nonce) => store.claimSellerNonce(n, p, nonce), description: "Text" }),
+    async (c) => (c.req.query("empty") ? c.body(null, 200) : c.text("Apple: Buy, target 250")),
+  );
   app.post(
     "/agon/agents/lead/forecast",
     async (c, next) => (state.free ? c.json({ ok: true, probabilityBps: 5000 }) : next()),
@@ -38,11 +51,15 @@ function world(opts: { price?: bigint } = {}) {
       // The budget wallet "is" the local buyer key so signatures verify at the seller.
       createWallet: async () => ({ walletId: "w-budget", address: buyer.address.toLowerCase() as Address }),
       seedTestnet: async () => ({}),
-      transfer: async () => ({ id: "t", state: "INITIATED" }),
+      transfer: async (input) => {
+        transfers.push(input);
+        if (state.transferFails > 0) { state.transferFails -= 1; throw new Error("circle busy"); }
+        return { id: `t-${transfers.length}`, state: "INITIATED" };
+      },
     },
   };
   const req = { ownerRef: "wa:abc", providerUrl: "http://api.test/agon/agents/lead/forecast", providerRef: "agent:lead", providerLabel: "Agon Lead Agent", body: { question: "BTC above 82k on Friday?" } };
-  return { store, settler, state, deps, req };
+  return { store, settler, state, deps, req, transfers, seen };
 }
 
 test("quote under the limit returns a code; confirming pays once and delivers", async () => {
@@ -252,4 +269,151 @@ test("a provider that answers without charging delivers, releases the reservatio
   assert.equal((await store.getJob(q.quote.jobId))!.state, "delivered");
   assert.equal([...store.spends.values()][0]!.state, "failed", "the daily limit is not charged");
   assert.notEqual((await store.listJobPayments(q.quote.jobId))[0]?.status, "settled", "no settled payment is recorded");
+});
+
+const FEE_TO = `0x${"fe".repeat(20)}` as Address;
+
+test("a GET provider gets the input as a query string and no body", async () => {
+  const { deps, seen } = world();
+  const q = await quoteHire(deps, { ownerRef: "wa:abc", providerUrl: "http://api.test/agon/data/ticker", providerRef: "circle:ticker", providerLabel: "Ticker", method: "GET", body: { ticker: "ARC" } });
+  assert.ok(q.ok && q.quote.step === "confirm_code", show(q));
+  const out = await confirmHire(deps, { ownerRef: "wa:abc", code: q.quote.code });
+  assert.ok(out.ok, show(out));
+  assert.deepEqual(out.result, { ticker: "ARC", price: 1.23 });
+  assert.ok(seen.every((r) => r.method === "GET" && r.body === "" && r.url.includes("ticker=ARC")), JSON.stringify(seen));
+});
+
+test("the quote shows price, fee and total, and limits apply to the total", async () => {
+  const { deps, req, store } = world();
+  const q = await quoteHire(deps, { ...req, feeBps: 150, feeAddress: FEE_TO });
+  assert.ok(q.ok);
+  assert.deepEqual([q.quote.amount, q.quote.fee, q.quote.total], [300_000n, 4_500n, 304_500n]);
+  await store.updateBudgetWallet("wa:abc", "arc-testnet", { perHireCap: 302_000n });
+  const over = await quoteHire(deps, { ...req, feeBps: 150, feeAddress: FEE_TO });
+  assert.ok(over.ok && over.quote.step === "approval_link", "the fee pushes this hire over the per-hire limit");
+});
+
+test("the fee is paid only after delivery, as its own payment", async () => {
+  const { deps, req, store, transfers } = world();
+  const q = await quoteHire(deps, { ...req, feeBps: 150, feeAddress: FEE_TO });
+  assert.ok(q.ok && q.quote.step === "confirm_code");
+  const out = await confirmHire(deps, { ownerRef: "wa:abc", code: q.quote.code });
+  assert.ok(out.ok, show(out));
+  const payments = await store.listJobPayments(q.quote.jobId);
+  const fee = payments.find((p) => p.kind === "fee")!;
+  assert.deepEqual([fee.payee, fee.amount, fee.status], [FEE_TO, 4_500n, "settled"]);
+  assert.equal(transfers.length, 1);
+  assert.equal(transfers[0]!.amountBaseUnits, 4_500n);
+});
+
+test("a provider that fails after payment is charged no fee", async () => {
+  const { deps, req, state, store, transfers } = world();
+  const q = await quoteHire(deps, { ...req, feeBps: 150, feeAddress: FEE_TO });
+  assert.ok(q.ok && q.quote.step === "confirm_code");
+  state.fail = true;
+  const out = await confirmHire(deps, { ownerRef: "wa:abc", code: q.quote.code });
+  assert.ok(!out.ok && out.code === "delivery_failed");
+  assert.equal((await store.listJobPayments(q.quote.jobId)).some((p) => p.kind === "fee"), false);
+  assert.equal(transfers.length, 0);
+});
+
+test("a failed fee transfer is retried by reconcile and never undoes the delivery", async () => {
+  const { deps, req, state, store } = world();
+  state.transferFails = 1;
+  const q = await quoteHire(deps, { ...req, feeBps: 150, feeAddress: FEE_TO });
+  assert.ok(q.ok && q.quote.step === "confirm_code");
+  const out = await confirmHire(deps, { ownerRef: "wa:abc", code: q.quote.code });
+  assert.ok(out.ok, show(out));
+  assert.equal((await store.getJob(q.quote.jobId))!.state, "delivered");
+  assert.equal((await store.listJobPayments(q.quote.jobId)).find((p) => p.kind === "fee")!.status, "pending");
+  const later = { ...deps, now: () => new Date(Date.now() + 11 * 60_000) };
+  await reconcileStuckHires(later);
+  assert.equal((await store.listJobPayments(q.quote.jobId)).find((p) => p.kind === "fee")!.status, "settled");
+});
+
+test("final C1: a runtime's reconcile never touches jobs or fees from the other network", async () => {
+  const { deps, req, store, state } = world();
+  state.transferFails = 1;
+  const q = await quoteHire(deps, { ...req, feeBps: 150, feeAddress: FEE_TO });
+  assert.ok(q.ok && q.quote.step === "confirm_code");
+  await confirmHire(deps, { ownerRef: "wa:abc", code: q.quote.code });
+  // A stuck testnet hire, as the mainnet runtime would see it.
+  const stuck = await quoteHire(deps, req);
+  assert.ok(stuck.ok);
+  await store.updateJob(stuck.quote.jobId, { state: "paying" });
+  const mainnet = { ...deps, network: agonNetwork("arc"), authorizationUsed: async () => false, now: () => new Date(Date.now() + 60 * 60_000) };
+  await reconcileStuckHires(mainnet);
+  assert.equal((await store.getJob(stuck.quote.jobId))!.state, "paying", "the testnet job is left for the testnet runtime");
+  assert.equal((await store.listJobPayments(q.quote.jobId)).find((p) => p.kind === "fee")!.status, "pending", "the testnet fee is not retried from mainnet");
+});
+
+test("final I2: a fee is settled only when its transfer confirms, and a failed transfer is recorded as failed", async () => {
+  const { deps, req, store } = world();
+  const states: Record<string, { state: string; txHash?: string; errorReason?: string }> = {};
+  const withState = { ...deps, feeTxState: async (id: string) => states[id] ?? { state: "QUEUED" }, feeWaitMs: 0 };
+  const q = await quoteHire(withState, { ...req, feeBps: 150, feeAddress: FEE_TO });
+  assert.ok(q.ok && q.quote.step === "confirm_code");
+  await confirmHire(withState, { ownerRef: "wa:abc", code: q.quote.code });
+  const fee = () => store.listJobPayments(q.quote.jobId).then((ps) => ps.find((p) => p.kind === "fee")!);
+  assert.equal((await fee()).status, "pending", "accepted by Circle is not paid");
+  states["t-1"] = { state: "COMPLETE", txHash: `0x${"cd".repeat(32)}` };
+  await reconcileStuckHires({ ...withState, now: () => new Date(Date.now() + 11 * 60_000) });
+  assert.deepEqual([(await fee()).status, (await fee()).txHash], ["settled", `0x${"cd".repeat(32)}`]);
+
+  const w2 = world();
+  const states2: Record<string, { state: string; errorReason?: string }> = { "t-1": { state: "FAILED", errorReason: "INSUFFICIENT_NATIVE_TOKEN" } };
+  const d2 = { ...w2.deps, feeTxState: async (id: string) => states2[id] ?? { state: "QUEUED" }, feeWaitMs: 0 };
+  const q2 = await quoteHire(d2, { ...w2.req, feeBps: 150, feeAddress: FEE_TO });
+  assert.ok(q2.ok && q2.quote.step === "confirm_code");
+  const out2 = await confirmHire(d2, { ownerRef: "wa:abc", code: q2.quote.code });
+  assert.ok(out2.ok, "the delivered answer stands");
+  const fee2 = (await w2.store.listJobPayments(q2.quote.jobId)).find((p) => p.kind === "fee")!;
+  assert.equal(fee2.status, "failed");
+  assert.match(fee2.detail ?? "", /INSUFFICIENT_NATIVE_TOKEN/);
+});
+
+test("final I7: a fee that keeps failing moves to the back of the queue and is given up after a day", async () => {
+  const { deps, req, store, state, transfers } = world();
+  state.transferFails = 99;
+  const q = await quoteHire(deps, { ...req, feeBps: 150, feeAddress: FEE_TO });
+  assert.ok(q.ok && q.quote.step === "confirm_code");
+  await confirmHire(deps, { ownerRef: "wa:abc", code: q.quote.code });
+  const fee = () => store.listJobPayments(q.quote.jobId).then((ps) => ps.find((p) => p.kind === "fee")!);
+  // Reconcile looks at fees untouched for 10 minutes; a failed retry is stamped, so it waits its turn again.
+  store.payments.get(`fee:${q.quote.jobId}`)!.updatedAt = new Date(Date.now() - 20 * 60_000);
+  const tries = transfers.length;
+  await reconcileStuckHires(deps);
+  assert.equal(transfers.length, tries + 1, "retried once");
+  assert.equal((await fee()).status, "pending");
+  await reconcileStuckHires(deps);
+  assert.equal(transfers.length, tries + 1, "a fee retried a moment ago goes to the back and is not picked again at once");
+  await reconcileStuckHires({ ...deps, now: () => new Date(Date.now() + 25 * 60 * 60_000) });
+  assert.equal((await fee()).status, "failed", "given up after a day");
+});
+
+test("final I9: a text answer is kept, and an empty answer is not delivered and carries no fee", async () => {
+  const { deps, store, transfers } = world();
+  const ask = (q: string) => quoteHire(deps, { ownerRef: "wa:abc", providerUrl: `http://api.test/agon/data/text${q}`, providerRef: "circle:text", providerLabel: "Text", method: "GET", body: {}, feeBps: 150, feeAddress: FEE_TO });
+  const q1 = await ask("");
+  assert.ok(q1.ok && q1.quote.step === "confirm_code", show(q1));
+  const out1 = await confirmHire(deps, { ownerRef: "wa:abc", code: q1.quote.code });
+  assert.ok(out1.ok, show(out1));
+  assert.deepEqual(out1.result, { contentType: "text/plain;charset=UTF-8", text: "Apple: Buy, target 250" });
+  assert.equal(transfers.length, 1, "the fee for a delivered text answer");
+  const q2 = await ask("?empty=1");
+  assert.ok(q2.ok && q2.quote.step === "confirm_code", show(q2));
+  const out2 = await confirmHire(deps, { ownerRef: "wa:abc", code: q2.quote.code });
+  assert.ok(!out2.ok && out2.code === "delivery_failed", show(out2));
+  assert.equal((await store.getJob(q2.quote.jobId))!.state, "failed");
+  assert.equal(transfers.length, 1, "no fee for an empty answer");
+});
+
+test("minor: changed terms or a short wallet are refused before any job or code is made", async () => {
+  const { deps, req, store } = world();
+  const changed = await quoteHire(deps, { ...req, expect: { amount: 200_000n, payTo: null } });
+  assert.deepEqual(changed, { ok: false, code: "terms_changed" });
+  const short = await quoteHire(deps, { ...req, balanceOf: async () => 100_000n, reserve: 5_000n });
+  assert.ok(!short.ok && short.code === "insufficient_balance", show(short));
+  assert.equal((short as { amount: bigint }).amount, 300_000n);
+  assert.equal(store.jobs.size, 0, "no job was written");
 });

@@ -12,16 +12,32 @@ export type LiveView = {
   jobId: string; rootId: string; question: string | null; phase: LivePhase; state: string; network: string; startedAt: string | null;
   events: StageEvent[]; haggle: BargainStep[]; answer: StageAnswer | null; failure: string | null; refunded: boolean; receipt: ReceiptNode | null; receiptUrl: string;
   preview?: boolean;
+  /** What a routed service returned, for hires of anything other than the Lead agent. */
+  result?: unknown;
 };
 export type StageConfig = { network: string; testnet: boolean; leadPrice: string | null; leadPriceAtomic: string | null; siteUrl: string; preview?: boolean };
 export type StageWallet = {
   networkId: string; network: string; testnet: boolean; explorer: string; address: string; balance: string | null; balanceAtomic: string | null;
   perHire: string; daily: string; spentToday: string; leftToday: string; frozen: boolean; preview?: boolean;
 };
+/// Fields every quote can carry: the routing fee and total, and for a routed
+/// hire the exact input sent and why Agon picked it.
+type QuoteExtras = { fee?: string; total?: string; input?: Record<string, unknown>; source?: "agon" | "circle"; reason?: string };
 export type AskResponse =
-  | { ok: true; step: "confirm_code"; jobId: string; amount: string; amountAtomic: string; providerLabel: string; network: string; testnet: boolean; expiresAt: string; code: string }
-  | { ok: true; step: "approval_link"; jobId: string; amount: string; amountAtomic: string; providerLabel: string; network: string; testnet: boolean; expiresAt: string; approvalUrl: string }
-  | { ok: false; code: string; detail?: string; amount?: string; depositAddress?: string };
+  | ({ ok: true; step: "confirm_code"; jobId: string; amount: string; amountAtomic?: string; providerLabel: string; network: string; testnet: boolean; expiresAt: string; code: string } & QuoteExtras)
+  | ({ ok: true; step: "approval_link"; jobId: string; amount: string; amountAtomic?: string; providerLabel: string; network: string; testnet: boolean; expiresAt: string; approvalUrl: string } & QuoteExtras)
+  | { ok: false; code: string; detail?: string; amount?: string; depositAddress?: string; question?: string; missing?: string[]; network?: "arc-testnet" | "arc" };
+export type RoutePick = {
+  source: "agon" | "circle"; reference: string; name: string; provider: string; category: string; description: string; method: "GET" | "POST";
+  network: "arc-testnet" | "arc"; rating: { tier: "scored" | "verified" | "listed" | "unrated"; score: number | null }; reason: string;
+  price: string; fee: string; total: string;
+};
+export type RouteSourceStatus = { id: string; status: "ok" | "unavailable" };
+export type RouteResponse =
+  | ({ kind: "lead" } & Partial<AskResponse>)
+  | { kind: "pick"; routeId: string; pick: RoutePick; alternatives: RoutePick[]; sources: RouteSourceStatus[] }
+  | { kind: "none"; sources: RouteSourceStatus[] }
+  | { kind?: undefined; ok: false; code: string };
 export type ConfirmResponse = { ok: true; jobId: string; amount: string; txHash: string | null } | { ok: false; code: string; jobId?: string; detail?: string };
 export type HistoryItem = { jobId: string; question: string | null; state: string; price: string; createdAt: string; receiptUrl: string };
 export type ApprovalView = {

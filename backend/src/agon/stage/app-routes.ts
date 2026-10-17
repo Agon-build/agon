@@ -8,10 +8,14 @@ import { CUSTODY_TERMS, CUSTODY_TERMS_VERSION, type CustodyTerms } from "./custo
 import { createRateLimiter } from "./rate-limit.ts";
 import type { AskResult, StageServices, WalletView } from "./services.ts";
 import { operatorOwnerRef } from "./settings.ts";
+import type { Ranked } from "../routing/rank.ts";
+import type { RouteQuote, Router } from "../routing/router.ts";
 
 const askBody = z.object({ question: z.string().max(2000), maxPrice: z.string().max(32).optional() });
 const confirmBody = z.object({ code: z.string().max(16) });
 const termsBody = z.object({ version: z.string().max(64) });
+const routeBody = z.object({ request: z.string().trim().min(8).max(600) });
+const routeQuoteBody = z.object({ routeId: z.string().max(64), reference: z.string().max(600), input: z.record(z.unknown()).optional() });
 const limitsBody = z.object({ perHire: z.string().max(32).optional(), daily: z.string().max(32).optional() });
 const withdrawBody = z.object({ to: z.string().regex(/^0x[0-9a-fA-F]{40}$/), amount: z.string().max(32) });
 
@@ -25,6 +29,29 @@ export function walletJson(w: WalletView) {
   };
 }
 
+export function rankedJson(r: Ranked) {
+  return {
+    source: r.source, reference: r.reference, name: r.name, provider: r.provider, category: r.category, description: r.description,
+    method: r.method, network: r.network, rating: r.rating, reason: r.reason,
+    price: formatUsdc(r.price), fee: formatUsdc(r.fee), total: formatUsdc(r.total),
+  };
+}
+
+export function routeQuoteJson(q: RouteQuote) {
+  if (!q.ok) {
+    const out: Record<string, unknown> = { ok: false, code: q.code };
+    if ("question" in q) Object.assign(out, { question: q.question, missing: q.missing });
+    if ("depositAddress" in q) Object.assign(out, { amount: formatUsdc(q.amount), depositAddress: q.depositAddress, network: q.network });
+    // Raw seller and network errors stay in the server log, never in the reply.
+    return out;
+  }
+  return {
+    ok: true, step: q.step, jobId: q.jobId, amount: formatUsdc(q.amount), fee: formatUsdc(q.fee), total: formatUsdc(q.total), providerLabel: q.providerLabel,
+    network: q.network, testnet: q.testnet, expiresAt: q.expiresAt.toISOString(), input: q.input, source: q.source, reason: q.reason,
+    ...(q.code ? { code: q.code } : {}), ...(q.approvalUrl ? { approvalUrl: q.approvalUrl } : {}),
+  };
+}
+
 export function askJson(a: AskResult) {
   if (!a.ok) {
     return {
@@ -32,7 +59,7 @@ export function askJson(a: AskResult) {
       ...(a.detail ? { detail: a.detail } : {}), ...(a.amount !== undefined ? { amount: formatUsdc(a.amount) } : {}), ...(a.depositAddress ? { depositAddress: a.depositAddress } : {}),
     };
   }
-  const base = { ok: true as const, jobId: a.jobId, amount: formatUsdc(a.amount), amountAtomic: a.amount.toString(), providerLabel: a.providerLabel, network: a.network, testnet: a.testnet, expiresAt: a.expiresAt.toISOString() };
+  const base = { ok: true as const, jobId: a.jobId, amount: formatUsdc(a.amount), amountAtomic: a.amount.toString(), fee: formatUsdc(a.fee), total: formatUsdc(a.total), providerLabel: a.providerLabel, network: a.network, testnet: a.testnet, expiresAt: a.expiresAt.toISOString() };
   return a.step === "confirm_code" ? { ...base, step: a.step, code: a.code } : { ...base, step: a.step, approvalUrl: a.approvalUrl };
 }
 
@@ -46,6 +73,10 @@ export function createAppRoutes(deps: {
   off: () => boolean;
   askLimit?: (key: string) => boolean;
   terms: CustodyTerms;
+  /** The aggregator; when set, confirm goes through it so each job confirms on its own network. */
+  router?: Router;
+  /** The Arc mainnet wallet services for outside routes (?network=arc). */
+  outside?: StageServices;
 }): Hono {
   const app = new Hono<{ Variables: { address: string } }>();
   const askLimit = deps.askLimit ?? createRateLimiter({ limit: 10, windowMs: 60_000 });
@@ -68,6 +99,9 @@ export function createAppRoutes(deps: {
   app.use("/hires/*", deps.requireAuth);
   app.use("/history", deps.requireAuth);
   app.use("/terms", deps.requireAuth);
+  app.use("/route", deps.requireAuth);
+  app.use("/route/*", deps.requireAuth);
+  const servicesFor = (c: { req: { query(name: string): string | undefined } }) => (c.req.query("network") === "arc" ? deps.outside ?? null : deps.services);
 
   app.get("/terms", async (c) => c.json({ version: CUSTODY_TERMS_VERSION, lines: CUSTODY_TERMS, accepted: await deps.terms.isAccepted(owner(c)) }));
 
@@ -79,7 +113,9 @@ export function createAppRoutes(deps: {
 
   app.get("/wallet", async (c) => {
     // Reading never creates a wallet; the first ask does.
-    const wallet = await deps.services.findWallet(owner(c));
+    const services = servicesFor(c);
+    if (!services) return c.json({ error: "outside_off" }, 404);
+    const wallet = await services.findWallet(owner(c));
     return wallet ? c.json(walletJson(wallet)) : c.json({ error: "no_wallet" }, 404);
   });
 
@@ -95,14 +131,35 @@ export function createAppRoutes(deps: {
     return c.json(askJson(await deps.services.ask(owner(c), { question: body.data.question, ...(maxPrice !== undefined ? { maxPrice } : {}) })));
   });
 
+  app.post("/route", async (c) => {
+    if (deps.off() || !deps.router) return c.json({ error: "web_off" }, 503);
+    const body = routeBody.safeParse(await readJson(c));
+    if (!body.success) return c.json({ error: "invalid_body" }, 400);
+    if (!askLimit(c.get("address"))) return c.json({ error: "rate_limited" }, 429);
+    if (!(await deps.terms.isAccepted(owner(c)))) return c.json({ ok: false, code: "terms_required" });
+    const out = await deps.router.route(owner(c), body.data.request);
+    if (out.kind === "lead") return c.json(out.ask ? { kind: "lead", ...askJson(out.ask) } : { kind: "lead" });
+    if (out.kind === "none") return c.json({ kind: "none", sources: out.sources });
+    return c.json({ kind: "pick", routeId: out.routeId, pick: rankedJson(out.pick), alternatives: out.alternatives.map(rankedJson), sources: out.sources });
+  });
+
+  app.post("/route/quote", async (c) => {
+    if (deps.off() || !deps.router) return c.json({ error: "web_off" }, 503);
+    const body = routeQuoteBody.safeParse(await readJson(c));
+    if (!body.success) return c.json({ error: "invalid_body" }, 400);
+    if (!askLimit(c.get("address"))) return c.json({ error: "rate_limited" }, 429);
+    if (!(await deps.terms.isAccepted(owner(c)))) return c.json({ ok: false, code: "terms_required" });
+    return c.json(routeQuoteJson(await deps.router.quote(owner(c), body.data.routeId, body.data.reference, body.data.input)));
+  });
+
   app.post("/hires/:jobId/confirm", async (c) => {
     if (deps.off()) return c.json({ error: "web_off" }, 503);
     const body = confirmBody.safeParse(await readJson(c));
     if (!body.success) return c.json({ error: "invalid_body" }, 400);
-    const out = await deps.services.confirm(owner(c), body.data.code.trim());
+    const out = deps.router ? await deps.router.confirm(owner(c), body.data.code.trim()) : await deps.services.confirm(owner(c), body.data.code.trim());
     return c.json(
       out.ok
-        ? { ok: true, jobId: out.jobId, amount: formatUsdc(out.amount), txHash: out.txHash }
+        ? { ok: true, jobId: out.jobId, amount: formatUsdc(out.amount), txHash: out.txHash, result: out.result ?? null }
         : { ok: false, code: out.code, ...(out.jobId ? { jobId: out.jobId } : {}), ...(out.detail ? { detail: out.detail } : {}) },
     );
   });
@@ -124,13 +181,20 @@ export function createAppRoutes(deps: {
     const perHireCap = body.data.perHire === undefined ? undefined : parseUsdc(body.data.perHire);
     const dailyCap = body.data.daily === undefined ? undefined : parseUsdc(body.data.daily);
     if (perHireCap === null || dailyCap === null) return c.json({ error: "invalid_body" }, 400);
-    return c.json(await deps.services.lowerLimits(owner(c), { ...(perHireCap !== undefined ? { perHireCap } : {}), ...(dailyCap !== undefined ? { dailyCap } : {}) }));
+    const services = servicesFor(c);
+    if (!services) return c.json({ error: "outside_off" }, 404);
+    return c.json(await services.lowerLimits(owner(c), { ...(perHireCap !== undefined ? { perHireCap } : {}), ...(dailyCap !== undefined ? { dailyCap } : {}) }));
   });
 
-  app.post("/wallet/freeze", async (c) => c.json({ frozen: await deps.services.freeze(owner(c)) }));
+  app.post("/wallet/freeze", async (c) => {
+    const services = servicesFor(c);
+    return services ? c.json({ frozen: await services.freeze(owner(c)) }) : c.json({ error: "outside_off" }, 404);
+  });
 
   app.post("/wallet/unfreeze", async (c) => {
-    const link = await deps.services.requestUnfreeze(owner(c));
+    const services = servicesFor(c);
+    if (!services) return c.json({ error: "outside_off" }, 404);
+    const link = await services.requestUnfreeze(owner(c));
     return link ? c.json({ approvalUrl: link.approvalUrl, expiresAt: link.expiresAt.toISOString() }) : c.json({ error: "no_wallet" }, 404);
   });
 
@@ -138,7 +202,9 @@ export function createAppRoutes(deps: {
     const body = withdrawBody.safeParse(await readJson(c));
     const amount = body.success ? parseUsdc(body.data.amount) : null;
     if (!body.success || amount === null) return c.json({ error: "invalid_body" }, 400);
-    const out = await deps.services.requestWithdraw(owner(c), body.data.to.toLowerCase() as Address, amount);
+    const services = servicesFor(c);
+    if (!services) return c.json({ error: "outside_off" }, 404);
+    const out = await services.requestWithdraw(owner(c), body.data.to.toLowerCase() as Address, amount);
     return c.json(out.ok ? { ok: true, approvalUrl: out.approvalUrl, expiresAt: out.expiresAt.toISOString() } : out);
   });
 

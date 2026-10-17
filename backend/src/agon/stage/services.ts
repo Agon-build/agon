@@ -1,6 +1,6 @@
 import type { Address } from "viem";
 
-import type { AgonNetwork, AgonNetworkId } from "../network.ts";
+import { agonNetwork, type AgonNetwork, type AgonNetworkId } from "../network.ts";
 import { LEAD_PROVIDER_REF, type LiveEvent } from "../lead-agent/lead-agent.ts";
 import { formatUsdc, type BargainStep } from "../payments/bargain.ts";
 import { budgetWalletRef } from "../payments/budget-wallets.ts";
@@ -15,10 +15,10 @@ export type WalletView = {
   networkId: AgonNetworkId; network: string; testnet: boolean; explorer: string; address: Address; balance: bigint | null;
   perHireCap: bigint; dailyCap: bigint; spentToday: bigint; leftToday: bigint; frozen: boolean;
 };
-export type AskRefusal = "invalid_question" | "payments_off" | "frozen" | "over_your_max" | "insufficient_balance" | "provider_unreachable" | "no_matching_option" | "provider_free" | "busy";
+export type AskRefusal = "invalid_question" | "payments_off" | "frozen" | "over_your_max" | "insufficient_balance" | "provider_unreachable" | "no_matching_option" | "provider_free" | "busy" | "terms_changed";
 export type AskResult =
-  | { ok: true; step: "confirm_code"; jobId: string; amount: bigint; providerLabel: string; network: string; testnet: boolean; expiresAt: Date; code: string }
-  | { ok: true; step: "approval_link"; jobId: string; amount: bigint; providerLabel: string; network: string; testnet: boolean; expiresAt: Date; approvalUrl: string }
+  | { ok: true; step: "confirm_code"; jobId: string; amount: bigint; fee: bigint; total: bigint; providerLabel: string; network: string; testnet: boolean; expiresAt: Date; code: string }
+  | { ok: true; step: "approval_link"; jobId: string; amount: bigint; fee: bigint; total: bigint; providerLabel: string; network: string; testnet: boolean; expiresAt: Date; approvalUrl: string }
   | { ok: false; code: AskRefusal; detail?: string; amount?: bigint; depositAddress?: Address };
 export type LivePhase = "quoted" | "paying" | "working" | "answered" | "refunded" | "failed";
 export type StageAnswer = {
@@ -28,6 +28,8 @@ export type StageAnswer = {
 export type LiveView = {
   jobId: string; rootId: string; question: string | null; phase: LivePhase; state: JobState; network: string; startedAt: string | null;
   events: LiveEvent[]; haggle: BargainStep[]; answer: StageAnswer | null; failure: string | null; refunded: boolean; receipt: ReceiptNode | null; receiptUrl: string;
+  /** What a routed service returned, for hires of anything other than the Lead agent. */
+  result: unknown;
 };
 export type HistoryItem = { jobId: string; question: string | null; state: JobState; price: string; createdAt: string; receiptUrl: string };
 export type ApprovalLink = { approvalUrl: string; expiresAt: Date };
@@ -66,6 +68,8 @@ export type StageServiceDeps = {
   now: () => Date;
   /** Gate for creating a new budget wallet (each is a Circle wallet); unset means always allowed. */
   newWalletAllowed?: () => boolean;
+  /** Agon routing fee on Lead hires: rate and where it goes. */
+  fee?: { bps: number; address: Address | null };
 };
 
 export const LEAD_LABEL = "Agon Lead Agent";
@@ -115,6 +119,8 @@ function phaseOf(job: Job, result: StoredResult | null, events: LiveEvent[], ans
   if (job.state === "quoted") return "quoted";
   if (job.state === "refunded" || (result?.ok === false && result.refunded === true)) return "refunded";
   if (answer) return "answered";
+  // A routed service has no Lead answer: delivered means it answered.
+  if (job.state === "delivered" && job.providerRef !== LEAD_PROVIDER_REF) return "answered";
   if (job.state === "failed" || job.state === "delivered") return "failed";
   return events.length > 0 ? "working" : "paying";
 }
@@ -161,14 +167,18 @@ export function createStageServices(deps: StageServiceDeps): StageServices {
       if (question.length < 8 || question.length > 300) return { ok: false, code: "invalid_question" };
       // Each new owner costs a Circle wallet, so new wallets pass a global gate.
       if (deps.newWalletAllowed && !(await deps.store.getBudgetWallet(ownerRef, deps.network.id)) && !deps.newWalletAllowed()) return { ok: false, code: "busy" };
-      const quoted = await deps.hire.quoteHire({ ownerRef, providerUrl: deps.hire.leadProviderUrl, providerRef: LEAD_PROVIDER_REF, providerLabel: LEAD_LABEL, body: { question } });
-      if (!quoted.ok) return { ok: false, code: quoted.code, ...(quoted.detail ? { detail: quoted.detail } : {}) };
+      const quoted = await deps.hire.quoteHire({ ownerRef, providerUrl: deps.hire.leadProviderUrl, providerRef: LEAD_PROVIDER_REF, providerLabel: LEAD_LABEL, body: { question }, feeBps: deps.fee?.bps ?? 0, feeAddress: deps.fee?.address ?? null });
+      if (!quoted.ok) {
+        if (quoted.code === "insufficient_balance") return { ok: false, code: quoted.code, amount: quoted.amount, depositAddress: quoted.depositAddress };
+        return { ok: false, code: quoted.code, ...(quoted.detail ? { detail: quoted.detail } : {}) };
+      }
       const q = quoted.quote;
-      if (input.maxPrice !== undefined && q.amount > input.maxPrice) return { ok: false, code: "over_your_max", amount: q.amount };
+      // The person's maximum covers what they pay in total, Agon's fee included.
+      if (input.maxPrice !== undefined && q.total > input.maxPrice) return { ok: false, code: "over_your_max", amount: q.total };
       const wallet = await deps.hire.wallets.ensure(ownerRef);
       const balance = await deps.balanceOf(wallet.address).catch(() => null);
-      if (balance !== null && balance < q.amount) return { ok: false, code: "insufficient_balance", amount: q.amount, depositAddress: wallet.address };
-      const base = { jobId: q.jobId, amount: q.amount, providerLabel: q.providerLabel, network: deps.network.label, testnet, expiresAt: q.expiresAt };
+      if (balance !== null && balance < q.total) return { ok: false, code: "insufficient_balance", amount: q.total, depositAddress: wallet.address };
+      const base = { jobId: q.jobId, amount: q.amount, fee: q.fee, total: q.total, providerLabel: q.providerLabel, network: deps.network.label, testnet, expiresAt: q.expiresAt };
       return q.step === "confirm_code" ? { ok: true, step: "confirm_code", ...base, code: q.code } : { ok: true, step: "approval_link", ...base, approvalUrl: approvalUrl(q.token) };
     },
 
@@ -192,10 +202,11 @@ export function createStageServices(deps: StageServiceDeps): StageServices {
       const phase = phaseOf(root, result, events, answer);
       const failure = phase === "failed" || phase === "refunded" ? String(result?.error ?? result?.code ?? "not_delivered") : null;
       return {
-        jobId: root.jobId, rootId: root.rootId, question: questionOf(root), phase, state: root.state, network: deps.network.label,
+        jobId: root.jobId, rootId: root.rootId, question: questionOf(root), phase, state: root.state, network: agonNetwork(root.network).label,
         startedAt: typeof result?.startedAt === "string" ? result.startedAt : (events[0]?.at ?? null),
         events, haggle: haggleOf(result), answer, failure, refunded: phase === "refunded",
         receipt: receiptTree(root.rootId, tree, payments), receiptUrl: receiptUrl(root.jobId),
+        result: root.providerRef !== LEAD_PROVIDER_REF && root.state === "delivered" ? (root.result ?? null) : null,
       };
     },
 

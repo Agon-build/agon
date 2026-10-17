@@ -17,11 +17,15 @@ const ASK: Record<string, string> = {
   network_unavailable: "Agon could not be reached. Check your connection.",
   busy: "Agon is busy setting up new wallets right now. Try again in a few minutes.",
   terms_required: "Accept the agent wallet terms to continue.",
+  no_match: "Nothing on Agon or Circle fits this yet. Try describing it differently.",
+  outside_off: "That service is on Circle and outside hires are switched off right now.",
+  terms_changed: "That service changed its price or payee just now. Nothing was charged; ask again.",
+  route_expired: "That choice expired. Ask again for a fresh pick.",
 };
 
 export function askRefusalText(code: string, amount?: string): string {
   if (code === "insufficient_balance") return `Your agent wallet needs ${amount ?? "more"} USDC for this hire.`;
-  if (code === "over_your_max") return `The lead agent charges ${amount ?? "more"} USDC, more than the maximum you set.`;
+  if (code === "over_your_max") return `This costs ${amount ?? "more"} USDC in total, more than the maximum you set.`;
   return ASK[code] ?? "Agon could not prepare this request. Try again in a moment.";
 }
 

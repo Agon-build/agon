@@ -1,4 +1,4 @@
-import type { AskResponse, LeaderboardResponse, LiveView, RatingCell, RatingsResponse, SeasonEntry, SeasonInfo, SeasonRoundSummary, StageConfig, StageEvent, StageWallet, ApprovalView } from "./stage-types.ts";
+import type { RouteResponse, AskResponse, LeaderboardResponse, LiveView, RatingCell, RatingsResponse, SeasonEntry, SeasonInfo, SeasonRoundSummary, StageConfig, StageEvent, StageWallet, ApprovalView } from "./stage-types.ts";
 
 /// Labelled preview data for design review (NEXT_PUBLIC_AGON_PREVIEW_FIXTURES=1).
 /// Every object carries preview: true and the UI shows PREVIEW DATA; none of it
@@ -113,3 +113,27 @@ export const previewApproval: ApprovalView = {
   rows: [{ label: "Service", value: "Agon Lead Agent" }, { label: "Price", value: "0.60 USDC" }, { label: "Question", value: QUESTION }, { label: "Network", value: "Arc Testnet" }],
   owner: "telegram",
 };
+
+const PREVIEW_PICK = {
+  source: "circle" as const, reference: "circle:https://analyst.lonestaroracle.xyz/ratings", name: "Analyst ratings and price target changes", provider: "LoneStarOracle",
+  category: "FINANCIAL_ANALYSIS", description: "Analyst ratings and price target upgrades and downgrades", method: "GET" as const, network: "arc" as const,
+  rating: { tier: "unrated" as const, score: null }, reason: "Not rated by Agon, from LoneStarOracle on Circle", price: "0.05", fee: "0.00075", total: "0.05075",
+};
+const PREVIEW_ALT = {
+  source: "agon" as const, reference: "5042002:0xf017:9", name: "Scout", provider: "Agon", category: "3", description: "A trade, watch or avoid verdict for any Polymarket market",
+  method: "POST" as const, network: "arc-testnet" as const, rating: { tier: "scored" as const, score: 82 }, reason: "Verified on Agon, score 82", price: "0.10", fee: "0.0015", total: "0.1015",
+};
+
+export function previewRoute(request: string): RouteResponse {
+  if (/btc|bitcoin|chance|will /i.test(request)) return { kind: "lead", ...previewAsk(request) };
+  return { kind: "pick", routeId: "preview-route", pick: PREVIEW_PICK, alternatives: [PREVIEW_ALT], sources: [{ id: "agon", status: "ok" }, { id: "circle", status: "ok" }] };
+}
+
+export function previewRouteQuote(reference: string): AskResponse {
+  const p = reference === PREVIEW_ALT.reference ? PREVIEW_ALT : PREVIEW_PICK;
+  return {
+    ok: true, step: "confirm_code", jobId: PREVIEW_JOB_ID, amount: p.price, fee: p.fee, total: p.total, providerLabel: p.name,
+    network: p.network === "arc" ? "Arc" : "Arc Testnet", testnet: p.network !== "arc", expiresAt: new Date(Date.now() + 300_000).toISOString(), code: "4821",
+    input: p.source === "circle" ? { symbol: "AAPL" } : { market: "arsenal-epl" }, source: p.source, reason: p.reason,
+  };
+}

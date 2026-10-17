@@ -3,7 +3,7 @@ import type { Address, Hex } from "viem";
 
 import type { AgonNetworkId } from "../network.ts";
 import type {
-  Approval, BudgetWallet, Confirmation, Job, JobPayment, JobState, PaymentsStore, Quote, ReserveResult, SpendOutcome, SpendReservation,
+  Approval, BudgetWallet, Confirmation, Job, JobPayment, JobPaymentKind, JobState, PaymentsStore, Quote, ReserveResult, SpendOutcome, SpendReservation,
 } from "./types.ts";
 
 const lower = <T extends string>(v: T) => v.toLowerCase() as T;
@@ -219,8 +219,11 @@ export class PostgresPaymentsStore implements PaymentsStore {
     return rows.map(toJob);
   }
 
-  async listStuckJobs(state: JobState, updatedBefore: Date): Promise<Job[]> {
-    const { rows } = await this.pool.query<JobRow>("select * from agon_jobs where state = $1 and updated_at < $2 order by updated_at limit 100", [state, updatedBefore]);
+  async listStuckJobs(state: JobState, updatedBefore: Date, network?: string): Promise<Job[]> {
+    const { rows } = await this.pool.query<JobRow>(
+      "select * from agon_jobs where state = $1 and updated_at < $2 and ($3::text is null or network = $3) order by updated_at limit 100",
+      [state, updatedBefore, network ?? null],
+    );
     return rows.map(toJob);
   }
 
@@ -274,6 +277,14 @@ export class PostgresPaymentsStore implements PaymentsStore {
       [p.idempotencyKey, p.jobId, p.kind, lower(p.payer), lower(p.payee), p.amount.toString(), p.network, p.status,
         p.txHash ? lower(p.txHash) : null, p.detail, p.authNonce ? lower(p.authNonce) : null, p.authValidBefore],
     );
+  }
+
+  async listPendingPayments(kind: JobPaymentKind, updatedBefore: Date, network?: string): Promise<JobPayment[]> {
+    const { rows } = await this.pool.query<PaymentRow>(
+      "select * from agon_job_payments where kind = $1 and status = 'pending' and updated_at < $2 and ($3::text is null or network = $3) order by updated_at limit 100",
+      [kind, updatedBefore, network ?? null],
+    );
+    return rows.map(toPayment);
   }
 
   async listJobPayments(rootId: string): Promise<JobPayment[]> {

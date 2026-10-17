@@ -1,12 +1,13 @@
 import type { ChannelStore, ChatChannel } from "../types.ts";
 import { formatUsdc } from "../../payments/bargain.ts";
 import type { ReceiptNode } from "../../payments/jobs.ts";
-import type { LiveView, StageServices, WalletView } from "../../stage/services.ts";
+import type { AskResult, LiveView, StageServices, WalletView } from "../../stage/services.ts";
 import { hashChatUser } from "../../stage/settings.ts";
+import type { Router } from "../../routing/router.ts";
 import { parseCodeIntent, type ChatIntent } from "./intents.ts";
 import type { ChatInbound, ChatReply } from "./types.ts";
 
-export const CHAT_TERMS_VERSION = "chat-2026-10-11";
+export const CHAT_TERMS_VERSION = "chat-2026-10-17";
 
 export type ConversationDeps = {
   services: StageServices;
@@ -22,6 +23,10 @@ export type ConversationDeps = {
   sleep?: (ms: number) => Promise<void>;
   /** Per-user message limit; true while under it. */
   limit?: (userHash: string) => boolean;
+  /** The aggregator: requests that are not a forecast or a command are routed through it. */
+  router?: Router;
+  /** The Arc mainnet wallet services, used when a wallet command says mainnet. */
+  outside?: StageServices;
 };
 
 const EXAMPLE = "What's the real chance BTC closes above $120k on Friday?";
@@ -63,7 +68,7 @@ function terms(): ChatReply {
       "Welcome to Agon. Agents here forecast market questions and pay each other in USDC on Arc.",
       "",
       "Before you start:",
-      "- Agon holds a small USDC balance for you in a wallet it runs on your behalf. It only pays what you confirm, within limits (0.50 per hire, 2.00 per day) that you can lower.",
+      "- Agon holds a small USDC balance for you in a wallet it runs on your behalf. It only pays what you confirm, within limits you can lower: 0.50 per hire and 2.00 per day on Arc Testnet, 0.25 per hire and 1.00 per day on Arc mainnet.",
       "- You confirm every payment with a code. Withdrawals and larger payments are approved in your browser.",
       "- You can withdraw your balance at any time.",
     ].join("\n"),
@@ -131,7 +136,7 @@ async function confirmAndWatch(deps: ConversationDeps, ownerRef: string, code: s
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const jobId = await deps.services.pendingJob(ownerRef);
   let finished = false;
-  const done = deps.services.confirm(ownerRef, code).finally(() => { finished = true; });
+  const done = (deps.router ? deps.router.confirm(ownerRef, code) : deps.services.confirm(ownerRef, code)).finally(() => { finished = true; });
   let messageId: number | null = null;
   let shown = "";
   const network = deps.services.network.label;
@@ -157,6 +162,12 @@ async function confirmAndWatch(deps: ConversationDeps, ownerRef: string, code: s
     return;
   }
   const live = await deps.services.live(out.jobId).catch(() => null);
+  // A routed hire to another agent has no Lead progress to show: send its answer.
+  if (!live?.answer && out.result !== undefined && out.result !== null && !(out.result as { probabilityBps?: unknown }).probabilityBps) {
+    const shown = JSON.stringify(out.result, null, 1);
+    await deps.reply.send({ text: `Done. The answer:\n${shown.length > 1500 ? `${shown.slice(0, 1500)}...` : shown}\nReceipt: ${deps.services.receiptUrl(out.jobId)}` });
+    return;
+  }
   if (live) {
     const reply = progressReply(live, amountOf(live), network);
     if (messageId === null) await deps.reply.send(reply);
@@ -165,45 +176,16 @@ async function confirmAndWatch(deps: ConversationDeps, ownerRef: string, code: s
   await deps.reply.send(finalReply(live));
 }
 
-async function act(deps: ConversationDeps, ownerRef: string, intent: ChatIntent): Promise<void> {
-  const s = deps.services;
+async function act(deps: ConversationDeps, ownerRef: string, intent: ChatIntent, text = ""): Promise<void> {
+  // Wallet commands act on the test wallet unless the message says mainnet.
+  const s = /\bmainnet\b/i.test(text) && deps.outside && !["forecast", "confirm", "cancel", "history", "leaderboard", "help", "unknown"].includes(intent.kind) ? deps.outside : deps.services;
   switch (intent.kind) {
     case "forecast": {
       const quote = await s.ask(ownerRef, { question: intent.question, ...(intent.maxPrice !== null ? { maxPrice: intent.maxPrice } : {}) });
-      if (quote.ok && quote.step === "confirm_code") {
-        const price = formatUsdc(quote.amount);
-        await deps.reply.send({
-          text: `${quote.providerLabel} will forecast this for ${price} USDC (${networkLine(s)}).\nQuestion: ${intent.question}\nReply YES ${quote.code} to pay. Expires in 5 min.`,
-          buttons: [[{ label: `Pay ${price} USDC`, data: `yes:${quote.code}` }, { label: "Cancel", data: "cancel" }]],
-        });
-        return;
-      }
-      if (quote.ok) {
-        const wallet = await s.wallet(ownerRef);
-        await deps.reply.send({
-          text: `This costs ${formatUsdc(quote.amount)} USDC, over your per-hire limit of ${formatUsdc(wallet.perHireCap)}. Approve it in your browser; the link works once, for 15 minutes.`,
-          buttons: [[{ label: "Approve in browser", url: quote.approvalUrl }]],
-        });
-        return;
-      }
-      if (quote.code === "insufficient_balance") {
-        const testnet = s.network.id === "arc-testnet";
-        await deps.reply.send({
-          text: `You need ${formatUsdc(quote.amount ?? 0n)} USDC in your Agon wallet first.\nSend USDC on ${s.network.label} to:\n${quote.depositAddress}${testnet ? `\n${FAUCET_LINE}` : ""}\nThen ask again.`,
-          buttons: faucetButtons(testnet),
-        });
-        return;
-      }
-      const reasons: Record<string, string> = {
-        over_your_max: `The lead agent charges ${formatUsdc(quote.amount ?? 0n)} USDC, more than the maximum you gave.`,
-        invalid_question: "Ask a full question, between 8 and 300 characters.",
-        frozen: "Your wallet is frozen. Reply unfreeze to get an approval link.",
-        payments_off: "Payments are paused right now. Try again shortly.",
-        busy: "Agon is busy setting up new wallets right now. Try again in a few minutes.",
-      };
-      await deps.reply.send({ text: reasons[quote.code] ?? "The lead agent is not available right now. Try again in a moment." });
+      await sendLeadQuote(deps, s, ownerRef, intent.question, quote);
       return;
     }
+
     case "confirm":
       await confirmAndWatch(deps, ownerRef, intent.code);
       return;
@@ -229,7 +211,8 @@ async function act(deps: ConversationDeps, ownerRef: string, intent: ChatIntent)
       }
       const out = await s.lowerLimits(ownerRef, { ...(intent.perHire !== null ? { perHireCap: intent.perHire } : {}), ...(intent.daily !== null ? { dailyCap: intent.daily } : {}) });
       if (!out.ok) {
-        await deps.reply.send({ text: out.code === "above_default" ? "Limits can only be lowered here, up to 0.50 per hire and 2.00 per day." : "Those limits did not work. Try: limits 0.20 per hire" });
+        const ceiling = s.network.id === "arc" ? "0.25 per hire and 1.00 per day" : "0.50 per hire and 2.00 per day";
+        await deps.reply.send({ text: out.code === "above_default" ? `Limits can only be lowered here, up to ${ceiling}.` : "Those limits did not work. Try: limits 0.20 per hire" });
         return;
       }
       const w = await s.wallet(ownerRef);
@@ -274,6 +257,10 @@ async function act(deps: ConversationDeps, ownerRef: string, intent: ChatIntent)
     case "help":
       await deps.reply.send(help(s.siteUrl));
       return;
+    case "unknown":
+      if (deps.router && text.trim().length >= 8) return routeTask(deps, ownerRef, text.trim());
+      await deps.reply.send(help(s.siteUrl));
+      return;
     default:
       await deps.reply.send(help(s.siteUrl));
   }
@@ -307,5 +294,90 @@ export async function handleChatMessage(deps: ConversationDeps, inbound: ChatInb
   if (inbound.kind === "other") return void (await deps.reply.send({ text: "I read text only for now. Type your question." }));
   if (inbound.kind === "tap" && inbound.text === "terms:accept") return void (await deps.reply.send(help(deps.services.siteUrl)));
   const intent: ChatIntent = inbound.kind === "tap" ? (parseCodeIntent(inbound.text) ?? { kind: "unknown" }) : await deps.classify(inbound.text);
-  await act(deps, ownerRef, intent);
+  await act(deps, ownerRef, intent, inbound.kind === "text" ? inbound.text : "");
+}
+
+/// Any request that is not a forecast or a wallet command: Agon picks the best
+/// fair-priced agent across Agon and Circle and quotes it with the fee shown.
+async function routeTask(deps: ConversationDeps, ownerRef: string, text: string): Promise<void> {
+  const router = deps.router!;
+  const routed = await router.route(ownerRef, text);
+  if (routed.kind === "lead") {
+    // The router already quoted the Lead: show that quote, never ask for a second one.
+    if (routed.ask) return sendLeadQuote(deps, deps.services, ownerRef, text.slice(0, 300), routed.ask);
+    return;
+  }
+  if (routed.kind === "none") {
+    const circleDown = routed.sources.some((x) => x.id === "circle" && x.status === "unavailable");
+    await deps.reply.send({ text: circleDown ? "Nothing on Agon fits this request, and Circle's marketplace could not be reached just now. Try again in a few minutes." : "Nothing on Agon or Circle fits this request yet. Try describing it differently." });
+    return;
+  }
+  const pick = routed.pick;
+  const q = await router.quote(ownerRef, routed.routeId, pick.reference);
+  if (!q.ok) {
+    if (q.code === "missing_input" && "question" in q) {
+      await deps.reply.send({ text: `${pick.name} can do this. ${q.question} Send your request again with that included.` });
+      return;
+    }
+    if (q.code === "insufficient_balance" && "depositAddress" in q) {
+      await deps.reply.send({ text: `This needs ${formatUsdc(q.amount)} USDC on ${q.network === "arc" ? "Arc mainnet" : "Arc Testnet"}. Send USDC to:\n${q.depositAddress}\nThen ask again.` });
+      return;
+    }
+    const why: Record<string, string> = {
+      outside_off: "That service is on Circle and outside hires are switched off right now.",
+      terms_changed: "That service changed its price or payee just now, so nothing was charged. Ask again.",
+      frozen: pick.network === "arc" ? "Your mainnet wallet is frozen. Reply unfreeze mainnet to get an approval link." : "Your wallet is frozen. Reply unfreeze to get an approval link.",
+    };
+    await deps.reply.send({ text: why[q.code] ?? "That service is not available right now. Try again in a moment." });
+    return;
+  }
+  const money = `${formatUsdc(q.amount)} USDC and Agon's ${formatUsdc(q.fee)} fee, ${formatUsdc(q.total)} USDC in total`;
+  const network = q.testnet ? "test USDC on Arc Testnet" : "real USDC on Arc mainnet";
+  const sent = Object.entries(q.input).map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`).join(", ");
+  const outsideNote = pick.source === "circle" ? "\nPaid to an outside service up front; Agon only takes its fee if the answer arrives." : "";
+  if (q.step === "confirm_code" && q.code) {
+    await deps.reply.send({
+      text: `${pick.name} (${pick.reason}).\n${money}, ${network}.\nSending: ${sent || "your request"}${outsideNote}\nReply YES ${q.code} to pay. Expires in 5 min.`,
+      buttons: [[{ label: `Pay ${formatUsdc(q.total)} USDC`, data: `yes:${q.code}` }, { label: "Cancel", data: "cancel" }]],
+    });
+    return;
+  }
+  await deps.reply.send({ text: `${pick.name}: ${money}, over your per-hire limit. Approve it in your browser; the link works once, for 15 minutes.`, buttons: q.approvalUrl ? [[{ label: "Approve in browser", url: q.approvalUrl }]] : undefined });
+}
+
+/// The Lead agent's quote in chat, the same whether the classifier or the router found the forecast.
+async function sendLeadQuote(deps: ConversationDeps, s: StageServices, ownerRef: string, question: string, quote: AskResult): Promise<void> {
+  if (quote.ok && quote.step === "confirm_code") {
+    const total = formatUsdc(quote.total);
+    const price = quote.fee > 0n ? `${formatUsdc(quote.amount)} USDC and Agon's ${formatUsdc(quote.fee)} fee, ${total} USDC in total` : `${total} USDC`;
+    await deps.reply.send({
+      text: `${quote.providerLabel} will forecast this for ${price} (${networkLine(s)}).\nQuestion: ${question}\nReply YES ${quote.code} to pay. Expires in 5 min.`,
+      buttons: [[{ label: `Pay ${total} USDC`, data: `yes:${quote.code}` }, { label: "Cancel", data: "cancel" }]],
+    });
+    return;
+  }
+  if (quote.ok) {
+    const wallet = await s.wallet(ownerRef);
+    await deps.reply.send({
+      text: `This costs ${formatUsdc(quote.total)} USDC, over your per-hire limit of ${formatUsdc(wallet.perHireCap)}. Approve it in your browser; the link works once, for 15 minutes.`,
+      buttons: [[{ label: "Approve in browser", url: quote.approvalUrl }]],
+    });
+    return;
+  }
+  if (quote.code === "insufficient_balance") {
+    const testnet = s.network.id === "arc-testnet";
+    await deps.reply.send({
+      text: `You need ${formatUsdc(quote.amount ?? 0n)} USDC in your Agon wallet first.\nSend USDC on ${s.network.label} to:\n${quote.depositAddress}${testnet ? `\n${FAUCET_LINE}` : ""}\nThen ask again.`,
+      buttons: faucetButtons(testnet),
+    });
+    return;
+  }
+  const reasons: Record<string, string> = {
+    over_your_max: `This costs ${formatUsdc(quote.amount ?? 0n)} USDC in total, more than the maximum you gave.`,
+    invalid_question: "Ask a full question, between 8 and 300 characters.",
+    frozen: "Your wallet is frozen. Reply unfreeze to get an approval link.",
+    payments_off: "Payments are paused right now. Try again shortly.",
+    busy: "Agon is busy setting up new wallets right now. Try again in a few minutes.",
+  };
+  await deps.reply.send({ text: reasons[quote.code] ?? "The lead agent is not available right now. Try again in a moment." });
 }

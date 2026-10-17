@@ -165,3 +165,25 @@ test("cancel retires the pending code", async () => {
   assert.ok(!out.ok && out.code === "already_used");
   assert.equal(await services.cancel(OWNER), false, "nothing left to cancel");
 });
+
+test("final C2: a delivered routed hire reads as answered with the service's result, on its own network", async () => {
+  const { services, store } = stageWorld();
+  const jobId = "44444444-4444-4444-8444-444444444444";
+  const at = new Date();
+  await store.insertJob({
+    jobId, parentId: null, rootId: jobId, depth: 0, buyerRef: "budget:op:x", providerRef: "circle:https://analyst.example/ratings", providerLabel: "Analyst ratings", network: "arc",
+    priceAtomic: 10_000n, budgetAtomic: 0n, state: "delivered", traceId: "t", request: { body: { symbol: "AAPL" } }, result: { symbol: "AAPL", rating: "buy" }, createdAt: at, updatedAt: at,
+  });
+  const live = await services.live(jobId);
+  assert.ok(live);
+  assert.equal(live.phase, "answered");
+  assert.deepEqual(live.result, { symbol: "AAPL", rating: "buy" });
+  assert.equal(live.failure, null);
+  assert.equal(live.network, "Arc");
+});
+
+test("minor: the person's maximum is checked against the total with Agon's fee", async () => {
+  const { services } = stageWorld({ fee: { bps: 150, address: `0x${"fe".repeat(20)}` as Address } });
+  const out = await services.ask(OWNER, { question: QUESTION, maxPrice: 302_000n });
+  assert.deepEqual(out, { ok: false, code: "over_your_max", amount: 304_500n });
+});

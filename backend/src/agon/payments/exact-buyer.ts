@@ -43,6 +43,22 @@ async function readJson(res: Response): Promise<unknown> {
   return res.json().catch(() => null);
 }
 
+const MAX_TEXT_ANSWER = 20_000;
+
+/// The paid answer: JSON as parsed, text kept (capped) with its type, other
+/// bodies described by type and size. An empty body is null.
+async function readAnswer(res: Response): Promise<unknown> {
+  const type = res.headers.get("content-type") ?? "";
+  const bytes = new Uint8Array(await res.arrayBuffer().catch(() => new ArrayBuffer(0)));
+  if (bytes.byteLength === 0) return null;
+  const text = new TextDecoder().decode(bytes);
+  if (/json/i.test(type) || type === "") {
+    try { return JSON.parse(text) as unknown; } catch { if (/json/i.test(type)) return null; }
+  }
+  if (/^text\/|xml|csv|markdown/i.test(type) || type === "") return { contentType: type || "text/plain", text: text.slice(0, MAX_TEXT_ANSWER) };
+  return { contentType: type, bytes: bytes.byteLength };
+}
+
 function requiredFrom(res: Response, body: unknown): { accepts: unknown[]; full: Record<string, unknown> } | null {
   try {
     const required = parser().getPaymentRequiredResponse((name) => res.headers.get(name), body) as unknown as Record<string, unknown>;
@@ -60,7 +76,7 @@ export async function peekExactTerms(input: {
 }): Promise<{ ok: true; option: ExactOption } | { ok: true; free: true; status: number; data: unknown } | { ok: false; code: "no_matching_option" | "unexpected_status" | "network_error"; detail: string }> {
   let res: Response;
   try {
-    res = await (input.fetchImpl ?? fetch)(input.url, { ...input.init, signal: AbortSignal.timeout(20_000) });
+    res = await (input.fetchImpl ?? fetch)(input.url, { ...input.init, redirect: "manual", signal: AbortSignal.timeout(20_000) });
   } catch (error) {
     return { ok: false, code: "network_error", detail: (error as Error).message };
   }
@@ -91,7 +107,7 @@ export async function buyExact(input: {
   const doFetch = input.fetchImpl ?? fetch;
   let first: Response;
   try {
-    first = await doFetch(input.url, { ...input.init, signal: AbortSignal.timeout(20_000) });
+    first = await doFetch(input.url, { ...input.init, redirect: "manual", signal: AbortSignal.timeout(20_000) });
   } catch (error) {
     return { ok: false, code: "network_error", detail: (error as Error).message };
   }
@@ -124,7 +140,7 @@ export async function buyExact(input: {
 
   let second: Response;
   try {
-    second = await doFetch(input.url, { ...input.init, headers: { ...((input.init?.headers as Record<string, string>) ?? {}), ...headers }, signal: AbortSignal.timeout(input.paidTimeoutMs ?? 60_000) });
+    second = await doFetch(input.url, { ...input.init, redirect: "manual", headers: { ...((input.init?.headers as Record<string, string>) ?? {}), ...headers }, signal: AbortSignal.timeout(input.paidTimeoutMs ?? 60_000) });
   } catch (error) {
     return { ok: false, code: "network_error", detail: `paid request failed in transit: ${(error as Error).message}`, txHash: null, sent: true };
   }
@@ -135,7 +151,7 @@ export async function buyExact(input: {
   } catch {
     txHash = null;
   }
-  const data = await readJson(second);
+  const data = second.ok ? await readAnswer(second) : await readJson(second);
   if (!second.ok) return { ok: false, code: "paid_request_failed", detail: `status ${second.status}`, status: second.status, data, txHash, sent: true };
   return { ok: true, amount: option.amount, payTo: option.payTo, txHash, status: second.status, data };
 }

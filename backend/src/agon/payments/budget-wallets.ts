@@ -12,7 +12,11 @@ export type WalletOps = {
   transfer(input: { walletId: string; destinationAddress: Address; amountBaseUnits: bigint; idempotencyKey: string; refId: string }): Promise<{ id: string; state: string }>;
 };
 
-export type WalletDeps = { store: PaymentsStore; ops: WalletOps; network: AgonNetwork; now: () => Date };
+export type WalletDeps = {
+  store: PaymentsStore; ops: WalletOps; network: AgonNetwork; now: () => Date;
+  /** Starting limits for new wallets; the mainnet wallet for outside services starts lower. */
+  defaults?: { perHireCap: bigint; dailyCap: bigint };
+};
 
 export const budgetWalletRef = (ownerRef: string) => `budget:${ownerRef}`;
 export const ownerRefFromWalletRef = (walletRef: string) => (walletRef.startsWith("budget:") ? walletRef.slice("budget:".length) : null);
@@ -29,8 +33,8 @@ export async function ensureBudgetWallet(deps: WalletDeps, ownerRef: string): Pr
     network: deps.network.id,
     walletId: created.walletId,
     address: created.address.toLowerCase() as Address,
-    perHireCap: BUDGET_DEFAULTS.perHireCap,
-    dailyCap: BUDGET_DEFAULTS.dailyCap,
+    perHireCap: deps.defaults?.perHireCap ?? BUDGET_DEFAULTS.perHireCap,
+    dailyCap: deps.defaults?.dailyCap ?? BUDGET_DEFAULTS.dailyCap,
     frozen: false,
     createdAt: deps.now(),
   });

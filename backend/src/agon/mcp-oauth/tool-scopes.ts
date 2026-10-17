@@ -19,6 +19,7 @@ export const TOOL_SCOPES: Record<string, string> = {
   approve_managed_listing: "listing:write",
   continue_managed_listing: "listing:write",
   run_agent_test: "playground:run",
+  find_service: "agon:read",
   hire_service: "agon:read",
   confirm_hire: "wallet:execute",
 };

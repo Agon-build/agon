@@ -2374,7 +2374,7 @@ create index if not exists agon_jobs_state_idx on agon_jobs(state, updated_at);
 create table if not exists agon_job_payments (
   idempotency_key    text primary key,
   job_id             uuid not null references agon_jobs(job_id),
-  kind               text not null check (kind in ('hire', 'data', 'refund')),
+  kind               text not null check (kind in ('hire', 'data', 'refund', 'fee')),
   payer              text not null check (payer ~ '^0x[0-9a-f]{40}$'),
   payee              text not null check (payee ~ '^0x[0-9a-f]{40}$'),
   amount             numeric(78, 0) not null check (amount >= 0),
@@ -2387,6 +2387,9 @@ create table if not exists agon_job_payments (
   created_at         timestamptz not null default now(),
   updated_at         timestamptz not null default now()
 );
+-- Routing fees are their own payment kind.
+alter table agon_job_payments drop constraint if exists agon_job_payments_kind_check;
+alter table agon_job_payments add constraint agon_job_payments_kind_check check (kind in ('hire', 'data', 'refund', 'fee'));
 create index if not exists agon_job_payments_job_idx on agon_job_payments(job_id);
 
 -- Agon channels (Plan 3). Chat users are stored only as a keyed hash.

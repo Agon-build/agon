@@ -10,6 +10,8 @@ export const MAX_CODE_ATTEMPTS = 5;
 export const APPROVAL_TTL_MS = 900_000;
 
 const sha256 = (input: string): Hex => `0x${createHash("sha256").update(input).digest("hex")}`;
+/** The stored key of an approval link, for reading it without redeeming it. */
+export const approvalHash = (token: string): Hex => sha256(`approval|${token}`);
 const codeHash = (walletRef: string, jobId: string, code: string) => sha256(`code|${walletRef}|${jobId}|${code}`);
 
 export async function issueConfirmation(

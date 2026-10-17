@@ -1,10 +1,10 @@
 import type { AgentActivity } from "./card-facts.ts";
 import { AGON_PREVIEW_MODE } from "./client";
 import {
-  PREVIEW_JOB_ID, previewApproval, previewAsk, previewConfig, previewEntries, previewLeaderboard, previewLive, previewRatings, previewRounds, previewSeason, previewWallet,
+  PREVIEW_JOB_ID, previewApproval, previewAsk, previewRoute, previewRouteQuote, previewConfig, previewEntries, previewLeaderboard, previewLive, previewRatings, previewRounds, previewSeason, previewWallet,
 } from "./stage-fixtures.ts";
 import type {
-  ApprovalResult, ApprovalView, AskResponse, ConfirmResponse, HistoryItem, LeaderboardResponse, LiveView, RatingsResponse, SeasonEntry, SeasonInfo, SeasonRoundSummary, StageConfig, StageWallet,
+  ApprovalResult, ApprovalView, AskResponse, ConfirmResponse, RouteResponse, HistoryItem, LeaderboardResponse, LiveView, RatingsResponse, SeasonEntry, SeasonInfo, SeasonRoundSummary, StageConfig, StageWallet,
 } from "./stage-types.ts";
 
 /// Which Season the site shows: 9001 for the testnet dry run, 1 from the mainnet start.
@@ -68,8 +68,18 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 export async function getStageConfig(): Promise<StageConfig> {
   return AGON_PREVIEW_MODE ? previewConfig : call<StageConfig>("/agon/app/config");
 }
-export async function getWallet(): Promise<StageWallet> {
-  return AGON_PREVIEW_MODE ? previewWallet : call<StageWallet>("/agon/app/wallet");
+export async function getWallet(network?: "arc"): Promise<StageWallet> {
+  if (AGON_PREVIEW_MODE) return previewWallet;
+  return call<StageWallet>(network === "arc" ? "/agon/app/wallet?network=arc" : "/agon/app/wallet");
+}
+/// The aggregator: Agon reads the request and picks the best agent across Agon and Circle.
+export async function routeRequest(request: string): Promise<RouteResponse> {
+  if (AGON_PREVIEW_MODE) return previewRoute(request);
+  return call<RouteResponse>("/agon/app/route", { body: { request } });
+}
+export async function quoteRoute(routeId: string, reference: string, input?: Record<string, unknown>): Promise<AskResponse> {
+  if (AGON_PREVIEW_MODE) return previewRouteQuote(reference);
+  return call<AskResponse>("/agon/app/route/quote", { body: { routeId, reference, ...(input ? { input } : {}) } });
 }
 export type WalletTerms = { version: string; lines: string[]; accepted: boolean };
 export async function getTerms(): Promise<WalletTerms> {

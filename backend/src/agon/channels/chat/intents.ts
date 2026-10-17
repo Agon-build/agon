@@ -42,7 +42,8 @@ export function parseCodeIntent(text: string): ChatIntent | null {
   if (yes) return { kind: "confirm", code: yes[1]! };
   if (/^(?:no|cancel|stop)$/i.test(t)) return { kind: "cancel" };
   const words = t.replace(/^\//, "").replace(/^(\w+)@\w+/, "$1");
-  const [head = "", ...rest] = words.split(/\s+/);
+  // "mainnet" picks the Arc mainnet wallet in conversation.ts; it is not an argument.
+  const [head = "", ...rest] = words.split(/\s+/).filter((w, i) => i === 0 || !/^mainnet$/i.test(w));
   const args = rest.join(" ");
   switch (head.toLowerCase()) {
     case "balance": return rest.length === 0 ? { kind: "balance" } : null;

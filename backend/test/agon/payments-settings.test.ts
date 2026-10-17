@@ -71,3 +71,20 @@ test("specialist agent wallets are optional; only pitch and scout are accepted",
   const bad = resolvePaymentSettings({ ...valid, AGON_SPECIALIST_WALLETS: JSON.stringify({ striker: { walletId: "w", address: `0x${"d".repeat(40)}` } }) });
   assert.ok(bad.enabled && !bad.ok && bad.problems.some((p) => p.includes("AGON_SPECIALIST_WALLETS")));
 });
+
+test("settings read the routing fee rate and address, default 150, refuse out of range", () => {
+  const out = resolvePaymentSettings(valid);
+  if (!out.enabled || !out.ok) throw new Error(JSON.stringify(out));
+  assert.equal(out.settings.routingFeeBps, 150);
+  assert.equal(out.settings.feeAddress, null);
+  const set = resolvePaymentSettings({ ...valid, AGON_ROUTING_FEE_BPS: "0", AGON_FEE_ADDRESS: `0x${"F".repeat(40)}` });
+  if (!set.enabled || !set.ok) throw new Error(JSON.stringify(set));
+  assert.equal(set.settings.routingFeeBps, 0);
+  assert.equal(set.settings.feeAddress, `0x${"f".repeat(40)}`);
+  for (const bad of ["2000", "abc", "-1", "1.5"]) {
+    const r = resolvePaymentSettings({ ...valid, AGON_ROUTING_FEE_BPS: bad });
+    assert.ok(r.enabled && !r.ok && r.problems.some((p) => p.includes("AGON_ROUTING_FEE_BPS")), bad);
+  }
+  const badAddr = resolvePaymentSettings({ ...valid, AGON_FEE_ADDRESS: "0x123" });
+  assert.ok(badAddr.enabled && !badAddr.ok && badAddr.problems.some((p) => p.includes("AGON_FEE_ADDRESS")));
+});

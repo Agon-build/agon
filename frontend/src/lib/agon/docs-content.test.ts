@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 
-import { DOCS_SECTIONS, MCP_PROMPTS, MCP_TOOL_GROUPS, ROADMAP, copyProblems, docsStrings } from "./docs-content.ts";
+import { DOCS_SECTIONS, FAQS, HIRE_STEPS, MCP_PROMPTS, MCP_TOOL_GROUPS, PAYMENT_OPTIONS, ROADMAP, copyProblems, docsStrings } from "./docs-content.ts";
 import { AGON_NAV } from "./nav.ts";
 import { DOCS_REDIRECTS } from "./docs-redirects.ts";
 
@@ -16,9 +16,9 @@ test("the roadmap names every deferred item from the spec, and Live now lists on
   const later = ROADMAP.later.map((i) => i.title.toLowerCase()).join(" | ");
   for (const word of ["escrow", "beyond forecasting", "trading", "whatsapp", "provider dashboard", "ratings feed", "other marketplaces"]) assert.ok(later.includes(word), word);
   const next = ROADMAP.next.map((i) => i.title.toLowerCase()).join(" | ");
-  for (const word of ["matched by category rating", "season 1 on arc mainnet", "hires on arc mainnet"]) assert.ok(next.includes(word), word);
+  for (const word of ["season 1 on arc mainnet", "agon hires on arc mainnet"]) assert.ok(next.includes(word), word);
   assert.deepEqual(ROADMAP.live.map((i) => i.title), [
-    "Hire the Lead agent on the web and in Telegram",
+    "Hire the best agent for any request, on Agon or Circle",
     "Season 1 dry run across six categories",
     "Agon MCP for coding agents",
     "Playground tests for listed agents",
@@ -184,4 +184,23 @@ test("the FAQ answers the questions people ask, in plain words, with no secret h
   const all = docsStrings();
   assert.ok(all.includes(FAQS[0]!.a), "FAQ copy is covered by the copy rules");
   for (const t of all) assert.deepEqual(copyProblems(t), [], t);
+});
+
+test("docs state the 1.5% routing fee, the Circle source and that outside services pay real USDC on Arc mainnet", () => {
+  const fees = PAYMENT_OPTIONS.map((o) => o.body).join(" ");
+  assert.match(fees, /1\.5% routing fee/);
+  assert.match(fees, /only when the answer arrives/);
+  const hire = HIRE_STEPS.map((h) => h.body).join(" ");
+  assert.match(hire, /Circle/);
+  assert.match(hire, /swap/i);
+  const all = docsStrings().join(" ");
+  assert.match(all, /real USDC on Arc mainnet/);
+  assert.ok(FAQS.some((f) => /Circle/.test(f.q)), "a question about Circle services");
+  assert.ok(!/Matching any task to the best-rated agent for it is on the roadmap/.test(all), "the old roadmap note is gone");
+});
+
+test("minor: the hire steps give the mainnet wallet's limits as well as the test wallet's", () => {
+  const confirm = HIRE_STEPS.find((h) => h.title === "Confirm")!.body;
+  assert.match(confirm, /0\.50 USDC per hire and 2\.00 per day/);
+  assert.match(confirm, /0\.25 per hire and 1\.00 per day/);
 });

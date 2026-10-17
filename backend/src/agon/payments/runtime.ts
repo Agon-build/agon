@@ -22,7 +22,7 @@ import { createGuardedSigner } from "./guarded-signer.ts";
 import { refundUndeliveredLeadHires } from "./auto-refund.ts";
 import { completeApprovedHire, confirmHire, quoteHire, reconcileStuckHires, type HireDeps, type HireOutcome, type HireRequest } from "./hire.ts";
 import { createPaymentRoutes } from "./routes.ts";
-import { resolvePaymentSettings, type PaymentSettings, type WalletHandle } from "./settings.ts";
+import { resolveOutsideSettings, resolvePaymentSettings, type PaymentSettings, type WalletHandle } from "./settings.ts";
 import { createStandinRoutes } from "./standin-seller.ts";
 import { PostgresPaymentsStore } from "./store.ts";
 import type { BudgetWallet } from "./types.ts";
@@ -99,6 +99,7 @@ export function startPaymentsRuntime(input: {
       ...walletDeps,
       signJson,
       off: { all: s.off.all, budget: s.off.budget },
+      feeTxState: getTxState,
       authorizationUsed: async (authorizer, nonce) =>
         (await client.readContract({ address: network.usdc, abi: AUTHORIZATION_STATE_ABI, functionName: "authorizationState", args: [authorizer, nonce] })) as boolean,
     };
@@ -192,3 +193,71 @@ export function startPaymentsRuntime(input: {
     return null;
   }
 }
+
+/// The slim Arc mainnet runtime for outside services (Circle routes): budget
+/// wallets and the hire engine only, no lead agent or house sellers. Off unless
+/// AGON_OUTSIDE_ENABLED is true. When Agon itself moves to mainnet this goes away.
+export function startOutsideRuntime(input: { env?: Record<string, string | undefined>; startLoops?: boolean } = {}): { hire: HireService; balanceOf(address: Address): Promise<bigint | null>; feeAddress: Address | null } | null {
+  try {
+    const resolved = resolveOutsideSettings(input.env ?? process.env);
+    if (!resolved.enabled) return null;
+    if (!resolved.ok) {
+      console.error(`[outside] disabled: ${resolved.problems.join("; ")}`);
+      return null;
+    }
+    const { network, feeAddress } = resolved.settings;
+    const client = createPublicClient({ transport: fallback(network.rpcHttp.map((url) => http(url))) });
+    const store = new PostgresPaymentsStore(pool);
+    const walletDeps = {
+      store, network, now: () => new Date(), defaults: OUTSIDE_WALLET_DEFAULTS,
+      ops: {
+        createWallet: createAgonWallet,
+        seedTestnet: async () => ({}),
+        transfer: (i: { walletId: string; destinationAddress: Address; amountBaseUnits: bigint; idempotencyKey: string; refId: string }) => createPlatformUsdcTransfer({ ...i, blockchain: network.circleChain }),
+      },
+    };
+    const hireDeps: HireDeps = {
+      ...walletDeps,
+      signJson: signTypedDataJson,
+      off: { all: false, budget: false },
+      feeTxState: getTxState,
+      authorizationUsed: async (authorizer, nonce) =>
+        (await client.readContract({ address: network.usdc, abi: AUTHORIZATION_STATE_ABI, functionName: "authorizationState", args: [authorizer, nonce] })) as boolean,
+    };
+    const hire: HireService = {
+      leadProviderUrl: "",
+      network,
+      quoteHire: (req) => quoteHire(hireDeps, req),
+      confirmHire: (i) => confirmHire(hireDeps, i),
+      completeApprovedHire: (i) => completeApprovedHire(hireDeps, i),
+      reconcile: () => reconcileStuckHires(hireDeps),
+      wallets: {
+        ensure: (ownerRef) => wallets.ensureBudgetWallet(walletDeps, ownerRef),
+        lowerLimits: (ownerRef, limits) => wallets.lowerLimits(walletDeps, ownerRef, limits),
+        freeze: (ownerRef) => wallets.freeze(walletDeps, ownerRef),
+        requestUnfreeze: (ownerRef) => wallets.requestUnfreeze(walletDeps, ownerRef),
+        completeUnfreeze: (token) => wallets.completeUnfreeze(walletDeps, token),
+        requestWithdraw: (ownerRef, to, amount) => wallets.requestWithdraw(walletDeps, ownerRef, to, amount),
+        completeWithdraw: (token) => wallets.completeWithdraw(walletDeps, token),
+      },
+    };
+    if (input.startLoops !== false) {
+      setInterval(() => { hire.reconcile().catch((e) => console.warn(`[outside] reconcile failed: ${(e as Error).message}`)); }, 5 * 60_000).unref();
+    }
+    const balanceOf = async (address: Address): Promise<bigint | null> => {
+      try {
+        return (await client.readContract({ address: network.usdc, abi: USDC_BALANCE_ABI, functionName: "balanceOf", args: [address] })) as bigint;
+      } catch {
+        return null;
+      }
+    };
+    console.log(`[outside] Circle routes on ${network.label}`);
+    return { hire, balanceOf, feeAddress };
+  } catch (error) {
+    console.error(`[outside] disabled: ${(error as Error).message}`);
+    return null;
+  }
+}
+
+/// Lower starting limits for the real-USDC wallet; people may raise them up to BUDGET_DEFAULTS.
+export const OUTSIDE_WALLET_DEFAULTS = { perHireCap: 250_000n, dailyCap: 1_000_000n } as const;

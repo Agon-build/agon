@@ -2,7 +2,8 @@ import { fromJsonSchema, type AuthInfo, type McpServer } from "@modelcontextprot
 import { z } from "zod";
 
 import { formatUsdc } from "../payments/bargain.ts";
-import { askJson } from "../stage/app-routes.ts";
+import { askJson, rankedJson, routeQuoteJson } from "../stage/app-routes.ts";
+import type { Router } from "../routing/router.ts";
 import type { CustodyTerms } from "../stage/custody-terms.ts";
 import { parseUsdc } from "../stage/money.ts";
 import { createRateLimiter } from "../stage/rate-limit.ts";
@@ -17,21 +18,29 @@ export type StageMcpDeps = {
   off: () => boolean;
   /** Agent wallet terms the account owner accepts once in the browser. */
   terms: Pick<CustodyTerms, "isAccepted">;
+  /** The aggregator; when set, find_service routes a need and hire_service takes a routeId. */
+  router?: Router;
   /** Per-actor quote limit; true while under it. */
   limit?: (actor: string) => boolean;
 };
 
 const LEAD_OUTCOME = "A probability for a Polymarket question, with three reasons, next to the market's own price. The lead agent buys live data and hires the best-rated Season 1 forecaster.";
 
-const findSchema = fromJsonSchema<{ need?: string }>({ type: "object", properties: { need: { type: "string", maxLength: 300 } }, additionalProperties: false });
-const hireSchema = fromJsonSchema<{ ref: string; question: string; maxPrice?: string }>({
+const findSchema = fromJsonSchema<{ need?: string }>({
+  type: "object",
+  properties: { need: { type: "string", maxLength: 600, description: "What the user needs done, in plain words. Agon picks the best fair-priced agent across Agon and Circle's marketplace." } },
+  additionalProperties: false,
+});
+const hireSchema = fromJsonSchema<{ ref?: string; question?: string; maxPrice?: string; routeId?: string; reference?: string; input?: Record<string, unknown> }>({
   type: "object",
   properties: {
-    ref: { type: "string", description: "Service reference from find_service. Today: agent:lead." },
-    question: { type: "string", minLength: 8, maxLength: 300, description: "The question in plain language." },
-    maxPrice: { type: "string", description: "Most the user will pay in USDC, for example 0.50." },
+    routeId: { type: "string", maxLength: 64, description: "The routeId from find_service." },
+    reference: { type: "string", maxLength: 600, description: "The reference of the pick or an alternative from find_service." },
+    input: { type: "object", description: "Only when hire_service asked a question: the input values to send, as one object." },
+    ref: { type: "string", description: "For a forecast: agent:lead." },
+    question: { type: "string", minLength: 8, maxLength: 300, description: "For a forecast with ref agent:lead: the question in plain language." },
+    maxPrice: { type: "string", description: "For a forecast: most the user will pay in USDC, for example 0.50." },
   },
-  required: ["ref", "question"],
   additionalProperties: false,
 });
 const confirmSchema = fromJsonSchema<{ jobId: string; code: string }>({
@@ -59,6 +68,7 @@ const forecastsSchema = fromJsonSchema<{ forecasts: unknown[] }>({
 });
 
 const hireInput = z.object({ ref: z.literal("agent:lead"), question: z.string().min(8).max(300), maxPrice: z.string().max(32).optional() });
+const routedInput = z.object({ routeId: z.string().min(1).max(64), reference: z.string().min(1).max(600), input: z.record(z.unknown()).optional() });
 const confirmInput = z.object({ jobId: z.string().uuid(), code: z.string().regex(/^\d{4}$/) });
 
 async function forward(season: StageMcpDeps["season"], path: string, body: unknown) {
@@ -75,7 +85,22 @@ export function registerStageTools(server: McpServer, authInfo: () => AuthInfo |
     title: "Find an agent service to hire",
     description: "List agent services that can be hired and paid per use from this MCP connection, with the live price and Season 1 forecaster ratings.",
     inputSchema: findSchema,
-  }, async () => {
+  }, async (args) => {
+    const need = typeof (args as { need?: unknown }).need === "string" ? (args as { need: string }).need.trim() : "";
+    if (deps.router && need.length >= 8) {
+      const who = requireActor(authInfo(), "agon:read");
+      if (typeof who !== "string") return who;
+      if (!quoteLimit(who)) return failure("rate_limited", "Too many requests. Wait a minute.");
+      const routed = await deps.router.route(operatorOwnerRef(who), need, { quoteLead: false });
+      if (routed.kind === "pick") {
+        return result({
+          routeId: routed.routeId, pick: rankedJson(routed.pick), alternatives: routed.alternatives.map(rankedJson), sources: routed.sources,
+          howToHire: "Show the user the pick, its price, fee and total. To hire, call hire_service with routeId and reference (the pick or an alternative).",
+        });
+      }
+      if (routed.kind === "none") return result({ services: [], sources: routed.sources, message: "Nothing on Agon or Circle fits this request. Try describing it differently." });
+    }
+
     const [price, rows] = await Promise.all([deps.services.leadPrice().catch(() => null), deps.services.leaderboard(5).catch(() => null)]);
     return result({
       services: [{
@@ -98,6 +123,16 @@ export function registerStageTools(server: McpServer, authInfo: () => AuthInfo |
     if (typeof who !== "string") return who;
     if (deps.off()) return failure("channel_off", "Hiring through MCP is paused right now.");
     if (!quoteLimit(who)) return failure("rate_limited", "Too many quotes. Wait a minute.");
+    const routed = routedInput.safeParse(args);
+    if (routed.success) {
+      if (!deps.router) return failure("routing_off", "Routing is not available on this server.");
+      if (!(await deps.terms.isAccepted(operatorOwnerRef(who)))) {
+        return failure("terms_required", `The account owner must accept Agon's agent wallet terms once in the browser at ${deps.services.siteUrl} (Hire page) before an agent can hire.`);
+      }
+      const quoted = routeQuoteJson(await deps.router.quote(operatorOwnerRef(who), routed.data.routeId, routed.data.reference, routed.data.input));
+      if (!quoted.ok) return result(quoted);
+      return result({ ...quoted, nextStep: quoted.step === "confirm_code" ? "Show the user the total. When they agree, call confirm_hire with jobId and code (needs the wallet:execute capability)." : "This is over the user's per-hire limit. Ask the user to open approvalUrl in a browser signed in to Agon." });
+    }
     const input = hireInput.safeParse(args);
     if (!input.success) return failure("invalid_input", "ref must be agent:lead and question must be 8 to 300 characters.");
     const maxPrice = input.data.maxPrice === undefined ? undefined : parseUsdc(input.data.maxPrice);
@@ -124,10 +159,10 @@ export function registerStageTools(server: McpServer, authInfo: () => AuthInfo |
     if (deps.off()) return failure("channel_off", "Hiring through MCP is paused right now.");
     const input = confirmInput.safeParse(args);
     if (!input.success) return failure("invalid_input", "jobId must be the quote's job id and code its 4 digits.");
-    const out = await deps.services.confirm(operatorOwnerRef(who), input.data.code);
+    const out = deps.router ? await deps.router.confirm(operatorOwnerRef(who), input.data.code) : await deps.services.confirm(operatorOwnerRef(who), input.data.code);
     if (!out.ok) return result({ ok: false, code: out.code, ...(out.jobId ? { jobId: out.jobId } : {}) });
     const live = await deps.services.live(out.jobId);
-    return result({ ok: true, jobId: out.jobId, amount: formatUsdc(out.amount), txHash: out.txHash, receiptUrl: deps.services.receiptUrl(out.jobId), answer: live?.answer ?? null });
+    return result({ ok: true, jobId: out.jobId, amount: formatUsdc(out.amount), txHash: out.txHash, receiptUrl: deps.services.receiptUrl(out.jobId), answer: live?.answer ?? null, result: out.result ?? null });
   });
 
   server.registerTool("get_job_status", {

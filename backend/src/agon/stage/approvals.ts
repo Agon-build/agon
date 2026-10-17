@@ -1,7 +1,7 @@
 import type { Address } from "viem";
 
 import type { ChannelStore } from "../channels/types.ts";
-import type { AgonNetwork } from "../network.ts";
+import { agonNetwork, type AgonNetwork, type AgonNetworkId } from "../network.ts";
 import { formatUsdc } from "../payments/bargain.ts";
 import { ownerRefFromWalletRef } from "../payments/budget-wallets.ts";
 import { peekApproval } from "../payments/limits.ts";
@@ -26,11 +26,18 @@ export async function describeApproval(
   const owner = parseOwnerRef(ownerRefFromWalletRef(a.walletRef) ?? "");
   const rows: { label: string; value: string }[] = [];
   let jobId: string | null = null;
+  // Each approval names its own network: a withdraw or unfreeze records it, a hire's job carries it.
+  const recorded = a.payload.network === "arc" || a.payload.network === "arc-testnet" ? (a.payload.network as AgonNetworkId) : null;
+  let network: AgonNetwork = recorded ? agonNetwork(recorded) : deps.network;
   if (a.action === "over_limit_hire") {
     const job = await deps.payments.getJob(String(a.payload.jobId ?? ""));
     if (!job) return { ok: false, code: "unknown" };
     jobId = job.jobId;
+    network = agonNetwork(job.network);
     rows.push({ label: "Service", value: job.providerLabel }, { label: "Price", value: `${formatUsdc(job.priceAtomic)} USDC` });
+    const rawFee = (job.request as { fee?: unknown }).fee;
+    const fee = typeof rawFee === "string" && /^\d+$/.test(rawFee) ? BigInt(rawFee) : 0n;
+    if (fee > 0n) rows.push({ label: "Agon routing fee", value: `${formatUsdc(fee)} USDC` }, { label: "Total", value: `${formatUsdc(job.priceAtomic + fee)} USDC` });
     const question = (job.request as { body?: { question?: unknown } }).body?.question;
     if (typeof question === "string") rows.push({ label: "Question", value: question });
   } else if (a.action === "withdraw") {
@@ -38,12 +45,12 @@ export async function describeApproval(
   } else {
     rows.push({ label: "Effect", value: "Spending from your Agon wallet starts again" });
   }
-  rows.push({ label: "Network", value: deps.network.label });
+  rows.push({ label: "Network", value: network.label });
   return {
     ok: true,
     walletRef: a.walletRef,
     view: {
-      action: a.action, title: TITLES[a.action], network: deps.network.label, testnet: deps.network.id === "arc-testnet", expiresAt: a.expiresAt.toISOString(),
+      action: a.action, title: TITLES[a.action], network: network.label, testnet: network.id === "arc-testnet", expiresAt: a.expiresAt.toISOString(),
       jobId, rows, owner: owner?.kind === "telegram" ? "telegram" : "web",
     },
   };

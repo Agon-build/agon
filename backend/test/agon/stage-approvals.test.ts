@@ -140,3 +140,19 @@ test("an account whose website has a different Telegram linked cannot claim a ch
   assert.equal((await s.channels.getAccount("telegram", TG_HASH))!.operatorAddress, null, "nothing was linked");
   assert.equal((await s.post(token, ALICE)).status, 200, "the link still works for an unlinked account");
 });
+
+test("final I3: a mainnet over-limit hire is described as real USDC on Arc, with the fee and the total", async () => {
+  const s = setup();
+  const { token, jobId } = await overLimitToken(s, operatorOwnerRef(ALICE));
+  const job = s.store.jobs.get(jobId)!;
+  job.network = "arc";
+  job.request = { ...(job.request as object), fee: "9000" };
+  const out = await describeApproval(s.gate, token);
+  assert.ok(out.ok);
+  assert.deepEqual([out.view.network, out.view.testnet], ["Arc", false]);
+  const rows = Object.fromEntries(out.view.rows.map((r) => [r.label, r.value]));
+  assert.equal(rows.Price, "0.60 USDC");
+  assert.equal(rows["Agon routing fee"], "0.009 USDC");
+  assert.equal(rows.Total, "0.609 USDC");
+  assert.equal(rows.Network, "Arc");
+});
