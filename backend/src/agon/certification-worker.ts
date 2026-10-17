@@ -163,7 +163,8 @@ export async function runAgonCertificationOnce(options: CertificationWorkerOptio
       {
         actorAddress: job.providerSnapshot,
         requestId: randomUUID(),
-        idempotencyKey: `certification-${job.jobId}-${job.checkSequence + 1}`,
+        // One run per attempt: reusing a failed run's key returns "already failed" and hides the real error.
+        idempotencyKey: `certification-${job.jobId}-${job.checkSequence + 1}-${job.attempts}`,
         scope: { listingReference: job.listingReference, listingVersion: job.listingVersion },
         store: options.playgroundStore,
         execute: (task, input) => options.providerRunner.run({ provider, task, taskInput: input }),
@@ -305,6 +306,9 @@ export async function runAgonCertificationOnce(options: CertificationWorkerOptio
       return "completed";
     }
     const errorCode = error instanceof PlaygroundProviderError ? error.code : "certification_worker_error";
+    if (errorCode === "certification_worker_error") {
+      console.warn(`[agon-certification] ${job.listingReference} v${job.listingVersion} failed: ${error instanceof Error ? error.message.slice(0, 300) : String(error)}`);
+    }
     const retryAt = nextRetryAt(job, now);
     if (retryAt) {
       await options.repository.failAgonCertification(job.jobId, errorCode, retryAt);

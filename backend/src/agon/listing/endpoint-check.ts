@@ -2,7 +2,7 @@ import { assertPublicHttpsDestination } from "../manifest-inspector.ts";
 import type { AgonNetwork } from "../network.ts";
 import { peekExactTerms } from "../payments/exact-buyer.ts";
 import { PREFLIGHT_PROTOCOL } from "../payments/listing-protocols.ts";
-import { createHttpPlaygroundProviderRunner } from "../playground-provider.ts";
+import { AGENT_TASK_TIMEOUT_MS, createHttpPlaygroundProviderRunner } from "../playground-provider.ts";
 import { defaultPlaygroundInput, getPlaygroundTask } from "../playground.ts";
 
 /// The live listing checks a builder runs before publishing, on the web and over MCP.
@@ -16,9 +16,8 @@ export type ListingCheckDeps = {
 };
 
 export const CHECK_TIMEOUT_MS = 15_000;
-/// Task calls (certification and Agon tests) wait longer than the unpaid probe:
-/// a reasoning model thinks before it answers (Grok 4.7 took 21 s on 17 Oct 2026).
-export const CERTIFY_TIMEOUT_MS = 45_000;
+/// Task calls (certification and Agon tests) wait longer than the unpaid probe; one value for every path.
+export const CERTIFY_TIMEOUT_MS = AGENT_TASK_TIMEOUT_MS;
 /// Category ids that have an automatic certification task today ("3" is Analysis).
 const CERTIFIABLE = new Set(["3"]);
 

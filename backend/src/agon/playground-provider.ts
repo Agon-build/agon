@@ -3,7 +3,10 @@ import { z } from "zod";
 import type { PlaygroundTask } from "./playground.ts";
 
 const MAX_PROVIDER_RESPONSE_BYTES = 64 * 1024;
-const DEFAULT_PROVIDER_TIMEOUT_MS = 12_000;
+/// How long any agent task call waits (Playground runs, automatic certification, Agon tests and the
+/// listing check): a reasoning model thinks before it answers. Kestrel (Grok 4.7) took 14 to 21 s
+/// on 17 Oct 2026 and failed every certification at the old 12 s.
+export const AGENT_TASK_TIMEOUT_MS = 45_000;
 
 const providerResponseSchema = z.object({
   protocol: z.literal("agon-playground/1"),
@@ -150,7 +153,7 @@ export function createHttpPlaygroundProviderRunner(
     targets.set(scope.toLowerCase(), endpoint(value));
   }
   const runFetch = options.fetch ?? fetch;
-  const timeoutMs = options.timeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS;
+  const timeoutMs = options.timeoutMs ?? AGENT_TASK_TIMEOUT_MS;
 
   return {
     scopes() {

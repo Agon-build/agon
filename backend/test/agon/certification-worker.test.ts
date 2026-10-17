@@ -4,7 +4,9 @@ import test from "node:test";
 import { buildAgonCertificationJob, type AgonCertificationJob } from "../../src/agon/certification.ts";
 import { agonCertificationWorkerLoop, runAgonCertificationOnce } from "../../src/agon/certification-worker.ts";
 import { InMemoryPlaygroundRunStore } from "../../src/agon/playground-store.ts";
-import type { PlaygroundProviderRunner } from "../../src/agon/playground-provider.ts";
+import { AGENT_TASK_TIMEOUT_MS, PlaygroundProviderError, type PlaygroundProviderRunner } from "../../src/agon/playground-provider.ts";
+import { CERTIFY_TIMEOUT_MS } from "../../src/agon/listing/endpoint-check.ts";
+import { AGON_CERTIFICATION_LEASE_MS } from "../../src/agon/store/repository.ts";
 import type { PlaygroundRun } from "../../src/agon/playground.ts";
 import type { AgonEndpointQaRunner } from "../../src/agon/endpoint-qa.ts";
 import { evaluateAgonLifecycle, type AgonLifecycleCheckResult, type AgonLifecycleTransition } from "../../src/agon/certification-lifecycle.ts";
@@ -312,4 +314,26 @@ test("a Verified write that never reached the chain retries in 5 minutes, and th
   const text = alerts.flatMap((a) => a.reasons).join(" ");
   assert.doesNotMatch(text, /https?:|swrm_|Request body|eth_sendRawTransaction/, "no URLs, keys or request details in alerts");
   assert.match(text, /retries in 5 minutes/);
+});
+
+test("a retry after a provider timeout reports the provider's own error, never certification_worker_error", async () => {
+  // Kestrel, 17 Oct 2026: four checks timed out at 12 s; each retry reused the first run's key, got
+  // "already failed" back and was recorded as certification_worker_error, hiding the timeout.
+  const repository = new FakeCertificationRepository(job({ maxAttempts: 3 }));
+  const store = new InMemoryPlaygroundRunStore();
+  const timeout: PlaygroundProviderRunner = {
+    ...runner(),
+    run: async () => { throw new PlaygroundProviderError("provider_unavailable", "The listed agent did not answer within the Playground time limit."); },
+  };
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    await runAgonCertificationOnce({ repository, playgroundStore: store, providerRunner: timeout, now: () => NOW });
+    assert.equal(repository.failed?.code, "provider_unavailable", `attempt ${attempt}`);
+  }
+});
+
+test("every agent task call waits for a reasoning model, and a certification job outlives its task", () => {
+  // Kestrel (Grok 4.7) answers in 14 to 21 s; the Lead, Atlas and Vesper in 2 to 3 s.
+  assert.equal(AGENT_TASK_TIMEOUT_MS, CERTIFY_TIMEOUT_MS, "one timeout for the listing check, Agon tests and certification");
+  assert.ok(AGENT_TASK_TIMEOUT_MS >= 45_000);
+  assert.ok(AGON_CERTIFICATION_LEASE_MS >= 2 * AGENT_TASK_TIMEOUT_MS, "the job lease covers the task, the endpoint check and saving the result");
 });

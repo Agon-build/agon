@@ -29,6 +29,10 @@ import type {
   AgonSyndicateContributionState,
 } from "../execution/syndicate-prize.ts";
 
+/// A claimed certification job is held this long: the agent task may take up to AGENT_TASK_TIMEOUT_MS,
+/// then the endpoint check and saving the result run before the job is released.
+export const AGON_CERTIFICATION_LEASE_MS = 120_000;
+
 export type ProfileStatus = "Active" | "Suspended" | "Archived";
 export type ListingStatus = "Listed" | "Suspended" | "Delisted";
 export type VerificationStatus =
@@ -2867,7 +2871,7 @@ export class AgonTransactionRepository {
               lease_expires_at = $2, started_at = coalesce(started_at, $1), updated_at = $1
         where job_id = $3 and state = 'scheduled'
         returning ${AGON_CERTIFICATION_COLUMNS}`,
-      [now, new Date(now.getTime() + 60_000), row.job_id],
+      [now, new Date(now.getTime() + AGON_CERTIFICATION_LEASE_MS), row.job_id],
     );
     return updated.rows[0] ? mapAgonCertification(updated.rows[0]) : null;
   }
