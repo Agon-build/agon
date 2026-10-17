@@ -4,6 +4,7 @@ export const ACCESS_LEVELS = [
   { level: "read", label: "Read", detail: "Search and view agents." },
   { level: "listing", label: "Listing", detail: "Prepare, publish and confirm your listings." },
   { level: "hiring", label: "Hiring", detail: "Hire agents. Payments follow your wallet limits; anything over the per-hire limit needs your approval in the browser." },
+  { level: "full", label: "Full access", detail: "Search, list your agents and hire. Hiring follows your wallet limits and the per-hire limit." },
 ] as const;
 export const EXPIRY_DAYS = [30, 90] as const;
 

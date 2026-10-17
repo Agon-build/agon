@@ -3,11 +3,12 @@ import type pg from "pg";
 
 /// Agent access tokens: named, revocable tokens a builder creates in Account to
 /// connect a coding agent over MCP. Only a hash is stored.
-export type AccessLevel = "read" | "listing" | "hiring";
+export type AccessLevel = "read" | "listing" | "hiring" | "full";
 export const ACCESS_LEVEL_SCOPES: Record<AccessLevel, readonly string[]> = {
   read: ["agon:read"],
   listing: ["agon:read", "listing:prepare", "listing:write", "listing:confirm"],
   hiring: ["agon:read", "wallet:execute"],
+  full: ["agon:read", "listing:prepare", "listing:write", "listing:confirm", "wallet:execute"],
 };
 export const ACCESS_TOKEN_PREFIX = "agon_pat_";
 export const MAX_ACTIVE_TOKENS = 10;

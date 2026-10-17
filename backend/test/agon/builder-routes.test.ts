@@ -44,6 +44,13 @@ test("a signed-in builder creates, lists and revokes tokens; the token is return
   assert.equal((await app.request("http://x/tokens/00000000-0000-4000-8000-000000000099/revoke", json({}))).status, 404);
 });
 
+test("a builder can create a full access token", async () => {
+  const app = createBuilderRoutes({ tokens: fakeTokens(), requireAuth: auth(true), now: () => now });
+  const made = await app.request("http://x/tokens", json({ name: "All of it", level: "full", days: 90 }));
+  assert.equal(made.status, 201);
+  assert.equal(((await made.json()) as { record: { level: string } }).record.level, "full");
+});
+
 test("bad input, too many tokens and signed-out callers are refused", async () => {
   const tokens = fakeTokens();
   const app = createBuilderRoutes({ tokens, requireAuth: auth(true), now: () => now });

@@ -11,7 +11,7 @@ export type PublishingResult = {
 };
 export type DraftSummary = { draftId: string; name: string; endpoint: string; priceUSDC: string; state: string; publishing: PublishingResult | null };
 export type DraftDetail = { draftId: string; draft: DraftInput; state: string; publishing: PublishingResult | null; feeUSDC: string };
-export type TokenRow = { id: string; name: string; level: "read" | "listing" | "hiring"; createdAt: string; expiresAt: string; lastUsedAt: string | null; revokedAt: string | null; active: boolean };
+export type TokenRow = { id: string; name: string; level: "read" | "listing" | "hiring" | "full"; createdAt: string; expiresAt: string; lastUsedAt: string | null; revokedAt: string | null; active: boolean };
 
 const base = "/agon/builder";
 const id = (draftId: string) => encodeURIComponent(draftId);

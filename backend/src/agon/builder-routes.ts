@@ -7,7 +7,7 @@ import type { ManagedPublisher } from "./mcp/managed-publisher.ts";
 
 const createToken = z.object({
   name: z.string().trim().min(1).max(80),
-  level: z.enum(["read", "listing", "hiring"]),
+  level: z.enum(["read", "listing", "hiring", "full"]),
   days: z.union([z.literal(30), z.literal(90)]),
 }).strict();
 const approveBody = z.object({ termsDigest: z.string().regex(/^0x[0-9a-fA-F]{64}$/) }).strict();

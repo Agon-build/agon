@@ -2404,7 +2404,7 @@ create table if not exists agon_access_tokens (
   id            uuid primary key,
   owner_address text not null,
   name          text not null check (char_length(name) between 1 and 80),
-  level         text not null check (level in ('read', 'listing', 'hiring')),
+  level         text not null check (level in ('read', 'listing', 'hiring', 'full')),
   token_hash    text not null unique,
   created_at    timestamptz not null,
   expires_at    timestamptz not null,
@@ -2412,6 +2412,9 @@ create table if not exists agon_access_tokens (
   revoked_at    timestamptz
 );
 create index if not exists agon_access_tokens_owner_idx on agon_access_tokens(owner_address, created_at desc);
+-- Full access: listing and hiring in one token.
+alter table agon_access_tokens drop constraint if exists agon_access_tokens_level_check;
+alter table agon_access_tokens add constraint agon_access_tokens_level_check check (level in ('read', 'listing', 'hiring', 'full'));
 
 create table if not exists agon_listing_checks (
   id              bigserial primary key,

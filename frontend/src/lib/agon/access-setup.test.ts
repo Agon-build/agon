@@ -3,8 +3,9 @@ import test from "node:test";
 
 import { ACCESS_LEVELS, EXPIRY_DAYS, listingStatusLabel, setupSnippets } from "./access-setup.ts";
 
-test("three access levels and two expiry choices", () => {
-  assert.deepEqual(ACCESS_LEVELS.map((l) => [l.level, l.label]), [["read", "Read"], ["listing", "Listing"], ["hiring", "Hiring"]]);
+test("four access levels, full access last, and two expiry choices", () => {
+  assert.deepEqual(ACCESS_LEVELS.map((l) => [l.level, l.label]), [["read", "Read"], ["listing", "Listing"], ["hiring", "Hiring"], ["full", "Full access"]]);
+  assert.match(ACCESS_LEVELS[3]!.detail, /per-hire limit/);
   assert.match(ACCESS_LEVELS[2]!.detail, /per-hire limit/);
   assert.deepEqual([...EXPIRY_DAYS], [30, 90]);
 });

@@ -21,7 +21,16 @@ test("tokens are opaque, prefixed and hashed; each level grants exactly its scop
     read: ["agon:read"],
     listing: ["agon:read", "listing:prepare", "listing:write", "listing:confirm"],
     hiring: ["agon:read", "wallet:execute"],
+    full: ["agon:read", "listing:prepare", "listing:write", "listing:confirm", "wallet:execute"],
   });
+});
+
+test("a full access token is stored and verifies with listing and hiring scopes", async () => {
+  const out = await store.create({ owner: OWNER, name: "everything", level: "full", days: 90, now });
+  assert.ok(out.ok);
+  const v = await store.verify(out.token, now);
+  assert.ok(v.ok);
+  assert.deepEqual(v.claims.scopes, ["agon:read", "listing:prepare", "listing:write", "listing:confirm", "wallet:execute"]);
 });
 
 test("a created token verifies once stored; only its hash is in the table", async () => {
