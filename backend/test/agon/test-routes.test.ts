@@ -24,7 +24,7 @@ function app(signedIn = true) {
     c.set("address" as never, RUNNER as never);
     await next();
   };
-  return { store, routes: createTestRoutes({ service, store, requireRun }) };
+  return { store, routes: createTestRoutes({ service, store, requireRun, now: () => NOW }) };
 }
 const post = (body: unknown) => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 

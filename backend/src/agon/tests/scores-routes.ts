@@ -27,7 +27,7 @@ function sortRows(rows: ScoreRow[], sort: Sort): ScoreRow[] {
 }
 
 /// Public Agon scores, read from snapshots. Boards are per category only.
-export function createScoresRoutes(deps: { store: ScoreSnapshotStore; remainingTests?: (agentId: string) => Promise<number> }) {
+export function createScoresRoutes(deps: { store: ScoreSnapshotStore; remainingTests?: (agentId: string) => Promise<number>; now?: () => Date }) {
   const app = new Hono();
   app.use("*", async (c, next) => {
     await next();
@@ -64,7 +64,7 @@ export function createScoresRoutes(deps: { store: ScoreSnapshotStore; remainingT
       const row = rows.find((r) => r.categoryId === category && r.window === w);
       return [w, row ? view(row) : null];
     }));
-    const now = new Date();
+    const now = (deps.now ?? (() => new Date()))();
     return c.json({
       agentId,
       category,

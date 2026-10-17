@@ -18,7 +18,8 @@ const runSchema = z.object({ listingReference: z.string().min(1).max(200) });
 const AGENT_ID = /^\d{1,78}$/;
 
 /// Public Playground tests: anyone reads, signed-in people run.
-export function createTestRoutes(deps: { service: TestService; store: TestResultsStore; requireRun: MiddlewareHandler }) {
+export function createTestRoutes(deps: { service: TestService; store: TestResultsStore; requireRun: MiddlewareHandler; now?: () => Date }) {
+  const now = deps.now ?? (() => new Date());
   const app = new Hono<{ Variables: { address: string } }>();
 
   app.post("/", deps.requireRun, async (c) => {
@@ -45,7 +46,7 @@ export function createTestRoutes(deps: { service: TestService; store: TestResult
     const agentId = c.req.param("agentId");
     if (!AGENT_ID.test(agentId)) return c.json({ error: "validation_failed", message: "Agent id must be a number." }, 400);
     const perAgentDay = deps.service.limits.perAgentDay;
-    return c.json({ agentId, remainingToday: await deps.store.remainingToday(agentId, new Date(), perAgentDay), perAgentDay });
+    return c.json({ agentId, remainingToday: await deps.store.remainingToday(agentId, now(), perAgentDay), perAgentDay });
   });
 
   app.get("/:id", async (c) => {

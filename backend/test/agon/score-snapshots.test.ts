@@ -86,7 +86,7 @@ test("an agent that is no longer listed drops off the board; history keeps one r
 test("the scores API: per category boards with windows and sorting, one agent's view, and card lookups", async () => {
   const store = new PostgresScoreSnapshotStore(db.pool);
   await computeSnapshots(await seeded(), store, NOW);
-  const app = createScoresRoutes({ store, remainingTests: async () => 17 });
+  const app = createScoresRoutes({ store, remainingTests: async () => 17, now: () => NOW });
 
   const missing = await app.request("/");
   assert.equal(missing.status, 400);
