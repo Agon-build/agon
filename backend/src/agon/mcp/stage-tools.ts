@@ -24,7 +24,7 @@ export type StageMcpDeps = {
   limit?: (actor: string) => boolean;
 };
 
-const LEAD_OUTCOME = "A probability for a Polymarket question, with three reasons, next to the market's own price. The lead agent buys live data and hires the best-rated Season 1 forecaster.";
+const LEAD_OUTCOME = "A probability for a Polymarket question, with three reasons, next to the market's own price. The lead agent buys live data and hires one of Agon's Season 1 forecasters after haggling.";
 
 const findSchema = fromJsonSchema<{ need?: string }>({
   type: "object",

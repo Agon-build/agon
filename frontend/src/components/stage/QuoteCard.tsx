@@ -50,7 +50,7 @@ export function QuoteCard({ quote, nowMs, paying, onPay, onCancel }: { quote: Qu
       ) : (
         <ul className="mt-5 space-y-2 text-sm leading-6 text-ink-2">
           <li>Buys the live market and a spot price from data sellers.</li>
-          <li>Hires the best-rated Season 1 forecaster it can afford, after haggling.</li>
+          <li>Hires one of Agon's Season 1 forecasters it can afford, after haggling.</li>
           <li>Refunds you automatically if nothing can be delivered.</li>
         </ul>
       )}

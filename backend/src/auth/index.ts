@@ -109,6 +109,7 @@ import {
   agonOperationsAlertWorkerLoop,
   createTelegramAlertSender,
 } from "../agon/operations-alerts.ts";
+import { redactSensitive } from "../agon/redact.ts";
 import { isAgonCertificationSchemaReady } from "../agon/certification-readiness.ts";
 import { PostgresAgonOperationStore } from "../agon/write/repository.js";
 import { CachedAgonReadiness } from "../agon/write/readiness.js";
@@ -5136,8 +5137,9 @@ app.get("/notifications", requireAuth, async (c) => {
     items: rows.map((r) => ({
       id: Number(r.id),
       kind: r.kind,
-      title: r.title,
-      body: r.body,
+      // Rows stored before redaction existed are cleaned on the way out too.
+      title: redactSensitive(r.title),
+      body: r.body === null ? null : redactSensitive(r.body),
       href: r.href,
       read: r.read,
       alertId: r.alert_id,

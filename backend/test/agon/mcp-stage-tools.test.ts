@@ -210,3 +210,9 @@ test("tool descriptions claim only what is live (agon-build capabilities.md, 202
   }
   assert.match(stage.find((t) => t.name === "get_leaderboard")!.description, /not scoring yet/);
 });
+
+test("the Lead agent is not described as hiring a best-rated forecaster while no forecaster is rated", async () => {
+  const { handler } = setup();
+  const { value } = await payload(await handler.fetch(rpc(1, "find_service", {})));
+  assert.doesNotMatch(JSON.stringify(value), /best-rated/i);
+});

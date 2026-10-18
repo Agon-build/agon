@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 
+import { redactDeep, redactSensitive } from "./redact.ts";
+
 export type AgonAlertSeverity = "info" | "warning" | "critical";
 export type AgonAlertSource = "certification" | "arena" | "stage";
 export type AgonAlertStatus = "open" | "acknowledged" | "resolved";
@@ -166,7 +168,14 @@ export class PostgresAgonOperationsAlertRepository {
     this.pool = pool;
   }
 
-  async raise(input: RaiseAgonOperationsAlert): Promise<AgonOperationsAlert> {
+  async raise(raw: RaiseAgonOperationsAlert): Promise<AgonOperationsAlert> {
+    // Alerts reach the notification bell, Telegram and email: nothing sensitive is stored.
+    const input: RaiseAgonOperationsAlert = {
+      ...raw,
+      title: redactSensitive(raw.title),
+      ...(raw.body !== undefined ? { body: redactSensitive(raw.body) } : {}),
+      ...(raw.context !== undefined ? { context: redactDeep(raw.context) } : {}),
+    };
     const operator = normalizeOperator(input.operator);
     const fingerprint = input.fingerprint.trim().slice(0, 256);
     if (!fingerprint) throw new Error("operations alert fingerprint is required");

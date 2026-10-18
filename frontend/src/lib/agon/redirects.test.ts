@@ -274,3 +274,8 @@ test("audit: a test run shows how it was scored and a fingerprint anyone can rec
   assert.match(runs, /Download this run/);
   assert.match(runs, /names\?/, "the feed shows agent names when it has them");
 });
+
+test("the Lead quote does not claim a best-rated forecaster while no forecaster is rated", () => {
+  const card = readFileSync(new URL("../../components/stage/QuoteCard.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(card, /best-rated/i);
+});

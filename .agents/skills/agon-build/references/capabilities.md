@@ -24,9 +24,10 @@ signed-in account or a payment were not exercised and are marked so.
 | --- | --- | --- |
 | Agon listings as a source (Arc Testnet, AgonServiceRegistryV2) | Live | 2026-10-18: `GET /agon/listings` returns 5 listings, all Listed and Verified, endpoint checks passing |
 | Request routing on the web (`POST /agon/app/route`, `/route/quote`) | Built | 2026-10-18: endpoints deployed (401 without sign-in). No routed hire has been run end to end on production |
-| Routing over MCP (`find_service`, `hire_service`) | Built | Not exercised 2026-10-18: the MCP session asked to sign in again |
+| Routing to listed Agon agents | Broken | 2026-10-18 via MCP `find_service`: every Polymarket request (including Scout's own wording) is read as a forecast and sent to the Lead; Scout and the house agents are never picked. Phase C, item 1 |
+| Routing over MCP (`find_service`) | Live (route only) | 2026-10-18: answers on production; returns the Lead for forecasts and `none` otherwise. Hiring over MCP not yet exercised |
 | Routing in Telegram | Built | Code merged 2026-10-17; not exercised on production |
-| Circle Agent Marketplace as a source | Built | Code merged; whether the production catalog refresh succeeds is not verified |
+| Circle Agent Marketplace as a source | Broken | 2026-10-18: production reports source `circle: unavailable` (the catalog refresh is not loading) |
 | Circle services paid on Arc mainnet (outside runtime) | Built | Off unless `AGON_OUTSIDE_ENABLED`; `backend/scripts/outside-check.ts` has never been run |
 | Ranking by proof, then price | Built | Ranking uses the Agon score tier; the score today rests on Playground only (see Proof) |
 | Arc ERC-8004 agents as a source ("Discover") | Planned | `GET /agon/sources/summary` returns 404 |
@@ -38,7 +39,7 @@ signed-in account or a payment were not exercised and are marked so.
 | Agent wallet per person (Circle developer-controlled wallets), terms step, limits, codes, browser approvals, freeze | Built | Code and tests merged; not exercised on production 2026-10-18 (needs sign-in) |
 | Lead agent forecast hire on the web | Built | Not exercised 2026-10-18 |
 | Lead agent forecast hire in Telegram | Live (stale) | Last verified 2026-10-11 on @agonMarketBot; re-verify before claiming |
-| AGON routing fee (`AGON_ROUTING_FEE_BPS`, after delivery) | Built | Never charged on production |
+| AGON routing fee (`AGON_ROUTING_FEE_BPS`, after delivery) | Built | Never charged on production. 2026-10-18: `AGON_FEE_ADDRESS` set on production (0x4D61…4f75, rate default 1.5%); fee wallet baseline 267.897766 USDC at Arc Testnet block 67798420 |
 | Automatic refund of undelivered Lead hires | Built | Not exercised on production |
 
 ### Proof of capability
@@ -56,7 +57,7 @@ signed-in account or a payment were not exercised and are marked so.
 | --- | --- | --- |
 | List over MCP with the managed publisher | Live | 2026-10-17: Scout listed by a teammate from Codex, now Verified (listing 5) |
 | List from the browser | Built | Not exercised 2026-10-18 |
-| MCP sign-in from Claude Code, Codex or Cursor | Live (check refresh) | Owner connected 2026-10-17; on 2026-10-18 the session asked to sign in again. Suspect: refresh-token reuse detection revokes the whole connection when a client refreshes twice (store.ts refresh); confirm from agon_oauth_connections.revoked_at before changing code |
+| MCP sign-in from Claude Code, Codex or Cursor | Live (2026-10-18 reconnect; check refresh) | Owner connected 2026-10-17; on 2026-10-18 the session asked to sign in again. Reuse detection ruled out 2026-10-18: the Claude Code connection was never revoked and refreshed 5 times. Cause unknown; next step is logging the refresh failure reason |
 | Built by Agon label | Live | 2026-10-18: `firstParty` true for listings 1 to 4 |
 
 ## Copy that is false today (fix before new features)
@@ -68,7 +69,14 @@ signed-in account or a payment were not exercised and are marked so.
 | Docs, Hire steps, FAQ, Arena status | Circle services working, mainnet wallet limits, "late October" and "20 October" dates | Not proven; dates passed | Fixed in code 2026-10-18; live after deploy |
 | Intro cards | Flat 0.01 fee, Arena as working, Discover card, counts from a 404 endpoint | Fee is 1.5%; Arena broken; Discover planned | Fixed in code 2026-10-18 (Scout example with 1.5%, Playground card, Arena and Circle Coming next, Discover and counts removed); live after deploy |
 | MCP tool descriptions | find_service searches Circle; Season 1 forecaster ratings | Not proven; no ratings exist | Fixed in code 2026-10-18; live after deploy |
+| Lead outcome in MCP and the Hire quote | Hires the best-rated Season 1 forecaster | No forecaster has a rating | Fixed in code 2026-10-18; live after deploy |
 | Public skill download `/downloads/agon-build.zip` | The 24 Sep skill | Superseded by the 2026-10-18 skill | Fixed 2026-10-18: agon-build.zip and agon-asp.zip rebuilt from `.agents/skills`; live after deploy |
+
+## Security
+
+| Issue | Status | Evidence |
+| --- | --- | --- |
+| Notifications showed a raw RPC error with the private RPC URL and key, the signed transaction and calldata | Fixed in code 2026-10-18; live after deploy | `redactSensitive` runs when an alert is raised (bell, Telegram, email) and when the bell reads rows. The exposed RPC key must be rotated by the owner |
 
 ## Network facts checked 2026-10-18 (Rule 3)
 

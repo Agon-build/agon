@@ -180,3 +180,16 @@ test("health readiness verifies the configured operations recipient and Telegram
   assert.equal(missing.ready, false);
   assert.deepEqual(missing.reasons, ["recipient_not_found"]);
 });
+
+test("an alert never stores or delivers a raw RPC error: URL paths, request bodies and calldata are removed", async () => {
+  const leaked = "marketplace_state_write_failed: RPC Request failed. URL: https://rpc.testnet.arc-node.example.com/v1/swrm_00000000fakekey00000000 Request body: {\"method\":\"eth_sendRawTransaction\",\"params\":[\"0x02f8" + "ab".repeat(80) + "\"]}";
+  await alertAgonCertificationOperator({
+    operator: OPERATOR, listingReference: `5042002:0x${"22".repeat(20)}:7`, listingVersion: "1", status: "warning", reasons: [leaked], consecutiveFailures: 1,
+  }, repository);
+  const stored = await database.pool.query("select a.title, a.body, a.context::text as context, n.body as notification from agon_operations_alerts a join agon_alert_recipients r on r.alert_id = a.alert_id join notifications n on n.id = r.notification_id where a.fingerprint = $1", [`certification:5042002:0x${"22".repeat(20)}:7@1`]);
+  assert.equal(stored.rowCount, 1);
+  for (const field of [stored.rows[0].body, stored.rows[0].context, stored.rows[0].notification]) {
+    assert.doesNotMatch(field, /swrm_|fakekey|Request body|eth_sendRawTransaction|0x02f8abab/, field);
+  }
+  assert.match(stored.rows[0].body, /marketplace_state_write_failed/);
+});
