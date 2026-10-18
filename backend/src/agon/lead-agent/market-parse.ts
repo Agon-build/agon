@@ -70,6 +70,9 @@ export function priceFromPayload(payload: unknown, coinId: string): number | nul
 const STOP = new Set([
   "what", "whats", "is", "the", "real", "chance", "of", "will", "spend", "up", "to", "usdc", "a", "an", "on", "by", "be", "price", "that", "this", "it", "for", "in", "at", "and", "or",
   "close", "closes", "closing", "end", "ends", "today", "tomorrow", "week", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+  // Words about trading the market rather than its subject; Polymarket questions rarely contain them.
+  "market", "markets", "polymarket", "worth", "trading", "trade", "bet", "betting", "odds", "likely", "probability", "should", "buy", "sell",
+  "good", "now", "do", "does", "how", "you", "your", "my", "me", "can", "are",
 ]);
 const SYNONYMS: Record<string, string> = { btc: "bitcoin", eth: "ethereum", ether: "ethereum", sol: "solana" };
 

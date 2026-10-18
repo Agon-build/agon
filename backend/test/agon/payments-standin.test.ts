@@ -23,6 +23,7 @@ function setup() {
       events: [{ title: "Bitcoin above ___ on October 30?", markets: [
         { conditionId: cid, question: "Will the price of Bitcoin be above $82,000 on October 30?", slug: "btc-82k-oct-30", endDate: "2026-10-30T16:00:00Z", outcomes: '["Yes","No"]', outcomePrices: '["0.41","0.59"]', liquidityNum: 40000 },
         { conditionId: `0x${"cd".repeat(32)}`, question: "Up or down?", slug: "x", endDate: "2026-10-30T16:00:00Z", outcomes: '["Up","Down"]', outcomePrices: '["0.5","0.5"]' },
+        { conditionId: `0x${"ce".repeat(32)}`, question: "Will the price of Bitcoin be above $80,000 on October 30?", slug: "y", endDate: "2026-10-30T16:00:00Z", outcomes: '["Yes","No"]', outcomePrices: '["1","0"]', closed: true },
       ] }],
     }));
   }) as typeof fetch;
@@ -49,6 +50,8 @@ test("the market route charges 0.0085 and returns binary markets with a Yes pric
   const markets = (out.data as { markets: { conditionId: string; yesPriceBps: number }[] }).markets;
   assert.deepEqual(markets.map((m) => [m.conditionId, m.yesPriceBps]), [[cid, 4100]]);
   assert.ok(upstream[0]!.startsWith("https://gamma-api.polymarket.com/public-search?"));
+  // Without this Polymarket ranks long-closed events first and almost no question finds an open market.
+  assert.equal(new URL(upstream[0]!).searchParams.get("events_status"), "active", "only open events are searched");
 });
 
 test("bad coin lists and empty queries are refused before payment", async () => {

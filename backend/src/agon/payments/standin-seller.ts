@@ -31,6 +31,7 @@ const gammaMarket = z.object({
   outcomes: z.unknown(),
   outcomePrices: z.unknown(),
   liquidityNum: z.coerce.number().optional(),
+  closed: z.boolean().optional(),
 });
 
 export function createStandinRoutes(deps: {
@@ -57,7 +58,8 @@ export function createStandinRoutes(deps: {
     return q.length >= 2 && q.length <= 200 ? next() : c.json({ error: "invalid_query" }, 400);
   });
   app.get("/markets", pay(STANDIN_SEARCH_ATOMIC, "Prediction market search (Polymarket)"), async (c) => {
-    const params = new URLSearchParams({ q: (c.req.query("q") ?? "").trim(), limit_per_type: "10" });
+    // events_status=active: without it Polymarket ranks long-closed events first.
+    const params = new URLSearchParams({ q: (c.req.query("q") ?? "").trim(), limit_per_type: "10", events_status: "active" });
     const res = await upstream(`https://gamma-api.polymarket.com/public-search?${params}`, { signal: AbortSignal.timeout(10_000) });
     if (!res.ok) return c.json({ error: "upstream_unavailable" }, 502);
     const body = (await res.json()) as { events?: { markets?: unknown[] }[] };
@@ -65,7 +67,7 @@ export function createStandinRoutes(deps: {
     for (const event of body.events ?? []) {
       for (const raw of event.markets ?? []) {
         const m = gammaMarket.safeParse(raw);
-        if (!m.success) continue;
+        if (!m.success || m.data.closed === true) continue;
         const outcomes = strings(m.data.outcomes);
         const prices = strings(m.data.outcomePrices)?.map(Number);
         if (!outcomes || outcomes[0] !== "Yes" || outcomes[1] !== "No" || !prices || !Number.isFinite(prices[0])) continue;

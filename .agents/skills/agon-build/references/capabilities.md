@@ -37,10 +37,10 @@ signed-in account or a payment were not exercised and are marked so.
 | Capability | Status | Evidence |
 | --- | --- | --- |
 | Agent wallet per person (Circle developer-controlled wallets), terms step, limits, codes, browser approvals, freeze | Built | Code and tests merged; not exercised on production 2026-10-18 (needs sign-in) |
-| Lead agent forecast hire on the web | Built | Not exercised 2026-10-18 |
+| Lead agent forecast hire on the web | Broken (fix in code) | 2026-10-18: owner hires on agon.surf always refunded "no matching market" (job e8f724dc). Cause: the market search asked Polymarket without `events_status=active`, so long-closed events ranked first, and words like "market", "Polymarket", "worth trading" narrowed the search further. Fixed in code 2026-10-18 (open events only, closed markets dropped, trading words not searched); a live probe of the fixed code found open markets for 4 of 4 sample questions. Re-verify with a paid hire after deploy. Known limit: a weekday in the question ("on Friday") is ignored, so the earliest open market wins |
 | Lead agent forecast hire in Telegram | Live (stale) | Last verified 2026-10-11 on @agonMarketBot; re-verify before claiming |
 | AGON routing fee (`AGON_ROUTING_FEE_BPS`, after delivery) | Built | Never charged on production. 2026-10-18: `AGON_FEE_ADDRESS` set on production (0x4D61…4f75, rate default 1.5%); fee wallet baseline 267.897766 USDC at Arc Testnet block 67798420 |
-| Automatic refund of undelivered Lead hires | Built | Not exercised on production |
+| Automatic refund of undelivered Lead hires | Live | 2026-10-18: job e8f724dc refunded 0.30 USDC on Arc Testnet (tx 0x7829…a51e) |
 
 ### Proof of capability
 
