@@ -160,11 +160,32 @@ test("the wallet hires are paid from is called the agent wallet everywhere", () 
   assert.match(readFileSync(new URL("../../components/stage/WalletStrip.tsx", import.meta.url), "utf8"), />Agent wallet</);
 });
 
-test("the Hire box asks what you need done and says plainly what routes today", () => {
+test("the Hire page says once, in plain words, what works today", () => {
   const composer = readFileSync(new URL("../../components/stage/Composer.tsx", import.meta.url), "utf8");
-  assert.doesNotMatch(composer, /market outcome/);
-  assert.match(composer, /What do you need done/);
+  const hire = readFileSync(new URL("../../components/stage/HireClient.tsx", import.meta.url), "utf8");
+  const docs = readFileSync(new URL("./docs-content.ts", import.meta.url), "utf8");
+  // 2026-10-18: the page said "Describe it", then "What do you need done?" twice more.
+  assert.match(hire, /Ask about any Polymarket market/);
+  assert.doesNotMatch(hire + composer, /What do you need done|"Describe it"/);
+  assert.match(composer, /className="sr-only"/, "the question box keeps an accessible label without repeating the heading");
   assert.match(composer, /HIRE_TODAY_NOTE/);
+  // Ratings and Circle are not working yet (capabilities.md), so the page must not promise them.
+  const note = /HIRE_TODAY_NOTE = "([^"]+)"/.exec(docs)![1]!;
+  const how = hire.slice(hire.indexOf("How it works"), hire.indexOf("</ol>", hire.indexOf("How it works")));
+  for (const text of [note, how]) assert.doesNotMatch(text, /rated|Circle/, text);
+});
+
+test("a lapsed sign-in asks to sign in again and retries the question once signed in", () => {
+  const hire = readFileSync(new URL("../../components/stage/HireClient.tsx", import.meta.url), "utf8");
+  assert.match(hire, /code === "unauthorized"\) void refresh\(\)/, "a 401 refreshes the session so the page shows signed out");
+  assert.match(hire, /mode\.code === "unauthorized" && me/, "signing in again retries the same question");
+  assert.match(hire, /<LoginButton \/>/, "the refusal offers the sign-in button, not only text");
+});
+
+test("the haggle reads as one aligned list, not two staggered columns", () => {
+  const tape = readFileSync(new URL("../../components/stage/HaggleTape.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(tape, /justify-end|justify-start/);
+  assert.match(tape, /haggleRows\(steps, seller\)/);
 });
 
 test("the header and root layout render the same markup on the server and on first load", () => {

@@ -88,9 +88,9 @@ test("buys market data and a price, haggles with the top forecaster, hires it an
   assert.equal(answer.probabilityBps, 3400);
   assert.equal(answer.marketPriceBps, 4100);
   assert.deepEqual(answer.forecaster, { name: "Atlas (house)", reason: "Season 1 rank #1", asked: "0.22", agreed: "0.17424" });
-  assert.ok(answer.progress.some((p) => p.startsWith("Bought market search from AGON testnet stand-in: 0.0085 USDC")));
-  assert.ok(answer.progress.some((p) => p.startsWith("Bought Bitcoin price from AGON testnet stand-in: 0.002 USDC")));
-  assert.ok(answer.progress.some((p) => p === "Hired Atlas (house), Season 1 rank #1: 0.17424 USDC (asked 0.22, agreed 0.17424)"));
+  assert.ok(answer.progress.some((p) => p.startsWith("Bought market search from Agon test data seller: 0.0085 USDC")));
+  assert.ok(answer.progress.some((p) => p.startsWith("Bought Bitcoin price from Agon test data seller: 0.002 USDC")));
+  assert.ok(answer.progress.some((p) => p === "Hired Atlas (house) to forecast for 0.17424 USDC (it asked 0.22). Season 1 rank #1"));
   const tree = await store.listJobTree(parent.jobId);
   assert.equal(tree.length, 2);
   assert.equal(tree.find((j) => j.parentId === parent.jobId)!.state, "delivered");

@@ -17,8 +17,8 @@ export function dataServicesFor(network: AgonNetwork, publicApiUrl: string): Dat
   return {
     price: (ids) => `${publicApiUrl}/agon/standin/price/${ids.join(",")}`,
     marketSearch: (q) => `${publicApiUrl}/agon/standin/markets?${new URLSearchParams({ q })}`,
-    priceLabel: "AGON testnet stand-in",
-    searchLabel: "AGON testnet stand-in",
+    priceLabel: "Agon test data seller",
+    searchLabel: "Agon test data seller",
   };
 }
 

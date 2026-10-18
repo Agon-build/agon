@@ -38,7 +38,7 @@ export function stageWorld(opts: { price?: bigint; newWalletAllowed?: () => bool
       const startedAt = new Date().toISOString();
       const events = [
         { at: startedAt, text: "Reading the question and looking for the market", kind: "note" },
-        { at: startedAt, text: "Bought market search from AGON testnet stand-in: 0.0085 USDC", kind: "data" },
+        { at: startedAt, text: "Bought market search from Agon test data seller: 0.0085 USDC", kind: "data" },
       ];
       await store.updateJob(jobId, { result: { live: true, startedAt, events, haggle: [] } });
       if (state.fail) return c.json({ error: "lead_agent_failed" }, 500);
@@ -53,7 +53,7 @@ export function stageWorld(opts: { price?: bigint; newWalletAllowed?: () => bool
         market: { conditionId: `0x${"ab".repeat(32)}`, question: "Will Bitcoin close above $120,000 on October 30?", slug: "btc-120k", endDate: "2026-10-30T16:00:00Z", yesPriceBps: 4100 },
         forecaster: { name: "Atlas (house)", reason: "Season 1 rank #1", asked: "0.22", agreed: "0.17424" },
         progress: [], haggle,
-        events: [...events, { at: startedAt, text: "Hired Atlas (house), Season 1 rank #1: 0.17424 USDC (asked 0.22, agreed 0.17424)", kind: "hire" }],
+        events: [...events, { at: startedAt, text: "Hired Atlas (house) to forecast for 0.17424 USDC (it asked 0.22). Season 1 rank #1", kind: "hire" }],
       };
       await store.updateJob(jobId, { result: body });
       return c.json(body);

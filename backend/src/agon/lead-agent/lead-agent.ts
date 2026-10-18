@@ -242,7 +242,7 @@ export async function runLeadForecast(
     // 3. Hire the best forecaster that will meet the budget.
     const body = { marketId: market.conditionId, question: market.question, endDate: market.endDate, crowdBps: market.yesPriceBps ?? undefined, notes };
     const init = (headers: Record<string, string>): RequestInit => ({ method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
-    await say("Asking Season 1 for the best forecasters", "note");
+    await say("Choosing a forecaster", "note");
     for (const cand of (await deps.forecasters()).slice(0, 3)) {
       const tree = await deps.store.listJobTree(root.rootId);
       const payments = await deps.store.listJobPayments(root.rootId);
@@ -314,7 +314,7 @@ export async function runLeadForecast(
       );
       if (result?.success) {
         await deps.store.updateJob(child.jobId, { state: "delivered", result: result.data });
-        await say(`Hired ${cand.displayName}, ${cand.reason}: ${formatUsdc(amount)} USDC (asked ${formatUsdc(ask)}, agreed ${formatUsdc(amount)})`, "hire");
+        await say(`Hired ${cand.displayName} to forecast for ${formatUsdc(amount)} USDC (it asked ${formatUsdc(ask)}). ${cand.reason}`, "hire");
         const answer: LeadAnswer = {
           ok: true,
           jobId: root.jobId,

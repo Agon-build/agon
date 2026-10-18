@@ -70,8 +70,9 @@ test("haggle steps become sides with amounts and a summary", () => {
     { step: "counter" as const, detail: "Atlas (house) countered at 0.1848 USDC" },
     { step: "accept" as const, detail: "agreed 0.17424 USDC (asked 0.22)" },
   ];
-  assert.deepEqual(haggleRows(steps).map((r) => [r.side, r.label, r.amount]), [
-    ["seller", "Listed at", "0.22"], ["agon", "Offered", "0.132"], ["seller", "Countered", "0.1848"], ["deal", "Agreed", "0.17424"],
+  // One row per move, each naming who made it, so the table reads top to bottom.
+  assert.deepEqual(haggleRows(steps, "Atlas (house)").map((r) => [r.side, r.label, r.amount]), [
+    ["seller", "Atlas (house) asked", "0.22"], ["agon", "Agon offered", "0.132"], ["seller", "Atlas (house) came down to", "0.1848"], ["deal", "Agreed price", "0.17424"],
   ]);
   assert.deepEqual(haggleSummary(steps), { asked: "0.22", agreed: "0.17424", percentOff: 21 });
   assert.equal(haggleSummary([{ step: "walk", detail: "walked away" }]), null);
@@ -79,11 +80,21 @@ test("haggle steps become sides with amounts and a summary", () => {
 
 test("the forecast is compared with the market in whole points", () => {
   const answer: StageAnswer = { probabilityBps: 3400, marketPriceBps: 4100, reasons: [], marketQuestion: "q", marketEndsAt: null, marketSlug: null, forecaster: { name: "A", reason: "r", asked: "0.22", agreed: "0.17" } };
-  assert.deepEqual(compareProbability(answer), { agonPct: 34, marketPct: 41, deltaPts: -7, sentence: "7 points below the market" });
-  assert.equal(compareProbability({ ...answer, probabilityBps: 4120 }).sentence, "Level with the market");
-  assert.equal(compareProbability({ ...answer, probabilityBps: 5000 }).sentence, "9 points above the market");
-  assert.equal(compareProbability({ ...answer, probabilityBps: 4200 }).sentence, "1 point above the market");
-  assert.equal(compareProbability({ ...answer, marketPriceBps: null }).sentence, "No market price to compare");
+  assert.deepEqual(compareProbability(answer), {
+    agonPct: 34, marketPct: 41, deltaPts: -7, verdict: "Less likely than the market says",
+    sentence: "The forecast gives Yes 34%, 7 points below the 41% traders pay for Yes on Polymarket. The forecaster thinks Yes is less likely than the market does.",
+  });
+  // Within 2 points the two agree: no edge is claimed.
+  const level = compareProbability({ ...answer, probabilityBps: 6000, marketPriceBps: 6050 });
+  assert.equal(level.verdict, "Agrees with the market");
+  assert.equal(level.sentence, "The forecast gives Yes 60% and traders pay 61% for Yes on Polymarket. They agree, so there is no clear edge either way.");
+  assert.equal(compareProbability({ ...answer, probabilityBps: 4300 }).verdict, "Agrees with the market");
+  const above = compareProbability({ ...answer, probabilityBps: 5000 });
+  assert.equal(above.verdict, "More likely than the market says");
+  assert.equal(above.sentence, "The forecast gives Yes 50%, 9 points above the 41% traders pay for Yes on Polymarket. The forecaster thinks Yes is more likely than the market does.");
+  const none = compareProbability({ ...answer, marketPriceBps: null });
+  assert.equal(none.verdict, "No market price to compare");
+  assert.equal(none.sentence, "The forecast gives Yes 34%. Polymarket had no price to compare it with.");
 });
 
 test("phases map to the four visible steps and only final phases stop polling", () => {

@@ -72,7 +72,7 @@ export const TEST_TASKS_DOCS: readonly { category: string; title: string; exampl
   { category: "Development", title: "Selector guard", example: "Four calldata strings, some full ERC-20 transfers and some truncated or unknown.", scoring: "Share of cases classified correctly." },
   { category: "Verification", title: "Manifest anchor", example: "Three service files, one with a plain http endpoint or a non x402 price.", scoring: "Each safe file's exact canonical hash and each unsafe file flagged." },
 ];
-export const HIRE_TODAY_NOTE = "Agon picks the best agent for your request: rated agents first, then the fairest price.";
+export const HIRE_TODAY_NOTE = "Agon's lead agent finds the market, buys the data and hires a forecaster. You get its chance of Yes next to the Polymarket price.";
 
 export const HIRE_STEPS: readonly { title: string; body: string }[] = [
   { title: "Ask", body: "Describe what you need in plain words, on the web, in Telegram or from a coding agent." },

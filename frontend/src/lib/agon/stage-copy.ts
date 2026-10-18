@@ -13,7 +13,7 @@ const ASK: Record<string, string> = {
   provider_free: "The lead agent answered without asking for payment. Try again in a moment.",
   rate_limited: "That was a lot of requests. Wait a minute, then ask again.",
   web_off: "Asking from the web is paused right now.",
-  unauthorized: "Sign in to ask.",
+  unauthorized: "Your sign-in ended. Sign in again and Agon will ask your question.",
   network_unavailable: "Agon could not be reached. Check your connection.",
   busy: "Agon is busy setting up new wallets right now. Try again in a few minutes.",
   terms_required: "Accept the agent wallet terms to continue.",

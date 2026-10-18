@@ -37,7 +37,7 @@ signed-in account or a payment were not exercised and are marked so.
 | Capability | Status | Evidence |
 | --- | --- | --- |
 | Agent wallet per person (Circle developer-controlled wallets), terms step, limits, codes, browser approvals, freeze | Built | Code and tests merged; not exercised on production 2026-10-18 (needs sign-in) |
-| Lead agent forecast hire on the web | Broken (fix in code) | 2026-10-18: owner hires on agon.surf always refunded "no matching market" (job e8f724dc). Cause: the market search asked Polymarket without `events_status=active`, so long-closed events ranked first, and words like "market", "Polymarket", "worth trading" narrowed the search further. Fixed in code 2026-10-18 (open events only, closed markets dropped, trading words not searched); a live probe of the fixed code found open markets for 4 of 4 sample questions. Re-verify with a paid hire after deploy. Known limit: a weekday in the question ("on Friday") is ignored, so the earliest open market wins |
+| Lead agent forecast hire on the web | Live | 2026-10-18: owner hire on agon.surf delivered (job c4a34bf3, "Will Arsenal win the 2026-27 EPL?"): market search 0.0085, Drift hired for 0.17424 after haggling, forecast 60% vs Polymarket 61%, every payment settled on Arc Testnet. Earlier hires refunded "no matching market" until the open-markets search fix. Known limits: a weekday in the question is ignored; a session that lapses mid-page showed "Sign in to ask" with no button (fixed in code 2026-10-19, live after deploy) |
 | Lead agent forecast hire in Telegram | Live (stale) | Last verified 2026-10-11 on @agonMarketBot; re-verify before claiming |
 | AGON routing fee (`AGON_ROUTING_FEE_BPS`, after delivery) | Built | Never charged on production. 2026-10-18: `AGON_FEE_ADDRESS` set on production (0x4D61…4f75, rate default 1.5%); fee wallet baseline 267.897766 USDC at Arc Testnet block 67798420 |
 | Automatic refund of undelivered Lead hires | Live | 2026-10-18: job e8f724dc refunded 0.30 USDC on Arc Testnet (tx 0x7829…a51e) |
@@ -70,6 +70,7 @@ signed-in account or a payment were not exercised and are marked so.
 | Intro cards | Flat 0.01 fee, Arena as working, Discover card, counts from a 404 endpoint | Fee is 1.5%; Arena broken; Discover planned | Fixed in code 2026-10-18 (Scout example with 1.5%, Playground card, Arena and Circle Coming next, Discover and counts removed); live after deploy |
 | MCP tool descriptions | find_service searches Circle; Season 1 forecaster ratings | Not proven; no ratings exist | Fixed in code 2026-10-18; live after deploy |
 | Lead outcome in MCP and the Hire quote | Hires the best-rated Season 1 forecaster | No forecaster has a rating | Fixed in code 2026-10-18; live after deploy |
+| Hire page | "Agon picks the best rated agent at a fair price, on Agon or Circle"; "rated agents first" | No ratings; Circle broken; routing reaches only the Lead | Fixed in code 2026-10-19: the page says it answers Polymarket questions, the steps claim only the price, Arc transactions and refunds; live after deploy |
 | Public skill download `/downloads/agon-build.zip` | The 24 Sep skill | Superseded by the 2026-10-18 skill | Fixed 2026-10-18: agon-build.zip and agon-asp.zip rebuilt from `.agents/skills`; live after deploy |
 
 ## Security

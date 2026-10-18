@@ -13,6 +13,7 @@ import { TopUpPanel } from "@/components/stage/TopUpPanel";
 import { WalletStrip } from "@/components/stage/WalletStrip";
 import { useLiveJob } from "@/components/stage/useLiveJob";
 import { useNow } from "@/components/stage/useNow";
+import { LoginButton } from "@/components/pengu/LoginButton";
 import { useAuth } from "@/hooks/useAuth";
 import { confirmHire, getHistory, getLeaderboard, getStageConfig, getWallet, quoteRoute, routeRequest, StageApiError } from "@/lib/agon/stage";
 import { canAfford } from "@/lib/agon/hire-panel";
@@ -35,7 +36,7 @@ type Mode =
 export function HireClient() {
   const router = useRouter();
   const params = useSearchParams();
-  const { me } = useAuth();
+  const { me, refresh } = useAuth();
   const now = useNow();
   const resumeJob = params?.get("job") ?? null;
   const stageQuery = params?.get("stage") === "1" ? "&stage=1" : "";
@@ -82,7 +83,10 @@ export function HireClient() {
       }
       refreshWallet();
     } catch (e) {
-      setMode({ kind: "refused", question, maxPrice, code: e instanceof StageApiError ? e.code : "network_unavailable" });
+      const code = e instanceof StageApiError ? e.code : "network_unavailable";
+      // A lapsed session: show the page signed out so the sign-in button appears.
+      if (code === "unauthorized") void refresh();
+      setMode({ kind: "refused", question, maxPrice, code });
     }
   }
 
@@ -97,7 +101,9 @@ export function HireClient() {
       else if (quote.code === "missing_input") setMode({ ...r, missing: quote.missing ?? [], prompt: quote.question ?? null });
       else setMode({ kind: "refused", question: r.question, maxPrice: null, code: quote.code, amount: quote.amount, network: quote.network, back: r });
     } catch (e) {
-      setMode({ kind: "refused", question: r.question, maxPrice: null, code: e instanceof StageApiError ? e.code : "network_unavailable", back: r });
+      const code = e instanceof StageApiError ? e.code : "network_unavailable";
+      if (code === "unauthorized") void refresh();
+      setMode({ kind: "refused", question: r.question, maxPrice: null, code, back: r });
     }
     refreshWallet();
     if (r.pick.network === "arc") refreshMainnet();
@@ -112,6 +118,16 @@ export function HireClient() {
     if (m.back) void quoteRouted(m.back);
     else void ask(m.question, m.maxPrice);
   }
+
+  // Signed in again after a lapsed session: ask the same question once more (once per question).
+  const signInRetried = useRef<string | null>(null);
+  useEffect(() => {
+    if (mode.kind !== "refused" || signInRetried.current === mode.question) return;
+    if (mode.code === "unauthorized" && me) {
+      signInRetried.current = mode.question;
+      retry(mode);
+    }
+  }, [me]);
 
   // Short wallet: watch the balance on the hire's network, and ask again once it covers the price.
   const shortOf = mode.kind === "refused" && mode.code === "insufficient_balance" && mode.amount ? mode.amount : null;
@@ -176,8 +192,8 @@ export function HireClient() {
         <div className="mt-10 grid gap-12 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-16">
           <div className="min-w-0">
             <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Hire{onMainnet ? " · Arc mainnet" : config ? ` · ${config.network}` : ""}</p>
-            <h1 className={`mt-4 font-display uppercase tracking-[-.04em] text-ink ${question ? "max-w-[24ch] text-[clamp(1.6rem,2.8vw,2.5rem)] leading-[1.05]" : "max-w-[10ch] text-[clamp(3rem,7vw,6.5rem)] leading-[.86]"}`}>
-              {question ?? "Describe it"}
+            <h1 className={`mt-4 font-display uppercase tracking-[-.04em] text-ink ${question ? "max-w-[24ch] text-[clamp(1.6rem,2.8vw,2.5rem)] leading-[1.05]" : "max-w-[14ch] text-[clamp(2.4rem,5vw,4.5rem)] leading-[.9]"}`}>
+              {question ?? "Ask about any Polymarket market"}
             </h1>
             {mode.kind === "idle" || mode.kind === "quoting" ? (
               <div className="mt-10"><Composer disabled={mode.kind === "quoting"} signedIn={canAct} onSubmit={ask} /></div>
@@ -186,6 +202,7 @@ export function HireClient() {
               <div role="alert" className="stage-print mt-8 border-y border-[color:var(--hairline-strong)] py-6">
                 <p className="text-base leading-7 text-ink">{askRefusalText(mode.code, mode.amount)}</p>
                 {mode.note ? <p className="mt-2 text-sm leading-6 text-ink-2">{mode.note}</p> : null}
+                {mode.code === "unauthorized" && !me ? <div className="mt-4"><LoginButton /></div> : null}
                 <button type="button" onClick={reset} className="mt-4 min-h-11 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 underline underline-offset-4 hover:text-accent">Describe something else</button>
               </div>
             ) : null}
@@ -200,9 +217,9 @@ export function HireClient() {
                 <h2 id="how-heading" className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">How it works</h2>
                 <ol className="mt-4 divide-y divide-[color:var(--hairline)]">
                   {[
-                    ["01", "Say what you need in plain words. Agon picks the best rated agent at a fair price, on Agon or Circle."],
-                    ["02", "You see the exact price and Agon's routing fee before anything is paid. Swap the pick if you like."],
-                    ["03", "Every payment lands on Arc with its transaction. Agon's fee is taken only when the answer arrives."],
+                    ["01", "Ask about a Polymarket market: a match, an election, a price."],
+                    ["02", "See the full price, Agon's fee included, before anything is paid."],
+                    ["03", "Watch the agents work. Every payment shows its Arc transaction. If no market matches, your money comes back."],
                   ].map(([n, text]) => <li key={n} className="grid grid-cols-[2.5rem_1fr] py-3 text-sm leading-6 text-ink-2"><span className="font-mono text-[11px] text-accent">{n}</span>{text}</li>)}
                 </ol>
                 {best ? (

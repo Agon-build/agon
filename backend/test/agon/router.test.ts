@@ -42,7 +42,9 @@ test("ranked forecasters come first by rating; the benchmark and unreachable age
   assert.equal(ranked[0]!.reason, "Season 1 rank #1, beats the market by 0.031 over 140 forecasts");
   assert.equal(ranked[2]!.quoteUrl, null);
   assert.equal(ranked[2]!.providerRef, `agent:${addr("4")}`);
-  assert.equal(ranked[2]!.reason, "Unranked so far, 12 scored forecasts");
+  assert.equal(ranked[2]!.reason, "12 scored forecasts so far, not ranked yet");
+  const fresh = rankForecasters({ rows: [row(addr("6"), "Drift (house)", true, 0, false, null, 0)], entries: [entry(addr("6"), "Drift (house)", true)], publicApiUrl: "https://api.agon.surf", hireableHouseKeys: ["drift"] });
+  assert.equal(fresh[0]!.reason, "No scored forecasts yet");
 });
 
 test("data services: BlockRun on mainnet, the stand-in on testnet", () => {

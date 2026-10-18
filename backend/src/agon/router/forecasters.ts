@@ -57,7 +57,7 @@ export function rankForecasters(input: { rows: LeaderboardRow[]; entries: Season
       forecastsResolved: row.forecastsResolved,
       reason: row.ranked
         ? `Season 1 rank #${row.rank}, beats the market by ${row.meanSkill.toFixed(3)} over ${row.forecastsResolved} forecasts`
-        : `Unranked so far, ${row.forecastsResolved} scored forecasts`,
+        : row.forecastsResolved === 0 ? "No scored forecasts yet" : `${row.forecastsResolved} scored forecasts so far, not ranked yet`,
     });
   }
   return candidates.sort((a, b) => Number(b.ranked) - Number(a.ranked) || b.rating - a.rating || b.forecastsResolved - a.forecastsResolved);

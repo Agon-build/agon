@@ -5,7 +5,7 @@ export type FlowNode = { id: string; role: "lead" | "data" | "forecaster" | "ref
 export type FlowModel = { lead: FlowNode | null; sellers: FlowNode[]; refund: FlowNode | null; agentSpend: string };
 export type LedgerRow = { key: string; offset: string; text: string; kind: StageEventKind };
 export type HaggleRow = { key: string; side: "seller" | "agon" | "deal" | "walk"; label: string; amount: string | null };
-export type ProbabilityComparison = { agonPct: number; marketPct: number | null; deltaPts: number | null; sentence: string };
+export type ProbabilityComparison = { agonPct: number; marketPct: number | null; deltaPts: number | null; verdict: string; sentence: string };
 
 export function parseUsdcText(text: string): bigint | null {
   const m = /^(\d+)(?:\.(\d{1,6}))?$/.exec(text.trim());
@@ -65,15 +65,15 @@ export function moneySegments(text: string): { text: string; money: boolean }[] 
 
 const amountIn = (detail: string) => /(\d+(?:\.\d+)?) USDC/.exec(detail)?.[1] ?? null;
 
-export function haggleRows(steps: BargainStep[]): HaggleRow[] {
+export function haggleRows(steps: BargainStep[], seller = "The forecaster"): HaggleRow[] {
   return steps.map((s, i) => {
     const key = `${i}-${s.step}`;
-    if (s.step === "request") return { key, side: "seller", label: "Listed at", amount: amountIn(s.detail) };
-    if (s.step === "offer") return { key, side: "agon", label: "Offered", amount: amountIn(s.detail) };
-    if (s.step === "counter") return { key, side: "seller", label: "Countered", amount: amountIn(s.detail) };
-    if (s.step === "accept") return { key, side: "deal", label: "Agreed", amount: amountIn(s.detail) };
-    if (s.step === "pay") return { key, side: "agon", label: "Paid", amount: amountIn(s.detail) };
-    return { key, side: "walk", label: "Walked away", amount: null };
+    if (s.step === "request") return { key, side: "seller", label: `${seller} asked`, amount: amountIn(s.detail) };
+    if (s.step === "offer") return { key, side: "agon", label: "Agon offered", amount: amountIn(s.detail) };
+    if (s.step === "counter") return { key, side: "seller", label: `${seller} came down to`, amount: amountIn(s.detail) };
+    if (s.step === "accept") return { key, side: "deal", label: "Agreed price", amount: amountIn(s.detail) };
+    if (s.step === "pay") return { key, side: "agon", label: "Agon paid", amount: amountIn(s.detail) };
+    return { key, side: "walk", label: "No deal", amount: null };
   });
 }
 
@@ -90,12 +90,22 @@ export function haggleSummary(steps: BargainStep[]): { asked: string; agreed: st
 
 export function compareProbability(answer: StageAnswer): ProbabilityComparison {
   const agonPct = Math.round(answer.probabilityBps / 100);
-  if (answer.marketPriceBps === null) return { agonPct, marketPct: null, deltaPts: null, sentence: "No market price to compare" };
+  if (answer.marketPriceBps === null) {
+    return { agonPct, marketPct: null, deltaPts: null, verdict: "No market price to compare", sentence: `The forecast gives Yes ${agonPct}%. Polymarket had no price to compare it with.` };
+  }
   const marketPct = Math.round(answer.marketPriceBps / 100);
   const deltaPts = agonPct - marketPct;
   const n = Math.abs(deltaPts);
-  const sentence = deltaPts === 0 ? "Level with the market" : `${n} point${n === 1 ? "" : "s"} ${deltaPts < 0 ? "below" : "above"} the market`;
-  return { agonPct, marketPct, deltaPts, sentence };
+  // Two points or less is within a forecaster's noise, so no edge is claimed.
+  if (n <= 2) {
+    return { agonPct, marketPct, deltaPts, verdict: "Agrees with the market", sentence: `The forecast gives Yes ${agonPct}% and traders pay ${marketPct}% for Yes on Polymarket. They agree, so there is no clear edge either way.` };
+  }
+  const more = deltaPts > 0;
+  return {
+    agonPct, marketPct, deltaPts,
+    verdict: more ? "More likely than the market says" : "Less likely than the market says",
+    sentence: `The forecast gives Yes ${agonPct}%, ${n} points ${more ? "above" : "below"} the ${marketPct}% traders pay for Yes on Polymarket. The forecaster thinks Yes is ${more ? "more" : "less"} likely than the market does.`,
+  };
 }
 
 export function phaseStep(phase: LivePhase | "idle" | "quote"): 0 | 1 | 2 | 3 {

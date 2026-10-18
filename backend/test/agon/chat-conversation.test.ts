@@ -110,7 +110,7 @@ test("paying shows progress in one message, then the forecast with the receipt l
   assert.match(progress.reply.text, /^(Paying 0\.30 USDC on Arc Testnet|Paid\. Working on it)/);
   assert.ok(s.edits.every((e) => e.id === progress.id), "progress edits one message");
   const finalProgress = s.edits.at(-1)?.reply.text ?? progress.reply.text;
-  assert.match(finalProgress, /- Bought market search from AGON testnet stand-in: 0\.0085 USDC/);
+  assert.match(finalProgress, /- Bought market search from Agon test data seller: 0\.0085 USDC/);
   assert.match(finalProgress, /- Hired Atlas \(house\)/);
   const answer = s.last();
   assert.match(answer.text, /^Forecast: 34% chance\. Polymarket says 41%\./);

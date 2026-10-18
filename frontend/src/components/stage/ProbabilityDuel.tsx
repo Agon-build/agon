@@ -6,17 +6,19 @@ export function ProbabilityDuel({ answer }: { answer: StageAnswer }) {
   return (
     <section aria-labelledby="answer-heading" className="stage-print">
       <h2 id="answer-heading" className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">The forecast</h2>
-      {answer.marketQuestion ? <p className="mt-3 max-w-[60ch] text-sm leading-6 text-ink-2">Market: {answer.marketQuestion}</p> : null}
+      <p className="mt-3 font-display text-3xl uppercase leading-[.95] tracking-[-.03em] text-ink sm:text-4xl">{c.verdict}</p>
+      <p className="mt-3 max-w-[60ch] text-base leading-7 text-ink">{c.sentence}</p>
+      {answer.marketQuestion ? <p className="mt-3 max-w-[60ch] text-sm leading-6 text-ink-2">Polymarket market: {answer.marketQuestion}</p> : null}
       <div className="mt-5 grid grid-cols-2 border-y border-[color:var(--hairline-strong)]">
         <div className="py-6 pr-4">
-          <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">Agon</p>
+          <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">Agon's forecast</p>
           <p className="mt-2 font-display text-[clamp(4rem,10vw,8rem)] leading-[.82] tracking-[-.06em] tabular-nums text-ink">{c.agonPct}<span className="text-[.45em] tracking-normal">%</span></p>
-          <p className="mt-2 text-xs text-ink-2">chance of Yes</p>
+          <p className="mt-2 text-xs text-ink-2">chance the answer is Yes</p>
         </div>
         <div className="border-l border-[color:var(--hairline)] py-6 pl-5">
-          <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">Polymarket</p>
+          <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">Polymarket price</p>
           <p className="mt-2 font-display text-[clamp(4rem,10vw,8rem)] leading-[.82] tracking-[-.06em] tabular-nums text-ink-3">{c.marketPct ?? "n/a"}{c.marketPct !== null ? <span className="text-[.45em] tracking-normal">%</span> : null}</p>
-          <p className="mt-2 text-xs text-ink-2">crowd price now</p>
+          <p className="mt-2 text-xs text-ink-2">what traders pay for Yes now</p>
         </div>
       </div>
       <div className="relative mt-6 h-6" aria-hidden>
@@ -26,9 +28,11 @@ export function ProbabilityDuel({ answer }: { answer: StageAnswer }) {
         <span className="absolute -bottom-4 left-0 font-mono text-[9px] text-ink-3">0</span>
         <span className="absolute -bottom-4 right-0 font-mono text-[9px] text-ink-3">100</span>
       </div>
-      <p className="mt-8 font-mono text-[12px] uppercase tracking-[0.14em] text-ink">{c.sentence}</p>
       {answer.reasons.length > 0 ? (
-        <ol className="mt-6 divide-y divide-[color:var(--hairline)] border-y border-[color:var(--hairline)]">
+        <h3 className="mt-10 font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Why</h3>
+      ) : null}
+      {answer.reasons.length > 0 ? (
+        <ol className="mt-3 divide-y divide-[color:var(--hairline)] border-y border-[color:var(--hairline)]">
           {answer.reasons.map((r, i) => (
             <li key={i} className="grid grid-cols-[2.5rem_1fr] gap-2 py-3 text-sm leading-6 text-ink">
               <span className="font-mono text-[11px] text-accent">0{i + 1}</span>{r}
@@ -37,8 +41,9 @@ export function ProbabilityDuel({ answer }: { answer: StageAnswer }) {
         </ol>
       ) : null}
       <p className="mt-5 text-sm leading-6 text-ink-2">
-        Forecast by <span className="text-ink">{answer.forecaster.name}</span>, {answer.forecaster.reason}. Agreed <span className="font-mono text-ink">{answer.forecaster.agreed} USDC</span> (asked {answer.forecaster.asked}).
+        Forecast by <span className="text-ink">{answer.forecaster.name}</span>. {answer.forecaster.reason}.
       </p>
+      <p className="mt-2 text-xs leading-5 text-ink-3">A forecast, not financial advice.</p>
     </section>
   );
 }

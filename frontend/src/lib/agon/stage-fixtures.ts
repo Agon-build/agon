@@ -12,8 +12,8 @@ const TIMELINE: { ms: number; text: string; kind: StageEvent["kind"] }[] = [
   { ms: 300, text: "Reading the question and looking for the market", kind: "note" },
   { ms: 1600, text: "Bought market search from BlockRun: 0.0085 USDC", kind: "data" },
   { ms: 2900, text: "Bought Bitcoin price from BlockRun: 0.002 USDC", kind: "data" },
-  { ms: 3600, text: "Asking Season 1 for the best forecasters", kind: "note" },
-  { ms: 6200, text: "Hired Atlas (house), Season 1 rank #1, beats the market by 0.031 over 214 forecasts: 0.17424 USDC (asked 0.22, agreed 0.17424)", kind: "hire" },
+  { ms: 3600, text: "Choosing a forecaster", kind: "note" },
+  { ms: 6200, text: "Hired Atlas (house) to forecast for 0.17424 USDC (it asked 0.22). Season 1 rank #1, beats the market by 0.031 over 214 forecasts", kind: "hire" },
 ];
 const HAGGLE = [
   { ms: 4200, step: "request" as const, detail: "asked Atlas (house) for a price; listed at 0.22 USDC" },
