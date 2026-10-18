@@ -1,15 +1,15 @@
 # AGON network matrix
 
 This is the public network contract. Facts below were read from the repository
-deployment receipt, Arc documentation, and live RPC calls on 2026-09-24.
-Re-verify before enabling any write.
+deployment receipt and Arc documentation, and re-checked against Arc docs and
+live RPC on 2026-10-18. Rule 3: re-verify before enabling any write.
 
 ## Contexts
 
 | Context | Chain id | Role | Status |
 | --- | ---: | --- | --- |
 | Arc Testnet | 5042002 | AGON's registry, listings, tests, Arena, and AGON-listed hires | Live |
-| Arc mainnet | 5042 | Discovery and buyer-paid hiring of external services, such as Circle marketplace services payable on Arc | Planned; no AGON contracts |
+| Arc mainnet | 5042 | Hiring outside services (Circle Agent Marketplace) paid in real USDC, behind `AGON_OUTSIDE_ENABLED` | Built, never run live; no AGON contracts |
 | BNB Smart Chain | 56 / 97 | Parked. Code lives in `bnb-market/` and is not part of the product | Out of scope |
 
 A context with no AGON contracts cannot expose an AGON write action. Mainnet
@@ -30,7 +30,7 @@ payments need an explicit mainnet choice, a spending cap, and a clear label.
 | ERC-8183 AgenticCommerce | `0x0747EEf0706327138c69792bF28Cd525089e4583` | Standard escrow jobs (proxy); candidate escrow rail |
 | USDC | `0x3600000000000000000000000000000000000000` | 6-decimal ERC-20 view of native USDC |
 
-Explorer: `https://testnet.arcscan.app`. The public RPC can rate-limit bursts;
+Explorer: `https://explorer.testnet.arc.io` (from Arc docs; `testnet.arcscan.app` is not in Arc docs and only redirects, so do not use it). The public RPC can rate-limit bursts;
 the frontend uses an optional `NEXT_PUBLIC_ARC_RPC_HTTP` fallback and batching.
 
 The frontend constants in `frontend/src/lib/arc.ts` must match the active pair

@@ -1,195 +1,236 @@
 ---
 name: agon-build
-description: Build, extend, review, or explain AGON, the Arc-native marketplace that aggregates agent services and routes buyers to the best provider. Use when an agent works on AGON discovery, marketplace sources, intent routing, hiring, listing through MCP, Playground, Arena, trust evidence, route isolation, or the AGON coding-agent workflow. Read this before changing AGON code.
+description: Build, extend, review, or explain AGON, the Arc-native aggregator of agent services that routes a request to the best agent by proven capability (Arena results, user ratings, Playground tests) and then price. Use before any AGON work: hiring, routing, sources, Circle Agent Marketplace, payments and wallets, Arena, Playground, ratings, listing over MCP, docs, UI, deployment. It carries the standing rules: the build direction, the diversion alert, verify-before-implement against Arc and Circle docs, claims only for working software, and the mainnet gate.
 ---
 
 # Agon build
 
-AGON is an Arc-native marketplace that aggregates agent services. It collects
-services from several sources (its own registry first, then the Circle Agent
-Marketplace and agents registered on Arc), turns a buyer's request into
-structured terms, routes the buyer to the best provider, and lets people and
-agents pay per use instead of subscribing. Providers list through AGON MCP and
-keep ownership through their ERC-8004 identity. The product records evidence
-separately from claims. Agon is not the old
-ArcRun competition product. ArcRun remains a compatibility surface and must
-not leak into new Agon product names, copy, routes, contracts, or network
-selection.
+AGON is an aggregator of agent services on Arc. A person or an agent says what
+they need; AGON finds the best agent service for it across sources (its own
+listings first, then outside marketplaces, starting with Circle's Agent
+Marketplace), shows why it chose it, and pays per use in USDC on Arc inside
+spending limits the person controls. Providers list through AGON MCP or the web
+and keep ownership through their ERC-8004 identity. AGON is not the old ArcRun
+competition product; ArcRun names, routes and copy do not enter AGON work.
 
-This skill is the public build contract. It is deliberately safe to distribute.
-Private hackathon plans, wallet details, credentials, operator runbooks,
-unpublished addresses, and internal research do not belong here.
+This skill is public and safe to distribute. Private plans, wallet details,
+credentials, operator runbooks and internal research never go in it.
+
+## Standing rules (every task, before anything else)
+
+These five rules outrank speed, deadlines and any plan. If a plan conflicts
+with them, the rules win and the conflict is reported.
+
+### Rule 1. The direction
+
+Everything built moves AGON toward one product: **an aggregator for agent
+services, where the best agent is chosen by proof of capability, then price.**
+
+Proof comes from three sources, and only these:
+
+1. **Arena**: competitive seasons scored against real outcomes, each round
+   committed on chain.
+2. **User ratings**: the person who paid for a delivered job rates it, once
+   per job.
+3. **Playground**: public tests scored by code, every run published with its
+   evidence fingerprint.
+
+The parts that serve this direction are: sources, routing, hiring and payment
+safety, the three proof sources, listing, and the honesty and reliability of
+what already exists. A task is on direction only if it builds or fixes one of
+them.
+
+### Rule 2. Diversion alert
+
+Before planning or writing code, classify the request:
+
+- **On direction**: builds or fixes a part named in Rule 1.
+- **Support**: security, reliability, operations, tests or docs truth that a
+  Rule 1 part needs.
+- **Diversion**: anything else. For example a new chain, a new product line,
+  ArcRun-era games, contests, syndicates or missions, a partner or category
+  added without its proof loop, mainnet work before the mainnet gate (Rule 5),
+  a decorative redesign while a live claim is false, or a new feature while an
+  existing claim is false.
+
+For a diversion, or when unsure, stop and output exactly this, then wait:
+
+```text
+DIVERSION ALERT
+Request: <one line>
+Why it is off direction: <one line naming the rule>
+On-direction alternative: <one line>
+Waiting for the owner to confirm before any work.
+```
+
+Only the owner's confirmation in chat releases the work, and it covers that
+request only. Record a confirmed diversion with its date in the plan.
+
+### Rule 3. Never assume: verify against Arc and Circle before implementing
+
+Before any change that touches Arc or Circle (chain config, contracts, RPC,
+explorers, gas and fees, USDC, x402, EIP-3009, developer-controlled wallets,
+Gateway, CCTP, App Kit, the Agent Marketplace discovery API, ERC-8004,
+ERC-8183):
+
+1. Read the current Arc docs (arc-docs MCP or docs.arc.io) and Circle docs
+   (Circle MCP and the live developers.circle.com page; the MCP index can be
+   stale, so confirm on the live page).
+2. Read the installed SDK version and its shipped type definitions. The
+   installed package outranks memory, blog posts and examples.
+3. Where behaviour matters, probe read-only (an RPC call, a GET, a dry run)
+   and keep the result.
+4. Write each fact with its source URL or file path and the date into the plan
+   or ledger, before writing code.
+
+If the docs, the SDK and observed behaviour disagree, stop and report the
+disagreement; never pick one silently. Never call a vendor product broken
+until it was run and failed; suspect AGON's own code first. "I think I
+remember" is the moment to look it up. Never invent an endpoint, address,
+decimal count, event shape, price, status or transaction result; if the
+evidence is missing, the capability is unavailable.
+
+### Rule 4. Claims follow working software
+
+AGON claims only what works today on the deployed app, exercised end to end.
+This covers the UI, the docs page, the README, MCP tool descriptions, skills,
+posts and submissions.
+
+- Every user-facing capability has a status in
+  [capabilities.md](references/capabilities.md): **Live** (run end to end on
+  production, with the date), **Built** (merged, not yet proven live),
+  **Broken**, or **Planned**.
+- Only Live may be presented as working. Built and Planned are labelled as such
+  or not shown. Broken is fixed or removed from the copy.
+- Passing tests is not Live. Live means a real run on agon.surf or
+  api.agon.surf, recorded with its date.
+- A claim found false is a P0 bug: fix the software or the copy before any new
+  feature.
+- Every change that adds, fixes or breaks a capability updates capabilities.md
+  in the same change.
+
+### Rule 5. Professional pace and the mainnet gate
+
+One change at a time: spec, plan, failing test, code, review, deploy, live
+check, then update capabilities.md. Do not skip steps for a deadline; if the
+deadline cannot be met honestly, ship less and label it.
+
+No Arc mainnet contract deployment, mainnet season, or new mainnet payment
+path until all of these hold:
+
+1. Every Live claim re-verified on production within the last 7 days.
+2. No open P0 or P1 bugs, and the findings of the last full audit closed.
+3. Contracts reviewed externally, and admin roles split from a single key.
+4. A security review of the payment, custody and sign-in paths.
+5. A rehearsed rollback and incident runbook.
+
+Mainnet work requested before then is a diversion under Rule 2.
 
 ## Start here
 
 Before writing or moving code, read these references in order:
 
-1. [product.md](references/product.md) for the verified product boundary.
-2. [network-matrix.md](references/network-matrix.md) for the chain model and
-   what is verified versus planned.
-3. [routes.md](references/routes.md) before touching routing or layout.
-4. [ui.md](references/ui.md) before touching any user-facing surface.
-5. [roadmap.md](references/roadmap.md) before adding a feature.
-6. [commands.md](references/commands.md) for the repository checks.
+1. [capabilities.md](references/capabilities.md): what works today, with
+   evidence. Start every task by checking the rows it touches.
+2. [product.md](references/product.md): the product boundary and vocabulary.
+3. [network-matrix.md](references/network-matrix.md): the chain model and what
+   is verified versus planned.
+4. [routes.md](references/routes.md) before touching routing or layout.
+5. [ui.md](references/ui.md) before touching any user-facing surface, together
+   with the `agon-design` skill.
+6. [roadmap.md](references/roadmap.md) before adding anything.
+7. [commands.md](references/commands.md) for the repository checks.
 
-Completion check: the agent can name the active product, the network
-contexts in scope, the catalog sources and their status, the public discovery
-routes, the protected action routes, and the current implementation boundary
-without relying on memory.
+Completion check: the agent can say which Rule 1 part the task serves, which
+capability rows it touches and their status, the network in scope, and the
+docs it checked under Rule 3.
 
-## Non-negotiable build procedure
+## Build procedure
 
 ### 1. Establish the source of truth
 
 Confirm the repository root and inspect the actual files before interpreting a
-plan. Read the installed dependency versions and shipped type definitions for
-any chain, wallet, payment, identity, or agent SDK. The repository source and
-installed package outrank a marketing page, a remembered API, or this skill.
-
-Do not invent an endpoint, contract address, token decimal count, event shape,
-trust status, agent identity, price, or transaction result. If source evidence
-is missing, represent the capability as unavailable or planned.
+plan. The repository source and installed packages outrank a marketing page, a
+remembered API, or this skill.
 
 Completion check: every external fact used in the change has a source file,
-installed package path, real payload, or current primary documentation URL.
+installed package path, real payload, or current documentation URL.
 
 ### 2. Keep product and network concerns separate
 
 The product is always AGON. The active network is a typed runtime context.
-Never use an environment string as a substitute for a network adapter.
 
 ```text
 AGON
-  Arc Testnet   AGON's own contracts, listings, tests, and Arena (live)
-  Arc mainnet   discovery and buyer-paid hiring of external services (planned)
+  Arc Testnet   AGON's own contracts, listings, tests, Arena and AGON hires
+  Arc mainnet   outside services (Circle) paid in real USDC, behind a switch;
+                no AGON contracts yet (Rule 5)
   BNB           parked; code stays in bnb-market/ and is not advertised
 ```
 
-Every catalog record carries its source and network. Testnet and mainnet
-results are never mixed without a label, and a mainnet payment is never
-prepared without an explicit mainnet choice and spending cap.
-
-Network selection must change the catalog source, chain id, RPC, explorer,
-contract inventory, identity registry, payment configuration, evidence scope,
-wallet chain, and write guards together. It must clear prepared quotes,
-signatures, and transactions from the previous network. A label-only switch is
-not a network switch.
-
-Completion check: the change selects one typed network context and every read,
-write, link, status label, and receipt uses that same context.
+Every catalog record carries its source and network. Testnet and mainnet are
+never mixed without a label, and a mainnet payment is never prepared without
+an explicit mainnet choice and spending cap. Network selection changes the
+catalog source, chain id, RPC, explorer, contracts, identity registry, payment
+configuration, wallet and write guards together; a label-only switch is not a
+network switch.
 
 ### 3. Preserve public discovery and gate only actions
 
-Landing, catalog, service detail, documentation, and Playground discovery are
-public. Do not redirect those routes to login. Authentication belongs at the
-action that needs an owner, signer, protected spend, listing publication, or
-other state change.
+Discovery, docs, agent pages and Playground results are public. Sign-in
+belongs at the action that needs it (a hire, a test run, a listing, a wallet
+change). Every write has an idempotency key, a durable pending state, receipt
+verification and a retry path.
 
-When a write is added, use an explicit action gate with a human-readable reason,
-an idempotency key, a durable pending state, receipt verification, and a retry
-path. Do not make SIWE or a wallet connection the first action for a buyer who
-is only browsing.
+### 4. Follow the AGON design system
 
-Completion check: a signed-out user can discover a service and understand its
-status, while a protected action explains exactly why sign-in is required.
-
-### 4. Use the AGON UI source of truth
-
-Reuse the existing AGON mark, typography, token system, intro animation,
-editorial spacing, hard borders, quiet surfaces, and mono evidence language.
-Network and source badges are small context labels, never a second brand
-color. Do not replace AGON with a generic
-crypto dashboard, a copied protocol template, glass cards, purple-blue
-gradients, particle backgrounds, decorative AI copy, or fake statistics.
-
-Every important surface must design loading, empty, error, unavailable,
-degraded, success, and recovery states. Motion must explain product state,
-honor reduced motion, and stay out of the way of the first action.
-
-Completion check: the UI brief or source-of-truth reference explains the user
-intent for the changed surface and the implementation has no unsupported claim.
+Load the `agon-design` skill before any user-facing change. Every important
+surface designs loading, empty, error, unavailable, degraded, success and
+recovery states, and shows nothing that Rule 4 does not allow.
 
 ### 5. Build the proof loop before breadth
 
-The primary buyer path is:
+The buyer path that every feature serves:
 
 ```text
-land on AGON
-  -> describe the outcome needed (or choose a category)
-  -> review the parsed terms: outcome, inputs, budget, speed, payment mode
-  -> compare ranked services across sources, with the reason for each rank
-  -> inspect provider, version, price, authority, and evidence
-  -> run a safe Playground test when available
-  -> connect only for the protected action
-  -> review and authorize
-  -> observe delivery and receipt
-  -> know how to stop, retry, or report a problem
+describe the job
+  -> AGON reads it and picks: proven agents first, then price, with the reason
+  -> see the exact input, price, AGON fee and total, swap the pick if wanted
+  -> pay inside limits; larger payments approved in the browser
+  -> watch delivery and the receipt, with Arc transactions
+  -> rate the delivered job (user rating feeds the next pick)
 ```
 
-Do not add a category, partner, payment rail, or chain until its end-to-end
-state is honest. A visible fixture is acceptable only when clearly labelled as
-fixture or preview and activation is disabled.
-
-Completion check: the changed feature has one demonstrable, recoverable user
-loop and a capability truth entry stating live, sandbox-verified,
-fixture-backed, local-only, unsupported, or unmodelled.
+Do not add a source, category, partner, payment rail or chain until its loop is
+honest end to end. A fixture or preview is labelled as such and cannot pay.
 
 ### 6. Delegate provider-specific work to a seam
 
-Use one typed adapter per external provider, marketplace source, or chain
-family. The UI and AGON domain logic must not import vendor SDKs directly. A
-marketplace source reads a documented public API, keeps its source reference
-on every record, marks stale records, and never copies another marketplace's
-badges as AGON evidence. Validate every external
-payload at the boundary. Keep payment, identity, authority, evidence, and
-execution as separate capabilities.
-
-The existing `agon-asp` skill remains the specialized workflow for service
-configuration, manifest verification, listing publication, Playground runs,
-and verification requests. Load it when the task concerns an agent listing.
-
-Completion check: swapping a provider, RPC, or chain changes one adapter and
-its tests, not the marketplace UI or unrelated ArcRun routes.
+One typed adapter per external provider, marketplace source or chain family.
+Validate every external payload at the boundary, keep the source on every
+record, and never copy another marketplace's badges as AGON evidence. Load the
+`agon-asp` skill for listing work.
 
 ### 7. Protect irreversible paths
 
-No private key, seed phrase, session token, or secret enters source, skill
-files, config committed to the repository, CLI arguments, logs, or chat.
-Preparation is read-only. State-changing operations require explicit human
-confirmation, bounded permissions, idempotency, receipt reconciliation, and a
-safe unknown-outcome path. Never describe a prepared transaction as completed.
-
-Completion check: the code can prove the final onchain state after a write and
-the UI distinguishes prepared, submitted, confirming, confirmed, reverted,
-expired, and unavailable.
-
-## Public route rule
-
-Use [routes.md](references/routes.md) as the current route inventory. In short,
-new AGON work belongs to the AGON route family. Legacy ArcRun routes remain
-isolated behind their existing data modules and must not be renamed or folded
-into AGON discovery as a shortcut.
+No private key, seed phrase, session token or secret in source, skills,
+committed config, CLI arguments, logs or chat. State-changing operations need
+explicit human confirmation, bounded permissions, idempotency, receipt
+reconciliation and a safe unknown-outcome path. Never describe a prepared
+transaction as completed.
 
 ## Verification before handoff
 
 Run the smallest relevant checks first, then the full checks for the touched
-surface. At minimum:
+surface:
 
-- typecheck the affected package;
-- run focused tests for the pure core and boundary;
-- run the production build;
-- smoke the signed-out discovery path;
-- smoke the protected action refusal path;
-- check desktop and 390px mobile layouts for horizontal overflow;
-- check reduced motion when motion changed;
-- inspect console errors and network failures;
-- confirm no internal plan, research, credential, or generated artifact is in
-  the public package.
+- typecheck and focused tests for the pure core and boundary;
+- the full suite and the production build;
+- the signed-out discovery path and the protected-action refusal path;
+- desktop and 390px mobile with no horizontal overflow; reduced motion;
+- console errors and network failures;
+- after deploy, the live check for every capability row the change touched,
+  recorded in capabilities.md with the date.
 
-The agent must report failures plainly. Do not claim a live chain, live agent,
-payment, verification, or official adoption unless the source and runtime
-evidence prove it.
-
-Completion check: all applicable checks are recorded with their exact result,
-known warnings are separated from failures, and the user receives only
-user-owned Git commands for staging, committing, and pushing.
+Report failures plainly. Give the owner only user-owned Git commands; the owner
+runs Git.

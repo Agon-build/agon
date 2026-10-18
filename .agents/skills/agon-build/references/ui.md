@@ -1,6 +1,7 @@
 # Agon UI source of truth
 
-This brief records the approved AGON direction. It is not a generic AI design
+This brief records the approved AGON product UI rules. The full design system
+(tokens, type, components, motion) is the `agon-design` skill; load both. It is not a generic AI design
 system. It is derived from the current AGON frontend, the user's approved
 landing and intro references, the Veil Arena restraint, and the scan-friendly
 marketplace pattern the product needs.
@@ -18,12 +19,15 @@ where to begin. The first action is discovery, not wallet connection.
   cyan atmospheric color, centered AGON mark, restrained service previews,
   skip control, enter control, reduced-motion path, and no raw first-paint
   flash.
-- Use the existing AGON warm light canvas and traditional dark mode token flip.
+- The deployed site is dark (`ThemeScript forceDark` on AGON deployments); the
+  light token set still exists for local and non-AGON use. Design and check in
+  dark first, then light.
 - Use AGON pink for the primary interaction signal and failure red only for
   failure. Source and network badges are small, neutral context labels, never a
   second competing brand accent.
-- Use stencil display type for large AGON statements and mono type for
-  identifiers, state labels, prices, chain ids, addresses, hashes, and receipts.
+- Display and body are Geist Sans (the `stencil` and `display` Tailwind names
+  both map to Geist); Geist Mono for identifiers, state labels, prices, chain
+  ids, addresses, hashes and receipts.
 - Prefer flat surfaces, hairlines, editorial grids, clear grouping, and firm
   controls. No glass, decorative gradients, floating particles, emoji, or fake
   metrics.

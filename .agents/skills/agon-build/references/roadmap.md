@@ -1,49 +1,58 @@
 # AGON public roadmap
 
-A sanitized summary for coding agents. It carries no private plans, wallet
-details, or operator notes.
+A sanitized summary for coding agents. No private plans, wallet details or
+operator notes. Status of every item lives in
+[capabilities.md](capabilities.md); this file is the order of work.
 
-## Present in the repository
-
-- AGON landing, public market, and service detail.
-- AGON MCP at `https://api.agon.surf/agon/mcp` with standard MCP sign-in
-  (OAuth 2.1, PKCE, Client ID Metadata Documents and Dynamic Client
-  Registration). A client connects by URL; the person approves on
-  agon.surf/connect and picks Read, Listing, Hire or Full access. Every MCP
-  request needs a connection; personal tokens remain for agents without a
-  browser. Tools: search and detail, hire preview and authorization, Lead
-  hires, Season 1, and a provider listing flow that ends at the provider's
-  wallet signature. Code in `backend/src/agon/mcp-oauth/`.
-- Version-scoped registry and Arena on Arc Testnet (V2 pair).
-- Playground, automatic certification, and Arena review.
-- The `agon-asp` CLI and skill.
-- Legacy ArcRun routes and contracts, kept for history.
+The direction (Rule 1): an aggregator for agent services where the best agent
+is chosen by proof of capability (Arena, user ratings, Playground), then price.
 
 ## Order of work
 
-1. **Fix and refill.** Close audit findings, bring providers onto the V2
-   registry, and prove one real pay-per-call hire.
-2. **Aggregate.** Add the Circle Agent Marketplace as a catalog source through
-   its public discovery API. Label every record by source and network.
-3. **Intent and routing.** Parse a request into structured terms, show them,
-   then rank eligible services with explained reasons.
-4. **Routed hiring.** Pay external services per call from the buyer's wallet
-   or Circle agent wallet after checking the live payment request against the
-   catalog.
-5. **Escrow hiring.** Multi-step work through the Arc ERC-8183 job standard,
-   with AGON as evaluator, pending an owner decision.
-6. **Simplest listing.** One guided MCP conversation from draft to signed
-   publication.
-7. **Arena seasons.** Sponsor-funded competitions for agent categories such as
-   liquidity management and trading, scored from on-chain results only.
-8. **Arc ERC-8004 agents as a source**, and reputation written back.
-9. **Hardening before mainnet contracts**, then an external audit.
+Work top to bottom. Do not start a later phase while an earlier one has an open
+item, unless the owner confirms the exception (Rule 2).
+
+### Phase A. Make every claim true
+
+1. Fix or relabel every row under "Copy that is false today" in
+   capabilities.md (Arena status, docs Live list, intro cards, fee copy).
+2. Run each Built capability end to end on production (web hire, routed hire,
+   Telegram, MCP routing, browser listing, refunds) and move it to Live or
+   Broken with evidence.
+3. Fix MCP token refresh if a connected client is asked to sign in again early.
+
+### Phase B. The three proof sources working
+
+1. **Arena**: rounds run on schedule, markets resolve, forecasts score, and the
+   score feeds ratings. Resolution and round health are monitored and alert
+   the owner when they stop.
+2. **User ratings**: the person who paid rates a delivered job once; ratings
+   show after a minimum count and feed the Agon score.
+3. **Playground**: real public use, not only AGON's own checks; per-category
+   tasks that measure the claimed capability.
+
+### Phase C. The aggregator end to end
+
+1. Ranking uses the combined proof (Arena, user ratings, Playground), then
+   price, with the reason shown.
+2. Circle Agent Marketplace source live, with its refresh status visible.
+3. A routed hire proven on Arc Testnet, then the mainnet outside check (one
+   Circle service, smallest price), with fee economics decided.
+
+### Phase D. Breadth, only after A to C
+
+Simpler listing, Arc ERC-8004 agents as a source, more categories, escrow
+hiring for larger jobs, more channels. Each needs its full loop before it is
+shown.
+
+### Phase E. Mainnet
+
+Only after the Rule 5 gate in SKILL.md.
 
 ## Non-goals until evidence exists
 
 - No generic AI chat wrapper as the product.
-- No fake agents, receipts, partner metrics, or copied external badges.
-- No custody of per-call payments.
-- No mainnet write action before deployment and receipt verification.
-- No folding legacy ArcRun routes into AGON discovery without a dated decision.
+- No fake agents, receipts, ratings, partner metrics or copied external badges.
+- No mainnet contract deployment before the Rule 5 gate.
+- No ArcRun-era games, contests, syndicates or missions inside AGON.
 - No public copy of private plans or operator documents.

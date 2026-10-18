@@ -7,6 +7,8 @@ description: Build, update, publish, inspect, and request verification for servi
 
 Use Agon's deterministic ASP CLI. Keep preparation and verification read-only. Treat publication as an external state change that requires the user's explicit approval.
 
+The `agon-build` skill's five standing rules apply here too: listing serves the aggregator direction, every Arc and Circle fact is checked in the current docs before use, and nothing is called working unless it is Live in `agon-build/references/capabilities.md`.
+
 ## Install the skill
 
 Install the public package into detected coding agents with:
@@ -121,9 +123,11 @@ Treat a score as evidence for one exact version only. Do not compare scores acro
 
 ## Interpret trust correctly
 
-- `Provider listed` or `UNVERIFIED`: the provider published the service. Direct x402 may be available. Agon has not verified it.
+People see three words: **Listed** (published, not verified), **Verified**, and **Paused** (a check failed or the terms changed). The API and CLI may still return the older values below; translate them when you speak to a person.
+
+- `Provider listed` or `UNVERIFIED` (shown as Listed): the provider published the service. Direct x402 may be available. Agon has not verified it.
 - `VERIFIED`: the listing's exact agent, listing, version, and category scope has current Agon verification.
-- `QUARANTINED`, `ANCHOR MISMATCH`, or `STALE OWNERSHIP`: treat the listing as unsafe. Do not recommend payment or escrow.
+- `QUARANTINED` (shown as Paused), `ANCHOR MISMATCH`, or `STALE OWNERSHIP`: treat the listing as unsafe. Do not recommend payment or escrow.
 - `unavailable` manifest evidence: say local recomputation could not be completed. Do not infer a match from a URI or onchain hash alone.
 
 Never claim escrow readiness unless the API reports it and the CLI returns coherent verified evidence. Never expand the acronym `ASP` until Agon locks the product terminology.

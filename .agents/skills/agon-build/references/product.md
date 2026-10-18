@@ -1,13 +1,14 @@
 # AGON product boundary
 
-Verified against the repository README, `frontend/src`, `backend/src/agon`,
-the deployment receipt, and live read-only API responses on 2026-09-24.
+Reviewed 2026-10-18. For what works today, read [capabilities.md](capabilities.md);
+this file is the boundary and the vocabulary, not the status.
 
 ## Product
 
-AGON is an Arc-native marketplace that aggregates agent services. People and
-agents use it to find a service for a job they need done once, compare the
-providers that can do it, and pay only for that use.
+AGON is an Arc-native aggregator of agent services. People and agents tell it
+what they need done; it picks the best agent service across sources by proven
+capability (Arena results, user ratings, Playground tests), then price, and pays
+per use in USDC on Arc.
 
 The problem it solves: most AI services are sold as subscriptions, while many
 needs are one-off. x402 makes per-call USDC payment practical, and ERC-8183
@@ -28,32 +29,22 @@ AGON keeps these concepts separate:
 | Authority | Who may act, with scope, expiry, allowlist, and spend cap |
 | Evidence | Endpoint checks, Playground runs, Arena results, delivery receipts |
 | Payment | x402 per call from the buyer's wallet, or a separately modelled escrow job |
-| Trust state | Provider listed, verified, quarantined, stale, mismatched, or unavailable |
+| Trust state | Shown to people as Listed, Verified or Paused (the API still says `quarantined` for Paused); stale, mismatched and unavailable are separate states |
+| Proof | Arena results, user ratings from paid work, Playground tests; the only inputs to an Agon score |
 
-## Current implementation (2026-09-24)
+## Current implementation
 
-- Public web market and service detail (Next.js App Router in `frontend/`).
-- Arc Testnet registry and Arena: `AgonServiceRegistryV2` and `AgonArenaV2`
-  with version-scoped verification. The market is empty until providers
-  publish on V2.
-- AGON MCP at `/agon/mcp` with public search and detail, hire preview and
-  authorization, and a provider listing flow that stops at the provider's
-  own wallet signature.
-- Playground public sample, automatic certification of listed versions, and
-  an Arena review path.
-- The `agon-asp` CLI and skill for manifest and listing operations.
-- Legacy ArcRun routes and contracts kept for history only.
-
-Not built yet: aggregation of external sources, intent parsing and routing,
-routed hiring of external services, escrow hiring, and sponsored Arena seasons.
-Treat them as planned, never as live.
+See [capabilities.md](capabilities.md). Never restate status here: a second
+copy goes stale.
 
 ## Product principles
 
-1. MCP is the primary interface; the web market is public discovery and the
-   human fallback.
+1. Hire is the front door. The web, Telegram and MCP all reach the same router.
 2. Discovery is public. Sign-in happens at the action that needs it.
-3. Per-call payments are non-custodial: the buyer's wallet pays the provider.
+3. AGON holds an agent wallet for each person on Circle developer-controlled
+   wallets, after they accept its terms. It pays only what they confirm, within
+   limits they can lower; larger payments, withdrawals and unfreezing are
+   approved in the browser, and the balance can be withdrawn at any time.
 4. Every result shows its source and network.
 5. Listed, tested, verified, available, paid, and delivered are different
    states.
