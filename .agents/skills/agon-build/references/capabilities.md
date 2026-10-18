@@ -56,19 +56,19 @@ signed-in account or a payment were not exercised and are marked so.
 | --- | --- | --- |
 | List over MCP with the managed publisher | Live | 2026-10-17: Scout listed by a teammate from Codex, now Verified (listing 5) |
 | List from the browser | Built | Not exercised 2026-10-18 |
-| MCP sign-in from Claude Code, Codex or Cursor | Live (check refresh) | Owner connected 2026-10-17; on 2026-10-18 the session asked to sign in again, so check token refresh |
+| MCP sign-in from Claude Code, Codex or Cursor | Live (check refresh) | Owner connected 2026-10-17; on 2026-10-18 the session asked to sign in again. Suspect: refresh-token reuse detection revokes the whole connection when a client refreshes twice (store.ts refresh); confirm from agon_oauth_connections.revoked_at before changing code |
 | Built by Agon label | Live | 2026-10-18: `firstParty` true for listings 1 to 4 |
 
 ## Copy that is false today (fix before new features)
 
-| Where | Claim | Truth |
-| --- | --- | --- |
-| Docs, How ratings are earned | Arena seasons: Live | Arena stopped on 14 Oct and never resolved a market |
-| Docs roadmap, Live now | Season 1 dry run "every 6 hours" | No round since 14 Oct |
-| Docs roadmap, Live now | Hire on the web, Telegram or MCP, and Circle services in real USDC | Built; not proven end to end; mainnet path never run |
-| Docs roadmap, Live now | Agon score from public tests, checks "and Arena results" | No Arena results exist |
-| Intro card 02 | Routing fee 0.01 | The fee is 1.5% of the price |
-| Intro cards 04 and 06 | Circle and Discover counts | Both read `/agon/sources/summary`, which returns 404; Discover is not built |
+| Where | Claim | Truth | Fix |
+| --- | --- | --- | --- |
+| Docs, How ratings are earned | Arena seasons: Live | Arena stopped on 14 Oct and never resolved a market | Fixed in code 2026-10-18 (now Coming next); live after deploy |
+| Docs roadmap, Live now | Season 1 dry run, Hire on web, Telegram and MCP, Circle services in real USDC | Built or Broken, not proven | Fixed in code 2026-10-18 (Live now holds only Playground, Agon score, MCP sign-in and listing); live after deploy |
+| Docs, Hire steps, FAQ, Arena status | Circle services working, mainnet wallet limits, "late October" and "20 October" dates | Not proven; dates passed | Fixed in code 2026-10-18; live after deploy |
+| Intro cards | Flat 0.01 fee, Arena as working, Discover card, counts from a 404 endpoint | Fee is 1.5%; Arena broken; Discover planned | Fixed in code 2026-10-18 (Scout example with 1.5%, Playground card, Arena and Circle Coming next, Discover and counts removed); live after deploy |
+| MCP tool descriptions | find_service searches Circle; Season 1 forecaster ratings | Not proven; no ratings exist | Fixed in code 2026-10-18; live after deploy |
+| Public skill download `/downloads/agon-build.zip` | The 24 Sep skill | Superseded by the 2026-10-18 skill | Fixed 2026-10-18: agon-build.zip and agon-asp.zip rebuilt from `.agents/skills`; live after deploy |
 
 ## Network facts checked 2026-10-18 (Rule 3)
 

@@ -194,3 +194,19 @@ test("final I5 and C2: find_service with a need is rate limited, and confirm_hir
   const done = await payload(await handler.fetch(rpc(2, "confirm_hire", { jobId: "00000000-0000-4000-8000-000000000001", code: "4242" }), auth(["agon:read", "wallet:execute"])));
   assert.deepEqual(done.value.result, { price: 1 });
 });
+
+test("tool descriptions claim only what is live (agon-build capabilities.md, 2026-10-18)", async () => {
+  const list = new Request("https://api.agon.surf/agon/mcp", {
+    method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
+  });
+  const raw = await (await setup().handler.fetch(list)).text();
+  const body = JSON.parse(raw.slice(raw.indexOf("{"))) as { result: { tools: { name: string; description: string; inputSchema: unknown }[] } };
+  const stage = body.result.tools.filter((t) => ["find_service", "hire_service", "confirm_hire", "get_job_status", "get_leaderboard", "enter_season", "submit_forecasts"].includes(t.name));
+  for (const t of stage) {
+    const text = `${t.description} ${JSON.stringify(t.inputSchema)}`;
+    assert.doesNotMatch(text, /Circle/, `${t.name} presents Circle services as working`);
+    assert.doesNotMatch(text, /forecaster ratings/, `${t.name} presents Arena ratings as existing`);
+  }
+  assert.match(stage.find((t) => t.name === "get_leaderboard")!.description, /not scoring yet/);
+});

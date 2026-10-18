@@ -1,28 +1,35 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { INTRO_CARDS, INTRO_CARD_MS, formatCount, introStep, type IntroState } from "./intro-cards.ts";
+import { INTRO_CARDS, INTRO_CARD_MS, introKeyAction, introStartPhase, introStep, type IntroState } from "./intro-cards.ts";
 import { copyProblems } from "./docs-content.ts";
 
-test("seven cards in the spec's order, with the routing fee and both sources on the route card", () => {
-  assert.deepEqual(INTRO_CARDS.map((c) => c.id), ["describe", "route", "a2a", "circle", "arena", "discover", "list"]);
-  const route = INTRO_CARDS.find((c) => c.id === "route")!;
-  assert.ok(route.lines.some((l) => /routing fee/i.test(l) && /0\.01/.test(l)));
-  assert.ok(route.lines.some((l) => /Circle Marketplace/.test(l)));
-  assert.equal(route.example, true);
-  assert.equal(INTRO_CARDS.find((c) => c.id === "a2a")!.example, true);
-  assert.equal(INTRO_CARDS.find((c) => c.id === "circle")!.count, "circle");
-  assert.equal(INTRO_CARDS.find((c) => c.id === "discover")!.count, "discover");
+test("seven cards, each labelled by what is true today (capabilities.md)", () => {
+  assert.deepEqual(INTRO_CARDS.map((c) => c.id), ["describe", "route", "a2a", "playground", "arena", "circle", "list"]);
+  const label = (id: string) => INTRO_CARDS.find((c) => c.id === id)!.label ?? null;
+  assert.deepEqual(["describe", "route", "a2a"].map(label), ["example", "example", "example"]);
+  assert.deepEqual(["playground", "list"].map(label), [null, null], "Live capabilities carry no label");
+  assert.deepEqual(["arena", "circle"].map(label), ["coming_next", "coming_next"], "not proven live, so not shown as working");
   assert.equal(INTRO_CARD_MS, 4500);
 });
 
-test("card copy follows the copy rules and never states a count of its own", () => {
+test("the route example uses a real listed agent's price and the 1.5% routing fee", () => {
+  const route = INTRO_CARDS.find((c) => c.id === "route")!;
+  assert.ok(route.lines.some((l) => /Scout/.test(l) && /0\.10\b/.test(l)), route.lines.join(" | "));
+  assert.ok(route.lines.some((l) => /routing fee/i.test(l) && /1\.5%/.test(l) && /0\.0015/.test(l)));
+  assert.ok(route.lines.some((l) => /Total/.test(l) && /0\.1015/.test(l)));
+});
+
+test("no card advertises Discover, hidden agents or a count", () => {
   for (const c of INTRO_CARDS) {
-    for (const s of [c.eyebrow, c.title, ...c.lines]) {
-      assert.deepEqual(copyProblems(s), [], s);
-      if (c.count) assert.ok(!/\d{3,}|\d+k\b/i.test(s.replace(/ERC-8004/g, "")), `${c.id} hardcodes a count: ${s}`);
-    }
+    const text = [c.eyebrow, c.title, ...c.lines].join(" ");
+    assert.ok(!/discover|hidden agent/i.test(text), `${c.id}: ${text}`);
+    assert.ok(!("count" in c), `${c.id} still reads a count`);
   }
+});
+
+test("card copy follows the copy rules", () => {
+  for (const c of INTRO_CARDS) for (const s of [c.eyebrow, c.title, ...c.lines]) assert.deepEqual(copyProblems(s), [], s);
 });
 
 test("the carousel advances on its timer, wraps, pauses and stops for good after manual moves", () => {
@@ -39,16 +46,6 @@ test("the carousel advances on its timer, wraps, pauses and stops for good after
   assert.equal(introStep(start, { type: "goto", index: 99 }).index, 0, "out-of-range goto is ignored");
 });
 
-test("counts format with separators and are never invented when unknown", () => {
-  assert.equal(formatCount(2195), "2,195");
-  assert.equal(formatCount(0), "0");
-  assert.equal(formatCount(null), null);
-  assert.equal(formatCount(Number.NaN), null);
-  assert.equal(formatCount(-3), null);
-});
-
-import { introKeyAction, introStartPhase } from "./intro-cards.ts";
-
 test("Enter leaves the intro unless focus is on one of its controls; arrows always move", () => {
   assert.equal(introKeyAction("Enter", false), "enter");
   assert.equal(introKeyAction("Enter", true), null, "a tick or Pause keeps its own Enter");
@@ -57,9 +54,9 @@ test("Enter leaves the intro unless focus is on one of its controls; arrows alwa
   assert.equal(introKeyAction("a", false), null);
 });
 
-test("the intro shows on a first visit, never over a resumed job, and always with ?intro=1", () => {
-  assert.equal(introStartPhase({ seen: false, forced: false, resumingJob: false }), "skip", "the app opens on Hire; the intro plays only when asked for");
-  assert.equal(introStartPhase({ seen: true, forced: false, resumingJob: false }), "skip");
-  assert.equal(introStartPhase({ seen: false, forced: false, resumingJob: true }), "skip");
-  assert.equal(introStartPhase({ seen: true, forced: true, resumingJob: true }), "show");
+test("the intro plays on every visit to agon.surf, once per page load, never over a resumed job", () => {
+  assert.equal(introStartPhase({ shownThisLoad: false, forced: false, resumingJob: false }), "show", "every visit opens with the intro");
+  assert.equal(introStartPhase({ shownThisLoad: true, forced: false, resumingJob: false }), "skip", "moving back to Hire inside the app does not replay it");
+  assert.equal(introStartPhase({ shownThisLoad: false, forced: false, resumingJob: true }), "skip", "a paid job reopens straight to its progress");
+  assert.equal(introStartPhase({ shownThisLoad: true, forced: true, resumingJob: true }), "show", "?intro=1 always shows it");
 });

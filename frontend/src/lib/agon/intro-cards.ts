@@ -1,25 +1,26 @@
-/// The intro's seven product cards (structure spec 4a). Counts are never written
-/// here: cards with `count` read them live and show none when unknown.
-export type IntroCardId = "describe" | "route" | "a2a" | "circle" | "arena" | "discover" | "list";
-export type IntroCard = { id: IntroCardId; eyebrow: string; title: string; lines: readonly string[]; example: boolean; count?: "circle" | "discover" };
+/// The intro's seven product cards. Each says only what is true today
+/// (agon-build capabilities.md): a Live capability has no label, an
+/// illustration is "example", and anything not proven live is "coming_next".
+export type IntroCardId = "describe" | "route" | "a2a" | "playground" | "arena" | "circle" | "list";
+export type IntroCard = { id: IntroCardId; eyebrow: string; title: string; lines: readonly string[]; label?: "example" | "coming_next" };
 
 export const INTRO_CARD_MS = 4500;
 export const INTRO_SLIDE_MS = 450;
 
 export const INTRO_CARDS: readonly IntroCard[] = [
-  { id: "describe", eyebrow: "01 / Hire", title: "Describe it", example: true,
-    lines: ["What do you need done?", "Real chance BTC closes above 120k on Friday?"] },
-  { id: "route", eyebrow: "02 / Routing", title: "Agon routes it", example: true,
-    lines: ["Kestrel · Agon agent · 0.22", "Polymarket data · Circle Marketplace · 0.0085", "Agon routing fee · 0.01", "Total · 0.2385 USDC"] },
-  { id: "a2a", eyebrow: "03 / Agent to agent", title: "Agents pay agents", example: true,
-    lines: ["Lead agent paid Kestrel · 0x8f3a…c21d", "Kestrel paid a data service · 0x51be…09fa", "Settled in USDC on Arc"] },
-  { id: "circle", eyebrow: "04 / Sources", title: "Circle Agent Marketplace", example: false, count: "circle",
-    lines: ["Checked services on Arc", "Prediction markets, financial analysis, research, social, creative, infrastructure"] },
-  { id: "arena", eyebrow: "05 / Arena", title: "Rated by results", example: false,
-    lines: ["Season 1 forecasts live Polymarket markets", "Overall · Crypto · Politics · Sports · Economics · World · Culture", "Skill is scored against the market"] },
-  { id: "discover", eyebrow: "06 / Discover", title: "Find hidden agents", example: false, count: "discover",
-    lines: ["ERC-8004 agent identities on Arc", "Verified agents can be hired. Discovered agents wait for their owner to list them."] },
-  { id: "list", eyebrow: "07 / List", title: "List your agent", example: false,
+  { id: "describe", eyebrow: "01 / Hire", title: "Describe it", label: "example",
+    lines: ["What do you need done?", "Is the Arsenal market on Polymarket worth trading?"] },
+  { id: "route", eyebrow: "02 / Routing", title: "Agon picks the agent", label: "example",
+    lines: ["Scout · Agon agent · Verified · 0.10", "Agon routing fee · 1.5% · 0.0015", "Total · 0.1015 USDC"] },
+  { id: "a2a", eyebrow: "03 / Agent to agent", title: "Agents pay agents", label: "example",
+    lines: ["Lead agent paid a forecaster · 0x8f3a…c21d", "The forecaster paid a data service · 0x51be…09fa", "Settled in USDC on Arc"] },
+  { id: "playground", eyebrow: "04 / Playground", title: "Tested in public",
+    lines: ["Run a test on any listed agent", "Scored by code, every run published with its fingerprint"] },
+  { id: "arena", eyebrow: "05 / Arena", title: "Rated by results", label: "coming_next",
+    lines: ["Seasons on live Polymarket markets", "Skill is scored against the market"] },
+  { id: "circle", eyebrow: "06 / Sources", title: "Circle Agent Marketplace", label: "coming_next",
+    lines: ["Services from Circle's marketplace, paid per use on Arc"] },
+  { id: "list", eyebrow: "07 / List", title: "List your agent",
     lines: ["Describe, check, pay the network fee, go live", "Or list from a coding agent over MCP"] },
 ];
 
@@ -40,10 +41,6 @@ export function introStep(state: IntroState, action: IntroAction): IntroState {
   }
 }
 
-export function formatCount(n: number | null): string | null {
-  return n !== null && Number.isFinite(n) && n >= 0 ? Math.floor(n).toLocaleString("en-US") : null;
-}
-
 /// Keys on the intro. Enter leaves it, except on one of its own controls, which keep their own Enter.
 export function introKeyAction(key: string, onInteractiveControl: boolean): "next" | "prev" | "enter" | null {
   if (key === "ArrowRight") return "next";
@@ -52,10 +49,11 @@ export function introKeyAction(key: string, onInteractiveControl: boolean): "nex
   return null;
 }
 
-/// Once per session; never over a resumed job (spec 4a: every other page opens directly); ?intro=1 always shows it.
-export function introStartPhase(input: { seen: boolean; forced: boolean; resumingJob: boolean }): "show" | "skip" {
-  // The app opens on Hire. The intro plays only when someone asks for it with ?intro=1.
-  void input.seen;
-  void input.resumingJob;
-  return input.forced ? "show" : "skip";
+/// Every visit to agon.surf opens with the intro, once per page load: moving
+/// back to Hire inside the app does not replay it, and a paid job reopens
+/// straight to its progress. ?intro=1 always shows it.
+export function introStartPhase(input: { shownThisLoad: boolean; forced: boolean; resumingJob: boolean }): "show" | "skip" {
+  if (input.forced) return "show";
+  if (input.resumingJob || input.shownThisLoad) return "skip";
+  return "show";
 }

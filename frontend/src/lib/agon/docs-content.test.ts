@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 
-import { DOCS_SECTIONS, FAQS, HIRE_STEPS, MCP_PROMPTS, MCP_TOOL_GROUPS, PAYMENT_OPTIONS, ROADMAP, copyProblems, docsStrings } from "./docs-content.ts";
+import { ARENA_STATUS, DOCS_SECTIONS, FAQS, HIRE_STEPS, MCP_PROMPTS, MCP_TOOL_GROUPS, PAYMENT_OPTIONS, ROADMAP, copyProblems, docsStrings } from "./docs-content.ts";
 import { AGON_NAV } from "./nav.ts";
 import { DOCS_REDIRECTS } from "./docs-redirects.ts";
 
@@ -14,16 +14,16 @@ test("docs sections come in one order with unique, URL-safe ids", () => {
 
 test("the roadmap names every deferred item from the spec, and Live now lists only what works today", () => {
   const later = ROADMAP.later.map((i) => i.title.toLowerCase()).join(" | ");
-  for (const word of ["escrow", "beyond forecasting", "trading", "whatsapp", "provider dashboard", "ratings feed", "other marketplaces"]) assert.ok(later.includes(word), word);
+  for (const word of ["escrow", "beyond forecasting", "trading", "whatsapp", "provider dashboard", "ratings feed", "other marketplaces", "arc mainnet"]) assert.ok(later.includes(word), word);
   const next = ROADMAP.next.map((i) => i.title.toLowerCase()).join(" | ");
-  for (const word of ["season 1 on arc mainnet", "agon hires on arc mainnet"]) assert.ok(next.includes(word), word);
+  for (const word of ["hire the best agent", "arena", "circle", "scores from paid work"]) assert.ok(next.includes(word), word);
+  // Live now holds only capabilities proven on production (agon-build capabilities.md, 2026-10-18).
   assert.deepEqual(ROADMAP.live.map((i) => i.title), [
-    "Hire the best agent for any request, on Agon or Circle",
-    "Season 1 dry run across six categories",
-    "Agon MCP for coding agents",
     "Playground tests for listed agents",
     "Agon score and category leaderboards",
+    "Agon MCP for coding agents",
   ]);
+  for (const i of ROADMAP.live) assert.ok(!/arena|circle|mainnet|telegram/i.test(`${i.title} ${i.body}`), `Live now claims what is not live: ${i.title}`);
 });
 
 test("the MCP section carries the connection, the tool groups and five starting requests", () => {
@@ -121,7 +121,7 @@ test("Docs say what Agon is: it routes to the best agent and proves it with rati
   assert.doesNotMatch(OVERVIEW.lead, /a market for AI agents/i);
   assert.deepEqual(RATING_SOURCES.map((r) => [r.title, r.status]), [
     ["Playground tests", "Live"],
-    ["Arena seasons", "Live"],
+    ["Arena seasons", "Coming next"],
     ["Scores from paid work", "Coming next"],
   ]);
   assert.match(RATING_SOURCES[0]!.body, /rate limited/i);
@@ -186,21 +186,22 @@ test("the FAQ answers the questions people ask, in plain words, with no secret h
   for (const t of all) assert.deepEqual(copyProblems(t), [], t);
 });
 
-test("docs state the 1.5% routing fee, the Circle source and that outside services pay real USDC on Arc mainnet", () => {
+test("docs present only Live capabilities as working: Circle, mainnet and the Arena read as coming next", () => {
   const fees = PAYMENT_OPTIONS.map((o) => o.body).join(" ");
   assert.match(fees, /1\.5% routing fee/);
   assert.match(fees, /only when the answer arrives/);
-  const hire = HIRE_STEPS.map((h) => h.body).join(" ");
-  assert.match(hire, /Circle/);
-  assert.match(hire, /swap/i);
-  const all = docsStrings().join(" ");
-  assert.match(all, /real USDC on Arc mainnet/);
-  assert.ok(FAQS.some((f) => /Circle/.test(f.q)), "a question about Circle services");
-  assert.ok(!/Matching any task to the best-rated agent for it is on the roadmap/.test(all), "the old roadmap note is gone");
+  const outsideRoadmap = docsStrings().filter((t) => !ROADMAP.next.some((i) => i.title === t || i.body === t) && !ROADMAP.later.some((i) => i.title === t || i.body === t));
+  for (const t of outsideRoadmap) {
+    if (!t.trim().endsWith("?") && /Circle('s)? Agent Marketplace|Circle services?/.test(t)) assert.match(t, /coming next/i, `presents Circle services as working: ${t}`);
+    assert.doesNotMatch(t, /20 October|late October/, `stale date: ${t}`);
+  }
+  assert.match(ARENA_STATUS, /not scoring/i);
+  assert.match(FAQS.find((f) => /Circle/.test(f.q))!.a, /^Not yet/);
+  assert.match(HIRE_STEPS.map((h) => h.body).join(" "), /swap/i);
 });
 
-test("minor: the hire steps give the mainnet wallet's limits as well as the test wallet's", () => {
+test("the hire steps give the test wallet's default limits and no mainnet wallet yet", () => {
   const confirm = HIRE_STEPS.find((h) => h.title === "Confirm")!.body;
   assert.match(confirm, /0\.50 USDC per hire and 2\.00 per day/);
-  assert.match(confirm, /0\.25 per hire and 1\.00 per day/);
+  assert.doesNotMatch(confirm, /mainnet/);
 });

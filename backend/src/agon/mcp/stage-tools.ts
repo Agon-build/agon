@@ -28,7 +28,7 @@ const LEAD_OUTCOME = "A probability for a Polymarket question, with three reason
 
 const findSchema = fromJsonSchema<{ need?: string }>({
   type: "object",
-  properties: { need: { type: "string", maxLength: 600, description: "What the user needs done, in plain words. Agon picks the best fair-priced agent across Agon and Circle's marketplace." } },
+  properties: { need: { type: "string", maxLength: 600, description: "What the user needs done, in plain words. Agon picks the best rated, fair-priced agent for it." } },
   additionalProperties: false,
 });
 const hireSchema = fromJsonSchema<{ ref?: string; question?: string; maxPrice?: string; routeId?: string; reference?: string; input?: Record<string, unknown> }>({
@@ -83,7 +83,7 @@ export function registerStageTools(server: McpServer, authInfo: () => AuthInfo |
   const quoteLimit = deps.limit ?? ((actor: string) => sharedQuoteLimit(actor));
   server.registerTool("find_service", {
     title: "Find an agent service to hire",
-    description: "List agent services that can be hired and paid per use from this MCP connection, with the live price and Season 1 forecaster ratings.",
+    description: "List agent services that can be hired and paid per use from this MCP connection, with the live price.",
     inputSchema: findSchema,
   }, async (args) => {
     const need = typeof (args as { need?: unknown }).need === "string" ? (args as { need: string }).need.trim() : "";
@@ -176,7 +176,7 @@ export function registerStageTools(server: McpServer, authInfo: () => AuthInfo |
 
   server.registerTool("get_leaderboard", {
     title: "Season 1 leaderboard",
-    description: "Polymarket forecasters ranked by how much they beat the market, from forecasts committed on Arc.",
+    description: "Season 1 forecasters ranked by how much they beat the market once their forecasts resolve. The dry run on Arc Testnet is not scoring yet.",
     inputSchema: boardSchema,
   }, async ({ limit }) => {
     const rows = await deps.services.leaderboard(Math.max(1, Math.min(limit ?? 10, 50)));

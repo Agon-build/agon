@@ -2,8 +2,7 @@
 
 import { useEffect, useReducer, useRef, useState } from "react";
 import { AgonMark } from "@/components/redesign/AgonMark";
-import { INTRO_CARDS, INTRO_CARD_MS, formatCount, introKeyAction, introStep } from "@/lib/agon/intro-cards";
-import { getIntroCounts, type IntroCounts } from "@/lib/agon/intro-counts";
+import { INTRO_CARDS, INTRO_CARD_MS, introKeyAction, introStep } from "@/lib/agon/intro-cards";
 
 const STARTUP_HOLD_MS = 3000;
 const STARTUP_EXIT_MS = 680;
@@ -249,9 +248,6 @@ export function AgonIntro({ phase, ready, onEnter }: { phase: "visible" | "exiti
         }
         .agon-intro-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
         .agon-intro-chip { padding: 4px 6px; border: 1px solid #374151; color: #9ca3af; font: 9px/1 var(--font-mono); letter-spacing: .14em; }
-        .agon-intro-count { display: flex; flex-wrap: wrap; gap: 24px; margin-top: 14px; animation: agon-intro-rise 600ms cubic-bezier(.16,1,.3,1) both; }
-        .agon-intro-count b { display: block; color: #f5f5f5; font: 34px/1 var(--font-mono); font-weight: 400; }
-        .agon-intro-count small { display: block; margin-top: 6px; color: #6b7280; font: 10px/1.3 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; }
         .agon-intro-lines { display: grid; gap: 8px; margin: 14px 0 0; padding: 0; list-style: none; color: #c3c8d2; font: 12px/1.45 var(--font-mono); }
         .agon-intro-lines li { padding-top: 8px; border-top: 1px solid #263044; overflow-wrap: anywhere; }
         .agon-intro-controls { display: flex; align-items: center; gap: 6px; margin-top: 12px; }
@@ -270,30 +266,11 @@ export function AgonIntro({ phase, ready, onEnter }: { phase: "visible" | "exiti
         @keyframes agon-intro-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
         @keyframes agon-intro-fade { from { opacity: 0; } to { opacity: 1; } }
 
-        .agon-startup-skip {
-          position: absolute;
-          z-index: 3;
-          top: 20px;
-          right: 20px;
-          min-height: 44px;
-          padding: 0 12px;
-          border: 1px solid #4b5563;
-          color: #f5f5f5;
-          background: rgba(10, 14, 26, .78);
-          font: 11px/1 var(--font-mono);
-          letter-spacing: .14em;
-          cursor: pointer;
-        }
-        .agon-startup-skip:hover,
-        .agon-startup-skip:focus-visible {
-          border-color: #ff4081;
-          outline: none;
-        }
         @media (prefers-reduced-motion: reduce) {
           .agon-startup { transition: none; }
           .agon-startup-smoke, .agon-startup-mark { animation: none; }
           .agon-intro-card { animation: agon-intro-fade 200ms linear both; }
-          .agon-intro-tick-fill, .agon-intro-count { animation: none; transform: none; }
+          .agon-intro-tick-fill { animation: none; transform: none; }
           .agon-intro-region { transition: none; }
           .agon-startup-mark-small, .agon-startup-mark-large { opacity: 0; }
           .agon-startup-mark-final { opacity: 1; }
@@ -313,16 +290,8 @@ export function AgonIntro({ phase, ready, onEnter }: { phase: "visible" | "exiti
 
 function StartupIntro({ phase, ready, onEnter }: { phase: "visible" | "exiting"; ready: boolean; onEnter: () => void }) {
   const [state, dispatch] = useReducer(introStep, { index: 0, paused: false, manual: false });
-  const [counts, setCounts] = useState<IntroCounts>({ circle: null, discover: null });
   const [userPaused, setUserPaused] = useState(false);
   const startX = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (!ready) return;
-    let stopped = false;
-    void getIntroCounts().then((c) => { if (!stopped) setCounts(c); });
-    return () => { stopped = true; };
-  }, [ready]);
 
   useEffect(() => {
     if (!ready) return;
@@ -330,12 +299,12 @@ function StartupIntro({ phase, ready, onEnter }: { phase: "visible" | "exiting";
     return () => window.clearInterval(timer);
   }, [ready]);
 
+  // Enter leaves from the first frame; the arrows move the cards once they show.
   useEffect(() => {
-    if (!ready) return;
     const onKey = (event: KeyboardEvent) => {
       const target = event.target instanceof Element ? event.target : null;
       const action = introKeyAction(event.key, Boolean(target?.closest("button, a, input, textarea, select")));
-      if (!action) return;
+      if (!action || (action !== "enter" && !ready)) return;
       event.preventDefault();
       if (action === "enter") onEnter();
       else dispatch({ type: action });
@@ -345,12 +314,6 @@ function StartupIntro({ phase, ready, onEnter }: { phase: "visible" | "exiting";
   }, [ready, onEnter]);
 
   const card = INTRO_CARDS[state.index]!;
-  const figures: [string | null, string][] = card.count === "circle"
-    ? [[formatCount(counts.circle?.arcMainnet ?? null), "services checked"]]
-    : card.count === "discover"
-      ? [[formatCount(counts.discover?.arcTestnet ?? null), "Arc Testnet"], [formatCount(counts.discover?.arcMainnet ?? null), "Arc mainnet"]]
-      : [];
-  const shown = figures.filter((f): f is [string, string] => f[0] !== null);
   const hold = () => dispatch({ type: "pause" });
   const release = () => { if (!userPaused) dispatch({ type: "resume" }); };
 
@@ -364,8 +327,7 @@ function StartupIntro({ phase, ready, onEnter }: { phase: "visible" | "exiting";
         <span className="agon-startup-mark agon-startup-mark-large"><AgonMark size={72} showWordmark={false} /></span>
         <span className="agon-startup-mark agon-startup-mark-final"><AgonMark size={62} /></span>
       </div>
-      {ready ? <button type="button" className="agon-startup-enter" onClick={onEnter}>ENTER AGON <span aria-hidden="true">→</span></button> : null}
-      <button type="button" className="agon-startup-skip" onClick={onEnter}>SKIP INTRO</button>
+      <button type="button" className="agon-startup-enter" onClick={onEnter}>ENTER AGON <span aria-hidden="true">→</span></button>
       <section
         aria-roledescription="carousel"
         aria-label="What Agon does"
@@ -387,12 +349,9 @@ function StartupIntro({ phase, ready, onEnter }: { phase: "visible" | "exiting";
         <div key={card.id} className="agon-intro-card" role="group" aria-roledescription="slide" aria-label={`${state.index + 1} of ${INTRO_CARDS.length}`}>
           <div className="agon-intro-head">
             <span className="agon-startup-preview-label">{card.eyebrow.toUpperCase()}</span>
-            {card.example ? <span className="agon-intro-chip">EXAMPLE</span> : null}
+            {card.label ? <span className="agon-intro-chip">{card.label === "example" ? "EXAMPLE" : "COMING NEXT"}</span> : null}
           </div>
           <div className="agon-startup-preview-title">{card.title}</div>
-          {shown.length > 0 ? (
-            <div className="agon-intro-count">{shown.map(([value, label]) => <span key={label}><b>{value}</b><small>{label}</small></span>)}</div>
-          ) : null}
           <ul className="agon-intro-lines">{card.lines.map((line) => <li key={line}>{line}</li>)}</ul>
         </div>
         <div className="agon-intro-controls">

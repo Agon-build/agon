@@ -44,7 +44,8 @@ test("the home page is the intro over Hire and every stage page uses the shared 
   assert.match(read("app/page.tsx"), /<IntroGate>[\s\S]*<HireClient \/>[\s\S]*<\/IntroGate>/);
   const gate = read("components/agon/IntroGate.tsx");
   assert.match(gate, /AgonIntro/);
-  assert.match(gate, /sessionStorage/);
+  assert.doesNotMatch(gate, /sessionStorage/, "the intro opens every visit, not once per session");
+  assert.doesNotMatch(read("components/agon/AgonIntro.tsx"), /SKIP INTRO|agon-startup-skip/, "Enter is the only way out");
   assert.match(gate, /intro"\) === "1"/);
   assert.match(read("components/stage/StageShell.tsx"), /<TopNav/);
   assert.doesNotMatch(read("components/stage/StageShell.tsx"), /const NAV =/);
