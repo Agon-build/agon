@@ -54,20 +54,51 @@ function toEntry(raw: unknown): CatalogEntry | null {
   };
 }
 
+// Circle answers 429 to pages fetched back to back (2026-10-19: page 8 of 11 at
+// about 0.7 s), so pages are spaced out and a 429 is waited out and retried.
+const PAGE_GAP_MS = 1_500;
+const BACKOFF_MS = [5_000, 15_000, 30_000];
+const MAX_RETRY_AFTER_MS = 60_000;
+
+function retryAfterMs(res: Response, attempt: number): number {
+  const seconds = Number(res.headers.get("retry-after"));
+  if (Number.isFinite(seconds) && seconds > 0) return Math.min(seconds * 1_000, MAX_RETRY_AFTER_MS);
+  return BACKOFF_MS[attempt] ?? BACKOFF_MS[BACKOFF_MS.length - 1]!;
+}
+
 /// Circle's Agent Marketplace, read from the public discovery API and kept in
-/// memory. A failed refresh keeps the last good copy and reports unavailable.
-export function createCircleSource(opts: { fetchImpl?: typeof fetch; baseUrl?: string } = {}): RouteSource & { refresh(): Promise<void>; entries(): CatalogEntry[] } {
+/// memory. A failed refresh keeps the last good copy, reports unavailable and logs why.
+export function createCircleSource(opts: { fetchImpl?: typeof fetch; baseUrl?: string; sleep?: (ms: number) => Promise<void>; log?: (line: string) => void } = {}): RouteSource & { refresh(): Promise<void>; entries(): CatalogEntry[] } {
   const fetchImpl = opts.fetchImpl ?? fetch;
   const base = opts.baseUrl ?? "https://api.circle.com/v2/x402/discovery/resources";
+  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  const log = opts.log ?? ((line: string) => console.warn(`[agon-routing] ${line}`));
   let catalog: CatalogEntry[] = [];
   let healthy = false;
 
-  async function refresh(): Promise<void> {
+  async function fetchPage(page: number): Promise<Response> {
+    for (let attempt = 0; ; attempt += 1) {
+      const res = await fetchImpl(`${base}?network=${ARC_MAINNET}&limit=${PAGE}&offset=${page * PAGE}`, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(15_000) });
+      if (res.status !== 429 || attempt >= BACKOFF_MS.length) return res;
+      await res.body?.cancel().catch(() => {});
+      await sleep(retryAfterMs(res, attempt));
+    }
+  }
+
+  // A slow refresh (retries) never overlaps the next one; callers share the one in flight.
+  let running: Promise<void> | null = null;
+  function refresh(): Promise<void> {
+    running ??= load().finally(() => { running = null; });
+    return running;
+  }
+
+  async function load(): Promise<void> {
     try {
       const next: CatalogEntry[] = [];
       for (let page = 0; page < MAX_PAGES; page += 1) {
-        const res = await fetchImpl(`${base}?network=${ARC_MAINNET}&limit=${PAGE}&offset=${page * PAGE}`, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(15_000) });
-        if (!res.ok) throw new Error(`circle discovery ${res.status}`);
+        if (page > 0) await sleep(PAGE_GAP_MS);
+        const res = await fetchPage(page);
+        if (!res.ok) throw new Error(`page ${page + 1} HTTP ${res.status}`);
         const body = (await res.json()) as { items?: unknown[]; pagination?: { total?: number } };
         for (const raw of body.items ?? []) {
           const entry = toEntry(raw);
@@ -78,8 +109,9 @@ export function createCircleSource(opts: { fetchImpl?: typeof fetch; baseUrl?: s
       }
       catalog = next;
       healthy = true;
-    } catch {
+    } catch (error) {
       healthy = false;
+      log(`Circle catalog refresh failed: ${error instanceof Error ? error.message : String(error)}; keeping ${catalog.length} services from the last good refresh`);
     }
   }
 

@@ -49,6 +49,73 @@ test("a failed refresh keeps the last copy and reports unavailable", async () =>
   assert.equal(empty.status(), "unavailable");
 });
 
+// Two pages of the same fixture items; `status(offset, call)` can turn a call into a 429.
+function pagedFetch(status: (offset: number, call: number) => { code: number; retryAfter?: string } = () => ({ code: 200 })) {
+  const calls: number[] = [];
+  const fetchImpl = (async (url: string | URL | Request) => {
+    const offset = Number(new URL(String(url)).searchParams.get("offset"));
+    calls.push(offset);
+    const s = status(offset, calls.length);
+    if (s.code !== 200) return new Response("slow down", { status: s.code, headers: s.retryAfter ? { "retry-after": s.retryAfter } : {} });
+    return Response.json({ ...page, pagination: { limit: 200, offset, total: 400 } });
+  }) as typeof fetch;
+  return { calls, fetchImpl };
+}
+
+test("the refresh spaces out its page requests, since Circle answers 429 to a burst", async () => {
+  const waits: number[] = [];
+  const { calls, fetchImpl } = pagedFetch();
+  const source = createCircleSource({ fetchImpl, sleep: async (ms) => { waits.push(ms); }, log: () => {} });
+  await source.refresh();
+  assert.deepEqual(calls, [0, 200]);
+  assert.deepEqual(waits, [1_500], "one pause between the two pages");
+  assert.equal(source.entries().length, 8);
+  assert.equal(source.status(), "ok");
+});
+
+test("a 429 waits as long as Circle asks (Retry-After) and retries the same page", async () => {
+  const waits: number[] = [];
+  const { calls, fetchImpl } = pagedFetch((offset, call) => (offset === 200 && call === 2 ? { code: 429, retryAfter: "7" } : { code: 200 }));
+  const source = createCircleSource({ fetchImpl, sleep: async (ms) => { waits.push(ms); }, log: () => {} });
+  await source.refresh();
+  assert.deepEqual(calls, [0, 200, 200]);
+  assert.deepEqual(waits, [1_500, 7_000]);
+  assert.equal(source.entries().length, 8);
+  assert.equal(source.status(), "ok");
+});
+
+test("a 429 without Retry-After backs off, and a long Retry-After is capped", async () => {
+  const waits: number[] = [];
+  const { fetchImpl } = pagedFetch((offset, call) => (offset === 200 && call === 2 ? { code: 429 } : offset === 200 && call === 3 ? { code: 429, retryAfter: "3600" } : { code: 200 }));
+  const source = createCircleSource({ fetchImpl, sleep: async (ms) => { waits.push(ms); }, log: () => {} });
+  await source.refresh();
+  assert.deepEqual(waits, [1_500, 5_000, 60_000]);
+  assert.equal(source.status(), "ok");
+});
+
+test("a 429 that does not clear gives up, keeps the last catalog and logs why", async () => {
+  const lines: string[] = [];
+  let limited = false;
+  const { fetchImpl } = pagedFetch((offset) => (limited && offset === 200 ? { code: 429 } : { code: 200 }));
+  const source = createCircleSource({ fetchImpl, sleep: async () => {}, log: (line) => lines.push(line) });
+  await source.refresh();
+  limited = true;
+  await source.refresh();
+  assert.equal(source.entries().length, 8, "the last good catalog stays");
+  assert.equal(source.status(), "unavailable");
+  assert.equal(lines.length, 1);
+  assert.match(lines[0]!, /Circle catalog refresh failed: page 2 HTTP 429/);
+});
+
+test("a refresh asked for while one is running shares it instead of starting another", async () => {
+  const { calls, fetchImpl } = pagedFetch();
+  const source = createCircleSource({ fetchImpl, sleep: async () => {}, log: () => {} });
+  await Promise.all([source.refresh(), source.refresh()]);
+  assert.deepEqual(calls, [0, 200]);
+  await source.refresh();
+  assert.deepEqual(calls, [0, 200, 0, 200], "a later refresh runs again");
+});
+
 test("final I1: a service whose address is not https, or names a private host, is left out", async () => {
   const good = page.items.find((i) => (i as { resource: string }).resource === "https://aero.lonestaroracle.xyz/pool")!;
   const items = ["http://aero.lonestaroracle.xyz/pool", "https://127.0.0.1/pool", "https://localhost/pool", "https://169.254.169.254/latest", "https://[::1]/x"].map((resource) => ({ ...(good as object), resource }));
