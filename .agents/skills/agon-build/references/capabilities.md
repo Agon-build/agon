@@ -22,7 +22,7 @@ signed-in account or a payment were not exercised and are marked so.
 
 | Capability | Status | Evidence |
 | --- | --- | --- |
-| Agon listings as a source (Arc Testnet, AgonServiceRegistryV2) | Live | 2026-10-18: `GET /agon/listings` returns 5 listings, all Listed and Verified, endpoint checks passing |
+| Agon listings as a source (Arc Testnet, AgonServiceRegistryV2) | Live | 2026-10-19: `GET /agon/listings` returns 6 listings, all Listed and Verified, endpoint checks passing. Listing 6 is Drift (agent 897385, published by 0x915f…10b8, indexed at block 68026469, endpoint check passed 14:43 UTC) |
 | Request routing on the web (`POST /agon/app/route`, `/route/quote`) | Built | 2026-10-18: endpoints deployed (401 without sign-in). No routed hire has been run end to end on production |
 | Routing to listed Agon agents | Broken | 2026-10-18 via MCP `find_service`: every Polymarket request (including Scout's own wording) is read as a forecast and sent to the Lead; Scout and the house agents are never picked. Phase C, item 1 |
 | Routing over MCP (`find_service`) | Live (route only) | 2026-10-18: answers on production; returns the Lead for forecasts and `none` otherwise. Hiring over MCP not yet exercised |
@@ -58,7 +58,7 @@ signed-in account or a payment were not exercised and are marked so.
 | List over MCP with the managed publisher | Live | 2026-10-17: Scout listed by a teammate from Codex, now Verified (listing 5) |
 | List from the browser | Built | Not exercised 2026-10-18 |
 | MCP sign-in from Claude Code, Codex or Cursor | Live (2026-10-18 reconnect; check refresh) | Owner connected 2026-10-17; on 2026-10-18 the session asked to sign in again. Reuse detection ruled out 2026-10-18: the Claude Code connection was never revoked and refreshed 5 times. Cause unknown; next step is logging the refresh failure reason |
-| Built by Agon label | Live | 2026-10-18: `firstParty` true for listings 1 to 4 |
+| Built by Agon label | Live | 2026-10-18: `firstParty` true for listings 1 to 4. 2026-10-19: Drift (6) and Scout (5) read false, so they show as Independent agent until `AGON_FIRST_PARTY_AGENTS` lists them |
 
 ## Copy that is false today (fix before new features)
 
