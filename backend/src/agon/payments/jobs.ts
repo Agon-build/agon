@@ -74,7 +74,15 @@ export function checkSubHire(input: { tree: Job[]; payments: JobPayment[]; paren
 }
 
 export type ReceiptPayment = { kind: string; amount: string; payer: string; payee: string; status: string; txUrl: string | null; detail: string | null };
-export type ReceiptNode = { jobId: string; label: string; buyer: string; state: string; price: string; network: string; payments: ReceiptPayment[]; children: ReceiptNode[] };
+/// Where the hired service comes from: the Lead agent, an Agon listing or Circle's Agent Marketplace.
+export type ReceiptSource = "lead" | "agon" | "circle";
+export type ReceiptNode = { jobId: string; label: string; source: ReceiptSource; buyer: string; state: string; price: string; network: string; payments: ReceiptPayment[]; children: ReceiptNode[] };
+
+// "agent:lead" is LEAD_PROVIDER_REF; Circle routes use "circle:<resource>" references.
+export function receiptSource(providerRef: string): ReceiptSource {
+  if (providerRef === "agent:lead") return "lead";
+  return providerRef.startsWith("circle:") ? "circle" : "agon";
+}
 
 export function receiptTree(rootId: string, tree: Job[], payments: JobPayment[]): ReceiptNode | null {
   const root = tree.find((j) => j.jobId === rootId);
@@ -84,6 +92,7 @@ export function receiptTree(rootId: string, tree: Job[], payments: JobPayment[])
     return {
       jobId: job.jobId,
       label: job.providerLabel,
+      source: receiptSource(job.providerRef),
       buyer: job.buyerRef.startsWith("budget:") ? "you" : job.buyerRef,
       state: job.state,
       price: formatUsdc(job.priceAtomic),

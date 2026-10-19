@@ -57,14 +57,14 @@ export function previewLive(jobId: string, startedMs: number | null, nowMs: numb
         }
       : null,
     receipt: {
-      jobId, label: "Agon Lead Agent", buyer: "you", state: done ? "delivered" : "paying", price: "0.30", network: "Arc Testnet",
+      jobId, label: "Agon Lead Agent", source: "lead", buyer: "you", state: done ? "delivered" : "paying", price: "0.30", network: "Arc Testnet",
       payments: [
         { kind: "hire", amount: "0.30", payer: previewWallet.address, payee: `0x${"c".repeat(40)}`, status: paid(200), txUrl: tx(200, "1"), detail: "Agon Lead Agent" },
         ...(elapsed >= 1200 ? [{ kind: "data", amount: "0.0085", payer: `0x${"c".repeat(40)}`, payee: `0x${"6".repeat(40)}`, status: paid(1600), txUrl: tx(1600, "2"), detail: "market search from BlockRun" }] : []),
         ...(elapsed >= 2500 ? [{ kind: "data", amount: "0.002", payer: `0x${"c".repeat(40)}`, payee: `0x${"6".repeat(40)}`, status: paid(2900), txUrl: tx(2900, "3"), detail: "Bitcoin price from BlockRun" }] : []),
       ],
       children: elapsed >= 6000
-        ? [{ jobId: "preview-atlas", label: "Atlas (house)", buyer: "agent:lead", state: done ? "delivered" : "paying", price: "0.17424", network: "Arc Testnet", children: [],
+        ? [{ jobId: "preview-atlas", label: "Atlas (house)", source: "agon", buyer: "agent:lead", state: done ? "delivered" : "paying", price: "0.17424", network: "Arc Testnet", children: [],
             payments: [{ kind: "hire", amount: "0.17424", payer: `0x${"c".repeat(40)}`, payee: `0x${"a".repeat(40)}`, status: paid(6200), txUrl: tx(6200, "4"), detail: "Atlas (house)" }] }]
         : [],
     },

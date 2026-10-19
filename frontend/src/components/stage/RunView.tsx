@@ -1,7 +1,7 @@
 import { answerView, type AnswerView } from "@/lib/agon/route-view";
 import type { LiveView } from "@/lib/agon/stage-types";
 import { failureText } from "@/lib/agon/stage-copy";
-import { isTerminal, ledgerRows, moneyFlow } from "@/lib/agon/stage-view";
+import { isTerminal, ledgerRows, moneyFlow, workingNotice } from "@/lib/agon/stage-view";
 import { HaggleTape } from "./HaggleTape";
 import { LedgerTape } from "./LedgerTape";
 import { MoneyFlow } from "./MoneyFlow";
@@ -11,7 +11,7 @@ function Notice({ eyebrow, title, body }: { eyebrow: string; title: string; body
   return (
     <section className="stage-print border-y border-[color:var(--hairline-strong)] py-8">
       <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">{eyebrow}</p>
-      <h2 className="mt-3 max-w-[18ch] font-display text-3xl uppercase leading-[.95] tracking-[-.03em] text-ink sm:text-4xl">{title}</h2>
+      <h2 className="mt-3 max-w-[18ch] break-words font-display text-3xl uppercase leading-[.95] tracking-[-.03em] text-ink sm:text-4xl">{title}</h2>
       <p className="mt-4 max-w-[52ch] text-sm leading-6 text-ink-2">{body}</p>
     </section>
   );
@@ -52,11 +52,7 @@ export function RunView({ live }: { live: LiveView }) {
         {live.phase === "failed" ? <Notice eyebrow="Not delivered" title="The job did not finish" body={failureText(live.failure)} /> : null}
         {live.phase === "quoted" ? <Notice eyebrow="Not paid" title="This quote was not paid" body="Nothing was charged. Ask again for a fresh price." /> : null}
         {!isTerminal(live.phase) ? (
-          <Notice
-            eyebrow={live.phase === "paying" ? "Paying" : "Working"}
-            title={live.phase === "paying" ? "Paying the lead agent" : "Agents at work"}
-            body={live.phase === "paying" ? "Your payment is settling on Arc. The lead agent starts the moment it lands." : "The lead agent is buying data and choosing a forecaster. Every payment appears on the right as it lands."}
-          />
+          <Notice eyebrow={live.phase === "paying" ? "Paying" : "Working"} {...workingNotice(live.phase === "paying" ? "paying" : "working", live.receipt)} />
         ) : null}
         {live.haggle.length > 0 ? <HaggleTape steps={live.haggle} seller={forecaster} /> : null}
       </div>

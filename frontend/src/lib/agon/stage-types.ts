@@ -2,7 +2,8 @@ export type StageEventKind = "note" | "data" | "haggle" | "hire" | "refund" | "f
 export type StageEvent = { at: string; text: string; kind: StageEventKind };
 export type BargainStep = { step: "request" | "offer" | "counter" | "accept" | "walk" | "pay"; detail: string };
 export type ReceiptPayment = { kind: string; amount: string; payer: string; payee: string; status: string; txUrl: string | null; detail: string | null };
-export type ReceiptNode = { jobId: string; label: string; buyer: string; state: string; price: string; network: string; payments: ReceiptPayment[]; children: ReceiptNode[] };
+/** `source` is optional so an API without the field still renders (as the Lead). */
+export type ReceiptNode = { jobId: string; label: string; source?: "lead" | "agon" | "circle"; buyer: string; state: string; price: string; network: string; payments: ReceiptPayment[]; children: ReceiptNode[] };
 export type StageAnswer = {
   probabilityBps: number; marketPriceBps: number | null; reasons: string[]; marketQuestion: string; marketEndsAt: string | null; marketSlug: string | null;
   forecaster: { name: string; reason: string; asked: string; agreed: string };

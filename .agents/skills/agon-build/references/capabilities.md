@@ -71,6 +71,7 @@ signed-in account or a payment were not exercised and are marked so.
 | MCP tool descriptions | find_service searches Circle; Season 1 forecaster ratings | Not proven; no ratings exist | Fixed in code 2026-10-18; live after deploy |
 | Lead outcome in MCP and the Hire quote | Hires the best-rated Season 1 forecaster | No forecaster has a rating | Fixed in code 2026-10-18; live after deploy |
 | Hire page | "Agon picks the best rated agent at a fair price, on Agon or Circle"; "rated agents first" | No ratings; Circle broken; routing reaches only the Lead | Fixed in code 2026-10-19: the page says it answers Polymarket questions, the steps claim only the price, Arc transactions and refunds; live after deploy |
+| Hire money flow and run view on a routed job | The hired service is "Built by Agon"; "Paying the lead agent", "The lead agent is buying data" | A routed job pays one service, from an Agon listing or Circle | Fixed in code 2026-10-19: receipts carry `source` (lead, agon, circle); the money flow reads Built by Agon, Listed on Agon or Circle Agent Marketplace, and the notice names the hired service; live after deploy. The Hire headline stays Polymarket-only until a routed hire runs end to end on production |
 | Public skill download `/downloads/agon-build.zip` | The 24 Sep skill | Superseded by the 2026-10-18 skill | Fixed 2026-10-18: agon-build.zip and agon-asp.zip rebuilt from `.agents/skills`; live after deploy |
 
 ## Security

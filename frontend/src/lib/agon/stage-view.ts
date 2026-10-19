@@ -23,13 +23,15 @@ export function formatUsdcAtomic(atomic: bigint): string {
 const status = (s: string): FlowStatus => (s === "settled" ? "settled" : s === "failed" ? "failed" : "pending");
 const capital = (s: string) => (s ? s[0]!.toUpperCase() + s.slice(1) : s);
 
+const SOURCE_LABEL = { lead: "Built by Agon", agon: "Listed on Agon", circle: "Circle Agent Marketplace" } as const;
+
 /// The receipt tree as a money flow: you pay the lead agent, the lead agent
 /// pays data sellers and forecasters. Only settled payments count as spent.
 export function moneyFlow(receipt: ReceiptNode | null): FlowModel {
   if (!receipt) return { lead: null, sellers: [], refund: null, agentSpend: "0.00" };
   const userPayment = receipt.payments.find((p) => p.kind === "hire");
   const lead: FlowNode = {
-    id: receipt.jobId, role: "lead", label: receipt.label, sublabel: "Built by Agon", amount: userPayment?.amount ?? receipt.price,
+    id: receipt.jobId, role: "lead", label: receipt.label, sublabel: SOURCE_LABEL[receipt.source ?? "lead"], amount: userPayment?.amount ?? receipt.price,
     status: userPayment ? status(userPayment.status) : "pending", txUrl: userPayment?.txUrl ?? null,
   };
   const sellers: FlowNode[] = [];
@@ -48,6 +50,20 @@ export function moneyFlow(receipt: ReceiptNode | null): FlowModel {
   let spent = 0n;
   for (const s of sellers) if (s.status === "settled") spent += parseUsdcText(s.amount) ?? 0n;
   return { lead, sellers, refund, agentSpend: formatUsdcAtomic(spent) };
+}
+
+/// The notice while a job is paying or working: a Lead job talks about the lead
+/// agent and its helpers, a routed job names the one service that was hired.
+export function workingNotice(phase: "paying" | "working", receipt: ReceiptNode | null): { title: string; body: string } {
+  if (!receipt || (receipt.source ?? "lead") === "lead") {
+    return phase === "paying"
+      ? { title: "Paying the lead agent", body: "Your payment is settling on Arc. The lead agent starts the moment it lands." }
+      : { title: "Agents at work", body: "The lead agent is buying data and choosing a forecaster. Every payment appears on the right as it lands." };
+  }
+  const name = receipt.label;
+  return phase === "paying"
+    ? { title: `Paying ${name}`, body: `Your payment is settling on Arc. ${name} starts the moment it lands.` }
+    : { title: `${name} is working`, body: `Your request is with ${name}. The answer appears here when it arrives, and the payment is on the right.` };
 }
 
 export function ledgerRows(events: StageEvent[], startedAt: string | null): LedgerRow[] {

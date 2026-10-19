@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Address } from "viem";
 
-import { checkSubHire, newJob, receiptTree, spentUnder } from "../../src/agon/payments/jobs.ts";
+import { LEAD_PROVIDER_REF } from "../../src/agon/lead-agent/lead-agent.ts";
+import { checkSubHire, newJob, receiptSource, receiptTree, spentUnder } from "../../src/agon/payments/jobs.ts";
 import type { JobPayment } from "../../src/agon/payments/types.ts";
 
 const now = new Date("2026-10-27T12:00:00Z");
@@ -62,4 +63,16 @@ test("the receipt tree nests children and links settled payments to the explorer
   assert.equal(view.children.length, 1);
   assert.equal(view.children[0]!.payments[0]!.txUrl, null);
   assert.equal(receiptTree("missing", [root], []), null);
+});
+
+test("the receipt says where each seller comes from: the Lead, an Agon listing or Circle", () => {
+  const { root, child } = setup();
+  const view = receiptTree(root.jobId, [root, child], [])!;
+  assert.equal(view.source, "lead");
+  assert.equal(view.children[0]!.source, "agon");
+  const circle = newJob({ parent: null, buyerRef: "budget:u", providerRef: "circle:https://lonestar.example/forecast", providerLabel: "LoneStarOracle", network: "arc", price: 50_000n, request: {}, now });
+  assert.equal(receiptTree(circle.jobId, [circle], [])!.source, "circle");
+  const listed = newJob({ parent: null, buyerRef: "budget:u", providerRef: "0xabc:7", providerLabel: "Scout", network: "arc-testnet", price: 20_000n, request: {}, now });
+  assert.equal(receiptTree(listed.jobId, [listed], [])!.source, "agon");
+  assert.equal(receiptSource(LEAD_PROVIDER_REF), "lead", "kept in step with the Lead's provider reference");
 });

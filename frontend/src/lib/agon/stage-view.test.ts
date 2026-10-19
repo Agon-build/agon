@@ -3,7 +3,7 @@ import test from "node:test";
 
 import {
   beatsMarketText, compareProbability, explorerBase, flattenPayments, formatCountdown, ratingForAgent, formatUsdcAtomic, haggleRows, haggleSummary, isTerminal, ledgerRows,
-  moneyFlow, moneySegments, parseUsdcText, phaseStep, shortHash, timeAgo,
+  moneyFlow, moneySegments, parseUsdcText, phaseStep, shortHash, timeAgo, workingNotice,
 } from "./stage-view.ts";
 import type { ReceiptNode, StageAnswer } from "./stage-types.ts";
 
@@ -41,6 +41,22 @@ test("the money flow follows the receipt: you pay the lead, the lead pays seller
   assert.equal(flow.agentSpend, "0.18274", "only settled payments count");
   assert.equal(flow.refund, null);
   assert.equal(moneyFlow(null).lead, null);
+});
+
+test("the money flow names where the hired service comes from", () => {
+  assert.equal(moneyFlow(receipt).lead!.sublabel, "Built by Agon", "no source means an older API: the Lead");
+  assert.equal(moneyFlow({ ...receipt, source: "lead" }).lead!.sublabel, "Built by Agon");
+  assert.equal(moneyFlow({ ...receipt, label: "LoneStarOracle", source: "circle", children: [] }).lead!.sublabel, "Circle Agent Marketplace");
+  assert.equal(moneyFlow({ ...receipt, label: "Scout", source: "agon", children: [] }).lead!.sublabel, "Listed on Agon");
+});
+
+test("the working notice names the hired service on a routed job and the lead agent on a Lead job", () => {
+  assert.deepEqual(workingNotice("paying", receipt), { title: "Paying the lead agent", body: "Your payment is settling on Arc. The lead agent starts the moment it lands." });
+  assert.deepEqual(workingNotice("working", { ...receipt, source: "lead" }), { title: "Agents at work", body: "The lead agent is buying data and choosing a forecaster. Every payment appears on the right as it lands." });
+  const circle: ReceiptNode = { ...receipt, label: "LoneStarOracle", source: "circle", children: [] };
+  assert.deepEqual(workingNotice("paying", circle), { title: "Paying LoneStarOracle", body: "Your payment is settling on Arc. LoneStarOracle starts the moment it lands." });
+  assert.deepEqual(workingNotice("working", circle), { title: "LoneStarOracle is working", body: "Your request is with LoneStarOracle. The answer appears here when it arrives, and the payment is on the right." });
+  assert.equal(workingNotice("working", null).title, "Agents at work");
 });
 
 test("a refund shows as its own node", () => {
