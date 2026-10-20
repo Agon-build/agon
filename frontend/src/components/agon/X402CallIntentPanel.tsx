@@ -8,7 +8,7 @@ import { X402AuthorizationSigner } from "@/components/agon/X402AuthorizationSign
 import { TagButton } from "@/components/redesign/TagButton";
 import { useAuth } from "@/hooks/useAuth";
 import { AGON_PREVIEW_MODE, approveX402CallIntent, captureX402Quote, prepareX402Authorization, prepareX402CallIntent } from "@/lib/agon/client";
-import { assessX402Readiness, buildCallIntentRequest, newCallIntentKey } from "@/lib/agon/call-intent";
+import { assessX402Readiness, buildCallIntentRequest, manifestMethod, newCallIntentKey } from "@/lib/agon/call-intent";
 import { formatUSDCBaseUnits } from "@/lib/agon/execution-review";
 import type { AgonListing, X402ApprovalView, X402AuthorizationSubmittedView, X402AuthorizationView, X402CallIntentView, X402QuoteView } from "@/lib/agon/types";
 
@@ -22,9 +22,14 @@ export function X402CallIntentPanel({ listing, defaultAmount, endpointUrl }: Pro
   const { me } = useAuth();
   const readiness = useMemo(() => assessX402Readiness(listing), [listing]);
   const [loginOpen, setLoginOpen] = useState(false);
-  const [method, setMethod] = useState<"GET" | "POST">("POST");
+  const method = manifestMethod(listing.manifest.body);
   const [input, setInput] = useState("{\n  \n}");
   const [maxAmountUSDC, setMaxAmountUSDC] = useState(defaultAmount ?? "0.01");
+  // The price arrives with the service file, after the first render; start the limit at the price.
+  const [limitEdited, setLimitEdited] = useState(false);
+  useEffect(() => {
+    if (defaultAmount && !limitEdited) setMaxAmountUSDC(defaultAmount);
+  }, [defaultAmount, limitEdited]);
   const [intent, setIntent] = useState<X402CallIntentView | null>(null);
   const [approval, setApproval] = useState<X402ApprovalView | null>(null);
   const [quote, setQuote] = useState<X402QuoteView | null>(null);
@@ -113,7 +118,7 @@ export function X402CallIntentPanel({ listing, defaultAmount, endpointUrl }: Pro
         <div>
           <div className="font-mono text-[10px] uppercase tracking-[0.14em]">HIRE THIS AGENT</div>
           <p className="mt-2 max-w-[42ch] font-mono text-[10px] leading-relaxed opacity-70">
-            Enter the task and set the most you are willing to pay. Nothing is charged until you review and sign.
+            Write the request this agent reads, and the most you will pay. Nothing is charged until you review and sign.
           </p>
         </div>
         <span className={`font-mono text-[10px] uppercase tracking-[0.12em] ${readiness.eligible ? "text-[color:var(--ok)]" : "text-[color:var(--err)]"}`}>
@@ -127,21 +132,12 @@ export function X402CallIntentPanel({ listing, defaultAmount, endpointUrl }: Pro
         <p className="mt-4 border-l-2 border-[color:var(--err)] pl-3 font-mono text-[10px] leading-relaxed opacity-75">{readiness.reason}</p>
       ) : (
         <>
-          <div className="mt-5 grid gap-3 sm:grid-cols-[110px_minmax(0,1fr)]">
-            <label className="font-mono text-[9px] uppercase tracking-[0.12em] opacity-65">
-              METHOD
-              <select value={method} onChange={(event) => setMethod(event.target.value as "GET" | "POST")} className="mt-2 h-10 w-full border border-current bg-transparent px-2 font-mono text-[11px] opacity-100">
-                <option value="POST">POST</option>
-                <option value="GET">GET</option>
-              </select>
-            </label>
-            <label className="font-mono text-[9px] uppercase tracking-[0.12em] opacity-65">
-              YOUR SPEND LIMIT · USDC
-              <input value={maxAmountUSDC} onChange={(event) => setMaxAmountUSDC(event.target.value)} inputMode="decimal" className="mt-2 h-10 w-full border border-current bg-transparent px-3 font-mono text-[11px] text-current" />
-            </label>
-          </div>
+          <label className="mt-5 block font-mono text-[9px] uppercase tracking-[0.12em] opacity-65">
+            MOST YOU'LL PAY · USDC
+            <input value={maxAmountUSDC} onChange={(event) => { setLimitEdited(true); setMaxAmountUSDC(event.target.value); }} inputMode="decimal" className="mt-2 h-10 w-full border border-current bg-transparent px-3 font-mono text-[11px] text-current" />
+          </label>
           <label className="mt-4 block font-mono text-[9px] uppercase tracking-[0.12em] opacity-65">
-            TASK DETAILS (JSON)
+            REQUEST · JSON
             <textarea value={input} onChange={(event) => setInput(event.target.value)} rows={4} spellCheck={false} className="mt-2 w-full resize-y border border-current bg-transparent p-3 font-mono text-[11px] leading-relaxed text-current" />
           </label>
           <div className="mt-4 flex flex-wrap items-center gap-3">

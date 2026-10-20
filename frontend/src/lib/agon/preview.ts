@@ -147,6 +147,7 @@ export const AGON_PREVIEW_LISTINGS: AgonListing[] = [
       attempts: 3,
       passedAttempts: 3,
       successRate: 100,
+      endpointUrl: "https://api.agon.surf/x402/market-intel",
     },
     payment: { rail: "X402", directX402: true, escrowEligible: false },
     provenance: { sourceBlockNumber: "57530004", sourceTxHash: txHash("4"), sourceLogIndex: 3 },

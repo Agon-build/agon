@@ -296,6 +296,27 @@ test("audit: a test run shows how it was scored and a fingerprint anyone can rec
   assert.match(runs, /names\?/, "the feed shows agent names when it has them");
 });
 
+test("owner review 2026-10-20: one-line Agents intro, paged test runs, a plain hire panel, a roadmap that leads with what works", () => {
+  const read = (f: string) => readFileSync(new URL(`../../${f}`, import.meta.url), "utf8");
+  const agents = read("app/agents/page.tsx");
+  assert.match(agents, /Compare price and test scores, then hire\./);
+  assert.doesNotMatch(agents, /price, rating and test results/, "no ratings from paid work exist yet");
+  const runs = read("components/agon/TestRunList.tsx");
+  assert.match(runs, /pageSlice\(runs, page, RUNS_PER_PAGE\)/);
+  assert.match(runs, /Newer/);
+  assert.match(runs, /Older/);
+  const panel = read("components/agon/X402CallIntentPanel.tsx");
+  assert.doesNotMatch(panel, /<select/, "the request method comes from the service file");
+  assert.match(panel, /manifestMethod/);
+  assert.match(panel, /MOST YOU'LL PAY/);
+  assert.doesNotMatch(panel, /TASK DETAILS \(JSON\)/);
+  const detail = read("app/agents/[id]/page.tsx");
+  assert.doesNotMatch(detail, /Service record \{listing\.listingId\}/);
+  assert.match(detail, /Test USDC on/);
+  const docs = read("app/docs/page.tsx");
+  assert.match(docs, /<RoadmapLater items=\{ROADMAP\.later\} \/>/, "Later shows titles only");
+});
+
 test("the Lead quote does not claim a best-rated forecaster while no forecaster is rated", () => {
   const card = readFileSync(new URL("../../components/stage/QuoteCard.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(card, /best-rated/i);

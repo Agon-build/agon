@@ -71,3 +71,12 @@ export function runErrorText(error: unknown): string {
   if (typeof e?.serverMessage === "string" && e.serverMessage) return e.serverMessage;
   return "The test could not run. Try again in a moment.";
 }
+
+/// One page of a list, with the page clamped to the last one when the list shrinks.
+export function pageSlice<T>(items: readonly T[], page: number, size: number): { rows: T[]; page: number; pages: number; label: string } {
+  const pages = Math.max(1, Math.ceil(items.length / size));
+  const at = Math.min(Math.max(0, page), pages - 1);
+  const rows = items.slice(at * size, at * size + size);
+  const label = rows.length ? `${at * size + 1}-${at * size + rows.length} of ${items.length}` : "";
+  return { rows, page: at, pages, label };
+}

@@ -175,10 +175,10 @@ export default function DocsPage() {
             </Section>
 
             <Section id="roadmap">
-              <div className="grid gap-px bg-[color:var(--hairline)] lg:grid-cols-3">
-                <RoadmapColumn title="Live now" items={ROADMAP.live} />
+              <RoadmapLive items={ROADMAP.live} />
+              <div className="mt-px grid gap-px bg-[color:var(--hairline)] lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
                 <RoadmapColumn title="Next" items={ROADMAP.next} />
-                <RoadmapColumn title="Later" items={ROADMAP.later} />
+                <RoadmapLater items={ROADMAP.later} />
               </div>
             </Section>
 
@@ -245,17 +245,46 @@ function Fact({ title, body }: { title: string; body: string }) {
   );
 }
 
-function RoadmapColumn({ title, items }: { title: string; items: readonly { title: string; body: string }[] }) {
+/// What works today leads the roadmap, full width, each item marked as live.
+function RoadmapLive({ items }: { items: readonly { title: string; body: string }[] }) {
   return (
-    <div className="bg-canvas-2 p-5 sm:p-6">
-      <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">{title}</div>
-      <ul className="mt-5 space-y-5">
+    <div className="border-l-[3px] border-[color:var(--ok)] bg-canvas-2 p-5 sm:p-6">
+      <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Live now</div>
+      <ul className="mt-5 grid gap-x-10 gap-y-6 md:grid-cols-2">
         {items.map((i) => (
           <li key={i.title}>
-            <h3 className="font-stencil text-[22px] uppercase leading-none">{i.title}</h3>
-            <p className="mt-2 font-mono text-[11px] leading-[1.65] text-ink-2">{i.body}</p>
+            <h3 className="flex items-start gap-3 font-stencil text-[22px] uppercase leading-none"><span aria-hidden="true" className="mt-1.5 h-2 w-2 shrink-0 bg-[color:var(--ok)]" />{i.title}</h3>
+            <p className="mt-2 pl-5 font-mono text-[11px] leading-[1.65] text-ink-2">{i.body}</p>
           </li>
         ))}
+      </ul>
+    </div>
+  );
+}
+
+function RoadmapColumn({ title, items }: { title: string; items: readonly { title: string; body: string }[] }) {
+  return (
+    <div className="bg-canvas p-5 sm:p-6">
+      <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3">{title}</div>
+      <ul className="mt-4 space-y-4">
+        {items.map((i) => (
+          <li key={i.title}>
+            <h3 className="font-sans text-[15px] font-semibold text-ink">{i.title}</h3>
+            <p className="mt-1 font-mono text-[11px] leading-[1.65] text-ink-2">{i.body}</p>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/// Later is a short list of titles, so plans never outweigh what already works.
+function RoadmapLater({ items }: { items: readonly { title: string; body: string }[] }) {
+  return (
+    <div className="bg-canvas p-5 sm:p-6">
+      <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3">Later</div>
+      <ul className="mt-4 divide-y divide-[color:var(--hairline)] border-y border-[color:var(--hairline)]">
+        {items.map((i) => <li key={i.title} title={i.body} className="py-2.5 font-mono text-[11px] text-ink-2">{i.title}</li>)}
       </ul>
     </div>
   );

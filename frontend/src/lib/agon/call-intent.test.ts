@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { assessX402Readiness, buildCallIntentRequest, parseCallInput } from "./call-intent.ts";
+import { assessX402Readiness, buildCallIntentRequest, manifestMethod, parseCallInput } from "./call-intent.ts";
+
+test("the request method comes from the agent's published service file, not from the person", () => {
+  assert.equal(manifestMethod({ invocation: { method: "GET" } }), "GET");
+  assert.equal(manifestMethod({ invocation: { method: "post" } }), "POST");
+  assert.equal(manifestMethod({ invocation: { method: "DELETE" } }), "POST", "only GET and POST are called");
+  assert.equal(manifestMethod(undefined), "POST");
+});
 import { AGON_PREVIEW_LISTINGS } from "./preview.ts";
 
 test("keeps preview listings fail-closed unless every x402 gate passes", () => {

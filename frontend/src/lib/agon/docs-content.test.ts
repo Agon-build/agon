@@ -12,13 +12,15 @@ test("docs sections come in one order with unique, URL-safe ids", () => {
   assert.equal(new Set(DOCS_SECTIONS.map((s) => s.label)).size, DOCS_SECTIONS.length);
 });
 
-test("the roadmap names every deferred item from the spec, and Live now lists only what works today", () => {
+test("the roadmap leads with what works, keeps Next to three and Later to short titles", () => {
   const later = ROADMAP.later.map((i) => i.title.toLowerCase()).join(" | ");
-  for (const word of ["escrow", "beyond forecasting", "trading", "whatsapp", "provider dashboard", "ratings feed", "other marketplaces", "arc mainnet"]) assert.ok(later.includes(word), word);
-  const next = ROADMAP.next.map((i) => i.title.toLowerCase()).join(" | ");
-  for (const word of ["hire the best agent", "arena", "circle", "scores from paid work"]) assert.ok(next.includes(word), word);
-  // Live now holds only capabilities proven on production (agon-build capabilities.md, 2026-10-18).
+  for (const word of ["escrow", "trading", "whatsapp", "provider dashboard", "other marketplaces", "arc mainnet", "circle"]) assert.ok(later.includes(word), word);
+  assert.ok(ROADMAP.later.length <= 6, "Later stays a short list");
+  // Circle waits for Agon's mainnet launch (owner decision 2026-10-19).
+  assert.deepEqual(ROADMAP.next.map((i) => i.title), ["Hire the best agent for any request", "Arena seasons that score", "Scores from paid work"]);
+  // Live now holds only capabilities proven on production (agon-build capabilities.md, 2026-10-19).
   assert.deepEqual(ROADMAP.live.map((i) => i.title), [
+    "Ask about any Polymarket market",
     "Playground tests for listed agents",
     "Agon score and category leaderboards",
     "Agon MCP for coding agents",
@@ -141,7 +143,6 @@ test("Docs state the exact rating method, each public test with an example, and 
   assert.doesNotMatch(RATING_SOURCES[0]!.body, /will count/);
   assert.match(RATING_SOURCES[0]!.body, /counts toward/);
   assert.doesNotMatch(LEADERBOARD_NOTE, /come next/);
-  assert.ok(ROADMAP.later.some((i) => i.title === "One leaderboard across categories"));
   assert.equal(ROADMAP.next.some((i) => /Leaderboard over 24 hours|Every Playground result counts/.test(i.title)), false, "shipped items leave Next");
 });
 
@@ -192,7 +193,7 @@ test("docs present only Live capabilities as working: Circle, mainnet and the Ar
   assert.match(fees, /only when the answer arrives/);
   const outsideRoadmap = docsStrings().filter((t) => !ROADMAP.next.some((i) => i.title === t || i.body === t) && !ROADMAP.later.some((i) => i.title === t || i.body === t));
   for (const t of outsideRoadmap) {
-    if (!t.trim().endsWith("?") && /Circle('s)? Agent Marketplace|Circle services?/.test(t)) assert.match(t, /coming next/i, `presents Circle services as working: ${t}`);
+    if (!t.trim().endsWith("?") && /Circle('s)? Agent Marketplace|Circle services?\b/.test(t)) assert.match(t, /move to Arc mainnet/i, `presents Circle services as working: ${t}`);
     assert.doesNotMatch(t, /20 October|late October/, `stale date: ${t}`);
   }
   assert.match(ARENA_STATUS, /not scoring/i);

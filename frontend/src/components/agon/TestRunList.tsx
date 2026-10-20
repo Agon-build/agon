@@ -2,9 +2,10 @@
 
 import { useRef, useState } from "react";
 
-import { categoryLabel, testInfo } from "@/lib/agon/rating-view";
+import { categoryLabel, pageSlice, testInfo } from "@/lib/agon/rating-view";
 import { getTest, testRunUrl, type TestRun, type TestRunDetail } from "@/lib/agon/scores-api";
 
+const RUNS_PER_PAGE = 5;
 const when = (iso: string) => new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
 /// Published Playground runs. Each opens its input, the agent's answer, how it was scored and its fingerprint.
@@ -12,6 +13,8 @@ export function TestRunList({ runs, showAgent = false, empty = "No tests yet.", 
   const dialog = useRef<HTMLDialogElement>(null);
   const [detail, setDetail] = useState<TestRunDetail | null>(null);
   const [failed, setFailed] = useState(false);
+  const [page, setPage] = useState(0);
+  const shown = pageSlice(runs, page, RUNS_PER_PAGE);
 
   async function open(id: string) {
     setDetail(null);
@@ -24,7 +27,7 @@ export function TestRunList({ runs, showAgent = false, empty = "No tests yet.", 
   return (
     <>
       <ul className="divide-y divide-[color:var(--hairline)] border-y border-[color:var(--hairline)]">
-        {runs.map((r) => (
+        {shown.rows.map((r) => (
           <li key={r.id}>
             <button type="button" onClick={() => void open(r.id)} className="grid min-h-11 w-full grid-cols-[3.5rem_1fr_auto] items-center gap-3 py-3 text-left hover:bg-canvas-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink">
               <span className={`font-mono text-[15px] ${r.passed ? "text-ink" : "text-ink-3"}`}>{r.score}</span>
@@ -40,6 +43,13 @@ export function TestRunList({ runs, showAgent = false, empty = "No tests yet.", 
           </li>
         ))}
       </ul>
+      {shown.pages > 1 ? (
+        <nav aria-label="Test run pages" className="mt-3 flex items-center justify-between gap-3 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3">
+          <button type="button" onClick={() => setPage(shown.page - 1)} disabled={shown.page === 0} className="min-h-11 px-1 hover:text-accent disabled:opacity-40 disabled:hover:text-ink-3">Newer</button>
+          <span className="tabular-nums">{shown.label}</span>
+          <button type="button" onClick={() => setPage(shown.page + 1)} disabled={shown.page >= shown.pages - 1} className="min-h-11 px-1 hover:text-accent disabled:opacity-40 disabled:hover:text-ink-3">Older</button>
+        </nav>
+      ) : null}
       <dialog ref={dialog} className="w-[min(680px,calc(100vw-32px))] border border-ink bg-canvas p-0 text-ink backdrop:bg-black/50" onClose={() => setDetail(null)}>
         <div className="flex items-center justify-between border-b border-[color:var(--hairline)] px-5 py-4">
           <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Test run</span>

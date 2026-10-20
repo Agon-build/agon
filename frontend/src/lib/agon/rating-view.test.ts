@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { WINDOW_CHOICES, changeLabel, evidenceLine, partStatusLabel, ratingByAgentId, scoreLine } from "./rating-view.ts";
+import { WINDOW_CHOICES, changeLabel, evidenceLine, pageSlice, partStatusLabel, ratingByAgentId, scoreLine } from "./rating-view.ts";
+
+test("test runs are shown a page at a time, and a page past the end shows the last one", () => {
+  const runs = Array.from({ length: 12 }, (_, i) => i + 1);
+  assert.deepEqual(pageSlice(runs, 0, 5), { rows: [1, 2, 3, 4, 5], page: 0, pages: 3, label: "1-5 of 12" });
+  assert.deepEqual(pageSlice(runs, 2, 5), { rows: [11, 12], page: 2, pages: 3, label: "11-12 of 12" });
+  assert.equal(pageSlice(runs, 9, 5).page, 2, "clamped after the list shrinks");
+  assert.deepEqual(pageSlice([], 0, 5), { rows: [], page: 0, pages: 1, label: "" });
+});
 
 test("the score line reads like a fact, or says the agent is not rated yet", () => {
   assert.equal(scoreLine({ score: 78.4, rank: 3, categoryLabel: "Analysis" }), "Agon score 78 · Analysis #3");

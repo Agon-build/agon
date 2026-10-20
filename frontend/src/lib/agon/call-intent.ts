@@ -32,6 +32,12 @@ export function assessX402Readiness(listing: AgonListing): X402Readiness {
   return { eligible: true, label: "READY", reason: "This version passed testing and its service endpoint is available." };
 }
 
+/// The method the agent's published service file declares; GET or POST, POST when unstated.
+export function manifestMethod(body: unknown): X402CallIntentRequest["method"] {
+  const method = (body as { invocation?: { method?: unknown } } | null | undefined)?.invocation?.method;
+  return typeof method === "string" && method.toUpperCase() === "GET" ? "GET" : "POST";
+}
+
 export function parseCallInput(raw: string): { input: unknown } | { error: string } {
   try {
     const input = JSON.parse(raw);

@@ -215,7 +215,7 @@ function ArcListingDetailPage() {
                     )}
 
                     <div className="mt-7 border-t border-current pt-5 font-mono text-[9px] uppercase leading-relaxed tracking-[0.1em] opacity-55">
-                      {network.name} <span aria-hidden>·</span> Service record {listing.listingId} <span aria-hidden>·</span> Version {listing.version}
+                      Test USDC on {network.name}
                     </div>
                   </BracketedCell>
                 </aside>
