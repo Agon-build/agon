@@ -22,12 +22,13 @@ const USER = `0x${"9".repeat(40)}` as Address;
 const QUESTION = "What's the real chance BTC closes above $82k on Friday?";
 const cid = `0x${"ab".repeat(32)}`;
 
-function world(opts: { atlasReply?: string; markets?: boolean; subHireBudget?: bigint; sellers?: string[]; failSettleFor?: string[]; searchFails?: boolean; quoteThrowsFor?: string } = {}) {
+function world(opts: { atlasReply?: string; markets?: boolean; subHireBudget?: bigint; sellers?: string[]; failSettleFor?: string[]; searchFails?: boolean; quoteThrowsFor?: string; search?: (q: string) => unknown[] } = {}) {
   const store = new MemoryPaymentsStore();
   const settler = fakeSettler();
   const upstream = (async (url: string) => {
     if (url.startsWith("https://coins.llama.fi/")) return new Response(JSON.stringify({ coins: { "coingecko:bitcoin": { price: 82953.31 } } }));
     if (opts.searchFails) return new Response("down", { status: 500 });
+    if (opts.search) return new Response(JSON.stringify({ events: opts.search(new URL(url).searchParams.get("q") ?? "") }));
     return new Response(JSON.stringify({ events: opts.markets === false ? [] : [{ markets: [{
       conditionId: cid, question: "Will the price of Bitcoin be above $82,000 on October 30?", slug: "btc", endDate: "2026-10-30T16:00:00Z",
       outcomes: '["Yes","No"]', outcomePrices: '["0.41","0.59"]', liquidityNum: 40000,
@@ -264,4 +265,34 @@ test("a refunded run keeps its events on the job", async () => {
   const stored = (await store.getJob(parent.jobId))!.result as { error: string; events: { kind: string }[] };
   assert.equal(stored.error, "no_market");
   assert.ok(stored.events.some((e) => e.kind === "refund"));
+});
+
+const matchEvent = (endDate: string) => ({ title: "Paris Saint-Germain FC vs. FC Barcelona", markets: [
+  { conditionId: `0x${"a1".repeat(32)}`, question: "Will Paris Saint-Germain FC win on 2026-10-28?", slug: "psg", endDate, outcomes: '["Yes","No"]', outcomePrices: '["0.46","0.54"]' },
+  { conditionId: `0x${"b1".repeat(32)}`, question: "Will FC Barcelona win on 2026-10-28?", slug: "fcb", endDate, outcomes: '["Yes","No"]', outcomePrices: '["0.31","0.69"]' },
+] });
+
+// 2026-10-20: "Who will win between Barcelona and PSG" was refunded while Polymarket had the match open.
+test("when the full search finds no match, one wider search on the first name finds it", async () => {
+  const searched: string[] = [];
+  const { store, deps } = world({ search: (q) => (searched.push(q), q === "barcelona" ? [matchEvent("2026-10-28T19:00:00Z")] : []) });
+  const parent = await userJob(store);
+  const answer = await runLeadForecast(deps, { parentJobId: parent.jobId, payer: USER, question: "Who will win between Barcelona and PSG" });
+  assert.ok(answer.ok, JSON.stringify(answer));
+  assert.deepEqual(searched, ["barcelona paris saint germain", "barcelona"]);
+  assert.equal(answer.market.question, "Will FC Barcelona win on 2026-10-28?");
+  assert.equal(answer.marketPriceBps, 3100);
+  assert.deepEqual((await store.listJobPayments(parent.jobId)).filter((p) => p.kind === "data").map((p) => p.amount), [8_500n, 8_500n]);
+});
+
+test("a match that already kicked off is refunded with that reason, not swapped for another game", async () => {
+  const later = { title: "FC Barcelona vs. Real Madrid CF", markets: [
+    { conditionId: `0x${"c1".repeat(32)}`, question: "Will FC Barcelona win on 2026-11-02?", slug: "fcb2", endDate: "2026-11-02T20:00:00Z", outcomes: '["Yes","No"]', outcomePrices: '["0.5","0.5"]' },
+  ] };
+  const { store, deps, refunds } = world({ search: () => [matchEvent("2026-10-27T11:00:00Z"), later] });
+  const parent = await userJob(store);
+  const answer = await runLeadForecast(deps, { parentJobId: parent.jobId, payer: USER, question: "Who will win between Barcelona and PSG" });
+  assert.ok(!answer.ok && answer.code === "market_started" && answer.refunded, JSON.stringify(answer));
+  assert.equal(refunds.length, 1);
+  assert.ok(answer.progress.some((p) => p.includes("Paris Saint-Germain FC vs. FC Barcelona") && p.includes("already started")), answer.progress.join("\n"));
 });

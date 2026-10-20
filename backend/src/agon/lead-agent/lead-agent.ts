@@ -10,7 +10,7 @@ import { LEAD_LIMITS } from "../payments/limits.ts";
 import type { Job, JobPayment, PaymentsStore } from "../payments/types.ts";
 import { coinIdsForQuestion, type DataServices } from "../router/data-services.ts";
 import type { ForecasterCandidate } from "../router/forecasters.ts";
-import { findMarkets, pickMarket, priceFromPayload, searchQueryFor, type MarketCandidate } from "./market-parse.ts";
+import { fallbackQueryFor, findMarkets, matchMarket, priceFromPayload, searchQueryFor, type MarketCandidate } from "./market-parse.ts";
 
 export const LEAD_PROVIDER_REF = "agent:lead";
 const LEAD_WALLET_REF = "agent:lead";
@@ -45,7 +45,7 @@ export type LeadAnswer =
       haggle: BargainStep[];
       events?: LiveEvent[];
     }
-  | { ok: false; jobId: string; code: "no_market" | "no_forecaster" | "lead_error"; refunded: boolean; refundTx: Hex | null; progress: string[]; events?: LiveEvent[] };
+  | { ok: false; jobId: string; code: "no_market" | "market_started" | "no_forecaster" | "lead_error"; refunded: boolean; refundTx: Hex | null; progress: string[]; events?: LiveEvent[] };
 
 const forecastResult = z.object({ probabilityBps: z.number().int().min(0).max(10_000), reasons: z.array(z.string()).max(5) });
 const quoteReply = z.object({ kind: z.enum(["accept", "counter", "walk"]), amount: z.string().regex(/^\d+$/).optional(), quoteId: z.string().optional() });
@@ -178,7 +178,7 @@ export async function runLeadForecast(
     return null;
   }
 
-  async function refundOnce(code: "no_market" | "no_forecaster" | "lead_error"): Promise<LeadAnswer> {
+  async function refundOnce(code: "no_market" | "market_started" | "no_forecaster" | "lead_error"): Promise<LeadAnswer> {
     if (!paid) {
       await deps.store.updateJob(root.jobId, { state: "failed", result: { error: code, events, haggle: liveHaggle } });
       return { ok: false, jobId: root.jobId, code, refunded: false, refundTx: null, progress, events };
@@ -192,7 +192,7 @@ export async function runLeadForecast(
     } catch (error) {
       deps.log?.(`lead agent refund failed for ${root.jobId}: ${(error as Error).message}`);
     }
-    const reason = { no_market: "no matching market", no_forecaster: "no forecaster could deliver", lead_error: "the lead agent hit an error" }[code];
+    const reason = { no_market: "no matching market", market_started: "the market already started", no_forecaster: "no forecaster could deliver", lead_error: "the lead agent hit an error" }[code];
     await recordPayment({
       idempotencyKey: key, jobId: root.jobId, kind: "refund", payer: deps.leadAddress, payee: input.payer, amount: deps.leadPrice,
       status: refundTx ? "settled" : "failed", txHash: refundTx, detail: reason,
@@ -224,7 +224,21 @@ export async function runLeadForecast(
     await say("Reading the question and looking for the market", "note");
     // 1. Find the market.
     const search = await buyData(deps.data.marketSearch(searchQueryFor(input.question)), deps.data.searchLabel, "market search");
-    const market = pickMarket(findMarkets(search), input.question, now());
+    let candidates = findMarkets(search);
+    let found = matchMarket(candidates, input.question, now());
+    // Polymarket search is narrow: one wider search on the first name, only when the first one answered.
+    const wider = fallbackQueryFor(input.question);
+    if (search !== null && !found.market && !found.started && wider) {
+      candidates = [...candidates, ...findMarkets(await buyData(deps.data.marketSearch(wider), deps.data.searchLabel, "a wider market search"))];
+      found = matchMarket(candidates, input.question, now());
+    }
+    if (found.started) {
+      const when = new Date(found.started.endDate);
+      const at = Number.isNaN(when.getTime()) ? "" : ` at ${when.toISOString().slice(11, 16)} UTC on ${when.toISOString().slice(0, 10)}`;
+      await say(`Found ${found.started.eventTitle || found.started.question}, but it already started${at}, so it cannot be forecast`, "note");
+      return refundOnce("market_started");
+    }
+    const market = found.market;
     if (!market) return refundOnce("no_market");
 
     // 2. Spot price, when the question names a coin.

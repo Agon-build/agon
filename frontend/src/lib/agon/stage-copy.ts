@@ -53,6 +53,7 @@ export const confirmFailureText = (code: string) => CONFIRM[code] ?? "The paymen
 
 const FAILURE: Record<string, string> = {
   no_market: "Polymarket has no open market that matches this question.",
+  market_started: "The market for this already started, so it can no longer be forecast.",
   no_forecaster: "No forecaster could deliver within the budget.",
   lead_error: "Something went wrong while the agents worked.",
   delivery_failed: "The lead agent was paid but did not deliver.",

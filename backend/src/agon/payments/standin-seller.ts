@@ -62,7 +62,7 @@ export function createStandinRoutes(deps: {
     const params = new URLSearchParams({ q: (c.req.query("q") ?? "").trim(), limit_per_type: "10", events_status: "active" });
     const res = await upstream(`https://gamma-api.polymarket.com/public-search?${params}`, { signal: AbortSignal.timeout(10_000) });
     if (!res.ok) return c.json({ error: "upstream_unavailable" }, 502);
-    const body = (await res.json()) as { events?: { markets?: unknown[] }[] };
+    const body = (await res.json()) as { events?: { title?: unknown; markets?: unknown[] }[] };
     const markets = [];
     for (const event of body.events ?? []) {
       for (const raw of event.markets ?? []) {
@@ -74,6 +74,8 @@ export function createStandinRoutes(deps: {
         markets.push({
           conditionId: m.data.conditionId.toLowerCase(), question: m.data.question, slug: m.data.slug, endDate: m.data.endDate,
           yesPriceBps: Math.round(prices[0]! * 10_000), liquidity: m.data.liquidityNum ?? 0,
+          // The event names both sides of a match; the market question names only one.
+          eventTitle: typeof event.title === "string" ? event.title : "",
         });
       }
     }

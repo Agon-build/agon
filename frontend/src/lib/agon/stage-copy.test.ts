@@ -12,6 +12,7 @@ test("every refusal a person can hit has a plain sentence", () => {
   assert.equal(confirmFailureText("expired"), "This quote expired. Ask again for a fresh price.");
   assert.equal(confirmFailureText("payment_unknown"), "The payment is still confirming on Arc. This page updates when it lands.");
   assert.equal(failureText("no_market"), "Polymarket has no open market that matches this question.");
+  assert.equal(failureText("market_started"), "The market for this already started, so it can no longer be forecast.");
   assert.equal(failureText(null), "The agents could not finish this job.");
   assert.equal(approvalFailureText("wrong_account"), "This approval belongs to a different Agon account. Sign in with the account linked to this chat.");
   assert.deepEqual(Object.keys(KIND_LABEL).sort(), ["data", "fail", "haggle", "hire", "note", "refund"]);

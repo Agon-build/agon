@@ -32,6 +32,7 @@ export type ConversationDeps = {
 const EXAMPLE = "What's the real chance BTC closes above $120k on Friday?";
 const FAILURE: Record<string, string> = {
   no_market: "Polymarket has no open market that matches this question",
+  market_started: "the market for this already started, so it can no longer be forecast",
   no_forecaster: "no forecaster could deliver within the budget",
   lead_error: "something went wrong while the agents worked",
   delivery_failed: "the lead agent was paid but did not deliver",

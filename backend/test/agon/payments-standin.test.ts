@@ -47,8 +47,8 @@ test("the market route charges 0.0085 and returns binary markets with a Yes pric
   const { fetchImpl, upstream } = setup();
   const out = await buyExact({ url: "http://api.test/markets?q=bitcoin%2082000", network, maxAmount: 8_500n, signerFor: () => localSigner(buyer), fetchImpl });
   assert.ok(out.ok, show(out));
-  const markets = (out.data as { markets: { conditionId: string; yesPriceBps: number }[] }).markets;
-  assert.deepEqual(markets.map((m) => [m.conditionId, m.yesPriceBps]), [[cid, 4100]]);
+  const markets = (out.data as { markets: { conditionId: string; yesPriceBps: number; eventTitle: string }[] }).markets;
+  assert.deepEqual(markets.map((m) => [m.conditionId, m.yesPriceBps, m.eventTitle]), [[cid, 4100, "Bitcoin above ___ on October 30?"]]);
   assert.ok(upstream[0]!.startsWith("https://gamma-api.polymarket.com/public-search?"));
   // Without this Polymarket ranks long-closed events first and almost no question finds an open market.
   assert.equal(new URL(upstream[0]!).searchParams.get("events_status"), "active", "only open events are searched");
