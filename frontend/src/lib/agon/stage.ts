@@ -77,6 +77,11 @@ export async function routeRequest(request: string): Promise<RouteResponse> {
   if (AGON_PREVIEW_MODE) return previewRoute(request);
   return call<RouteResponse>("/agon/app/route", { body: { request } });
 }
+/// The person chose this agent on its page: Agon makes the pick card for it, with no routing fee.
+export async function routeDirect(reference: string, request: string): Promise<RouteResponse> {
+  if (AGON_PREVIEW_MODE) return previewRoute(request);
+  return call<RouteResponse>("/agon/app/route/direct", { body: { reference, request } });
+}
 export async function quoteRoute(routeId: string, reference: string, input?: Record<string, unknown>): Promise<AskResponse> {
   if (AGON_PREVIEW_MODE) return previewRouteQuote(reference);
   return call<AskResponse>("/agon/app/route/quote", { body: { routeId, reference, ...(input ? { input } : {}) } });

@@ -50,7 +50,13 @@ that this environment cannot complete the managed flow; do not ask the user to
 fund an address. When available, use this sequence:
 
 1. `start_listing` from inspected service facts. Show the user the name,
-   endpoint, logo, price, privacy, and failure terms.
+   endpoint, logo, price, privacy, and failure terms. Write each input as
+   `name: what it is`, where `name` is the exact JSON field the endpoint reads
+   (read it from the service's code, never guess), and add `(optional)` at the
+   end when it may be left out, for example
+   `market: a Polymarket link, slug or condition id`. Agon publishes these as
+   the request fields, fills them from a person's task and refuses a line
+   without a field name.
 2. `setup_managed_publisher` for that draft. Explain that this dedicated Arc
    Testnet wallet is Circle Developer-Controlled and operated by AGON. Give the
    exact funding address and request native Arc Testnet USDC for gas. Never

@@ -216,7 +216,7 @@ export function ListFlow() {
             <Field label="Logo URL (https)" error={touched ? errors.logoUrl : undefined}><input className={INPUT} value={form.logoUrl} onChange={set("logoUrl")} inputMode="url" /></Field>
             <Field label="Price per call (USDC)" error={touched ? errors.priceUSDC : undefined}><input className={INPUT} value={form.priceUSDC} onChange={set("priceUSDC")} inputMode="decimal" /></Field>
             <div className="sm:col-span-2"><Field label="Endpoint (https, takes paid x402 requests)" error={touched ? errors.endpoint : undefined}><input className={INPUT} value={form.endpoint} onChange={set("endpoint")} inputMode="url" /></Field></div>
-            <Field label="What it takes (one per line)"><textarea className={`${INPUT} min-h-24 py-2`} value={form.inputs} onChange={set("inputs")} /></Field>
+            <Field label="What it takes, one per line as name: what it is" error={touched ? errors.inputs : undefined}><textarea className={`${INPUT} min-h-24 py-2`} value={form.inputs} onChange={set("inputs")} placeholder={"market: a Polymarket link, slug or condition id\nnotes: short notes (optional)"} /></Field>
             <Field label="What it returns (one per line)" error={touched ? errors.outputs : undefined}><textarea className={`${INPUT} min-h-24 py-2`} value={form.outputs} onChange={set("outputs")} /></Field>
             <Field label="Privacy" error={touched ? errors.privacy : undefined}><input className={INPUT} value={form.privacy} onChange={set("privacy")} /></Field>
             <Field label="If it fails" error={touched ? errors.failurePolicy : undefined}><input className={INPUT} value={form.failurePolicy} onChange={set("failurePolicy")} /></Field>

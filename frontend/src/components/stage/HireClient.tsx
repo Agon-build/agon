@@ -15,7 +15,9 @@ import { useLiveJob } from "@/components/stage/useLiveJob";
 import { useNow } from "@/components/stage/useNow";
 import { LoginButton } from "@/components/pengu/LoginButton";
 import { useAuth } from "@/hooks/useAuth";
-import { confirmHire, getHistory, getLeaderboard, getStageConfig, getWallet, quoteRoute, routeRequest, StageApiError } from "@/lib/agon/stage";
+import { confirmHire, getHistory, getLeaderboard, getStageConfig, getWallet, quoteRoute, routeDirect, routeRequest, StageApiError } from "@/lib/agon/stage";
+import { presentListing } from "@/lib/agon/catalog";
+import { getListing, inspectManifest } from "@/lib/agon/client";
 import { canAfford } from "@/lib/agon/hire-panel";
 import { mainnetInView, mergeAnswers, sourcesNote } from "@/lib/agon/route-view";
 import { askRefusalText, confirmFailureText } from "@/lib/agon/stage-copy";
@@ -39,6 +41,9 @@ export function HireClient() {
   const { me, refresh } = useAuth();
   const now = useNow();
   const resumeJob = params?.get("job") ?? null;
+  // An agent the person chose on its page: their task goes to it, with no routing fee.
+  const agentRef = params?.get("agent") ?? null;
+  const [agentName, setAgentName] = useState<string | null>(null);
   const stageQuery = params?.get("stage") === "1" ? "&stage=1" : "";
   const [config, setConfig] = useState<StageConfig | null>(null);
   const [wallet, setWallet] = useState<StageWallet | null>(null);
@@ -60,6 +65,21 @@ export function HireClient() {
     getLeaderboard().then((b) => setBest(b.rows.find((r) => r.ranked && !r.displayName.includes("market copy")) ?? null)).catch(() => setBest(null));
   }, []);
   useEffect(() => { refreshWallet(); }, [refreshWallet]);
+  useEffect(() => {
+    if (!agentRef) { setAgentName(null); return; }
+    setAgentName(null);
+    let live = true;
+    // The catalog may return the listing without its service file; read the file for the name, as the agent page does.
+    getListing(agentRef)
+      .then(async (l) => {
+        if (l.manifest.body !== undefined) return presentListing(l).name;
+        const read = await inspectManifest(l.manifest.uri).catch(() => null);
+        return presentListing(read?.validation.ok ? { ...l, manifest: { ...l.manifest, body: read.body } } : l).name;
+      })
+      .then((name) => { if (live) setAgentName(name); })
+      .catch(() => { if (live) setAgentName("this agent"); });
+    return () => { live = false; };
+  }, [agentRef]);
 
   const refreshMainnet = useCallback(() => { getWallet("arc").then(setMainnetWallet).catch(() => {}); }, []);
 
@@ -67,7 +87,7 @@ export function HireClient() {
   async function ask(question: string, maxPrice: string | null) {
     setMode({ kind: "quoting", question });
     try {
-      const routed = await routeRequest(question);
+      const routed = agentRef ? await routeDirect(agentRef, question) : await routeRequest(question);
       if (routed.kind === "pick") {
         setMode({ kind: "routed", question, routeId: routed.routeId, pick: routed.pick, alternatives: routed.alternatives, missing: [], prompt: null, busy: false, answers: {}, note: sourcesNote(routed.sources) });
         if (routed.pick.network === "arc" || routed.alternatives.some((a) => a.network === "arc")) refreshMainnet();
@@ -165,7 +185,7 @@ export function HireClient() {
 
   function reset() {
     setMode({ kind: "idle" });
-    router.replace(`/${stageQuery ? "?stage=1" : ""}`, { scroll: false });
+    router.replace(agentRef ? `/?agent=${encodeURIComponent(agentRef)}` : `/${stageQuery ? "?stage=1" : ""}`, { scroll: false });
   }
 
   // While the payment is in flight the job can still read "quoted"; show it as paying, not as unpaid.
@@ -193,10 +213,10 @@ export function HireClient() {
           <div className="min-w-0">
             <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Hire{onMainnet ? " · Arc mainnet" : config ? ` · ${config.network}` : ""}</p>
             <h1 className={`mt-4 font-display uppercase tracking-[-.04em] text-ink ${question ? "max-w-[24ch] text-[clamp(1.6rem,2.8vw,2.5rem)] leading-[1.05]" : "max-w-[14ch] text-[clamp(2.4rem,5vw,4.5rem)] leading-[.9]"}`}>
-              {question ?? "Ask about any Polymarket market"}
+              {question ?? (agentRef ? `Hire ${agentName ?? "this agent"}` : "Ask about any Polymarket market")}
             </h1>
             {mode.kind === "idle" || mode.kind === "quoting" ? (
-              <div className="mt-10"><Composer disabled={mode.kind === "quoting"} signedIn={canAct} onSubmit={ask} /></div>
+              <div className="mt-10"><Composer disabled={mode.kind === "quoting"} signedIn={canAct} onSubmit={ask} agentName={agentRef ? (agentName ?? "this agent") : null} /></div>
             ) : null}
             {mode.kind === "refused" && !shortOf && mode.code !== "terms_required" ? (
               <div role="alert" className="stage-print mt-8 border-y border-[color:var(--hairline-strong)] py-6">
@@ -212,7 +232,14 @@ export function HireClient() {
           </div>
 
           <div className="min-w-0">
-            {mode.kind === "idle" || mode.kind === "quoting" ? (
+            {(mode.kind === "idle" || mode.kind === "quoting") && agentRef ? (
+              <aside aria-labelledby="chosen-heading" className="border-y border-[color:var(--hairline-strong)] py-6">
+                <h2 id="chosen-heading" className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">You chose {agentName ?? "this agent"}</h2>
+                <p className="mt-4 text-sm leading-6 text-ink-2">You pay its price and no Agon routing fee. You see the price before anything is paid.</p>
+                <a href={`/agents/${encodeURIComponent(agentRef)}`} className="mt-4 inline-flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 underline underline-offset-4 hover:text-accent">Back to the agent</a>
+              </aside>
+            ) : null}
+            {(mode.kind === "idle" || mode.kind === "quoting") && !agentRef ? (
               <aside aria-labelledby="how-heading" className="border-y border-[color:var(--hairline-strong)] py-6">
                 <h2 id="how-heading" className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">How it works</h2>
                 <ol className="mt-4 divide-y divide-[color:var(--hairline)]">

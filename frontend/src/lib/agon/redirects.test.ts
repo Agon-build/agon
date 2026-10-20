@@ -317,6 +317,20 @@ test("owner review 2026-10-20: one-line Agents intro, paged test runs, a plain h
   assert.match(docs, /<RoadmapLater items=\{ROADMAP\.later\} \/>/, "Later shows titles only");
 });
 
+test("any listed agent is hired from its page through the same Hire flow, with no routing fee", () => {
+  const read = (f: string) => readFileSync(new URL(`../../${f}`, import.meta.url), "utf8");
+  const detail = read("app/agents/[id]/page.tsx");
+  assert.match(detail, /href=\{`\/\?agent=\$\{encodeURIComponent\(listing\.id\)\}`\}/);
+  assert.match(detail, /needs an update before Agon can hire it/);
+  assert.doesNotMatch(detail, /<X402CallIntentPanel/, "the self-signed developer panel leaves the agent page");
+  const hire = read("components/stage/HireClient.tsx");
+  assert.match(hire, /params\?\.get\("agent"\)/);
+  assert.match(hire, /routeDirect\(/);
+  assert.match(read("components/stage/Composer.tsx"), /Your task for/);
+  assert.match(read("components/stage/QuoteCard.tsx"), /hasFee\(quote\.fee\)/);
+  assert.match(read("lib/agon/stage-copy.ts"), /not_hireable/);
+});
+
 test("the Lead quote does not claim a best-rated forecaster while no forecaster is rated", () => {
   const card = readFileSync(new URL("../../components/stage/QuoteCard.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(card, /best-rated/i);

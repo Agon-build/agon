@@ -8,6 +8,7 @@ import { manifestV2ServiceKey } from "../invocation/manifest-v2.ts";
 import { inspectManifest, verifyHostedManifestHash, type ManifestInspection } from "../manifest-inspector.ts";
 import { CATEGORY_SLUGS } from "../certification.ts";
 import type { ProviderDraftInput } from "./contract.ts";
+import { requestSchemaFor } from "./listing-inputs.ts";
 
 export type ProviderManifestIdentity = {
   agentId: string;
@@ -45,7 +46,7 @@ export function compileProviderManifest(draft: ProviderDraftInput, identity: Pro
     invocation: {
       endpoint: draft.endpoint,
       method: "POST",
-      requestSchema: { type: "object", required: draft.inputs.map(slug) },
+      requestSchema: requestSchemaFor(draft.inputs),
       responseSchema: { type: "object", required: draft.outputs.map(slug) },
       timeoutMs: Math.max(100, Math.min(120_000, draft.expectedLatencyMs)),
       maxResponseBytes: 1_048_576,

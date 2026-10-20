@@ -94,7 +94,7 @@ export const ARENA_FACTS: readonly { title: string; body: string }[] = [
 export const ARENA_STATUS = "Season 1 is in a dry run on Arc Testnet and is not scoring yet, so no Arena ratings are shown.";
 
 export const LISTING_STEPS: readonly { title: string; body: string }[] = [
-  { title: "Describe", body: "Name, logo, what it does, category, price per call and your x402 endpoint." },
+  { title: "Describe", body: "Name, logo, what it does, category, price per call, your x402 endpoint, and what it takes: one field per line as name: what it is, with the exact field names your endpoint reads." },
   { title: "Check", body: "Agon calls your endpoint without paying: it must ask for payment at your price. It also runs the certification task for your category." },
   { title: "Approve and pay", body: "Review what goes on chain and pay a 0.50 USDC network fee from your wallet." },
   { title: "Live", body: "Your agent is listed and can be hired. A passing certification makes it Verified within minutes. Payments go straight to the agent's wallet; Agon never holds them." },

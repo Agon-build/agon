@@ -4,6 +4,7 @@ import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
 import type { Address, Hex } from "viem";
 
+import type { MarketLookup } from "../../agents/market-lookup.ts";
 import type { AgonNetwork } from "../../network.ts";
 import { sellerRespond } from "../../payments/bargain.ts";
 import { exactPayment, type ExactSettler, type X402Paid } from "../../payments/exact-seller.ts";
@@ -21,13 +22,18 @@ const quoteBody = z.object({
   round: z.number().int().min(1).max(3),
   lastCounter: atomic.optional(),
 });
-const forecastBody = z.object({
+const notes = z.array(z.string().max(200)).max(5).optional();
+// The Lead sends the full market; a person names it by link, slug or condition id.
+const fullBody = z.object({
   marketId: z.string().regex(/^0x[0-9a-fA-F]{64}$/),
   question: z.string().min(5).max(300),
   endDate: z.string().datetime({ offset: true }),
   crowdBps: z.number().int().min(0).max(10_000).optional(),
-  notes: z.array(z.string().max(200)).max(5).optional(),
+  notes,
 });
+const byMarketBody = z.object({ market: z.string().trim().min(3).max(400), notes: z.union([notes, z.string().max(200).transform((n) => [n])]) });
+const forecastBody = z.union([fullBody, byMarketBody]);
+type Forecast = z.infer<typeof fullBody>;
 
 /// House forecasters as real sellers: they haggle down to a floor over HTTP,
 /// then sell one forecast per x402 payment, at the agreed quote or the list
@@ -39,11 +45,13 @@ export function createHouseSellerRoutes(deps: {
   ask: bigint;
   floor: bigint;
   callModel: ModelCaller;
+  /** Resolves a market link, slug or condition id; without it, only full market bodies are accepted. */
+  lookupMarket?: MarketLookup;
   now?: () => Date;
   newQuoteId?: () => string;
   maxRounds?: number;
 }): Hono {
-  const app = new Hono<{ Variables: { x402: X402Paid } }>();
+  const app = new Hono<{ Variables: { x402: X402Paid; forecast: Forecast } }>();
   const now = deps.now ?? (() => new Date());
   const seller = (key: string) => {
     const s = deps.sellers[key];
@@ -83,6 +91,17 @@ export function createHouseSellerRoutes(deps: {
     if (check) return check;
     const body = forecastBody.safeParse(raw);
     if (!body.success) return c.json({ error: "invalid_forecast_request" }, 400);
+    if ("marketId" in body.data) {
+      c.set("forecast", body.data);
+      return next();
+    }
+    // Looked up before payment, so an unknown or closed market is never charged.
+    if (!deps.lookupMarket) return c.json({ error: "invalid_forecast_request" }, 400);
+    const found = await deps.lookupMarket(body.data.market);
+    if (!found.ok) return c.json({ error: found.code }, found.code === "market_unavailable" ? 503 : 400);
+    if (found.market.closed) return c.json({ error: "market_closed" }, 400);
+    const m = found.market;
+    c.set("forecast", { marketId: m.conditionId, question: m.question.slice(0, 300), endDate: m.endAt.toISOString(), crowdBps: m.yesBps, notes: body.data.notes });
     return next();
   });
 
@@ -102,11 +121,12 @@ export function createHouseSellerRoutes(deps: {
         description: `${s.spec.displayName} forecast`,
         beforeSettle: async (payment) => (quoted && !(await deps.store.useQuote(quoted.quoteId, payment.payer, now())) ? "quote_invalid" : null),
         now,
-      })(c, next);
+        // The payment step only reads and sets x402; the resolved forecast rides along untouched.
+      })(c as unknown as Parameters<ReturnType<typeof exactPayment>>[0], next);
     },
     async (c) => {
       const s = seller(c.req.param("key"))!;
-      const body = forecastBody.parse(await c.req.json());
+      const body = c.get("forecast");
       const market = {
         seasonId: 0n, round: 0n, marketId: body.marketId as Hex, question: body.question, slug: "",
         endAt: new Date(body.endDate), baselineBps: body.crowdBps ?? 5_000, category: "other" as const,

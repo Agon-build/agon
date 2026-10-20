@@ -2,10 +2,22 @@
 /// what it costs with the routing fee, and which money it uses.
 export type RouteRating = { tier: "scored" | "verified" | "listed" | "unrated"; score: number | null };
 
+/// A fee above zero; a direct hire carries none.
+export function hasFee(fee: string | undefined): boolean {
+  return fee !== undefined && /^\d+(\.\d+)?$/.test(fee) && Number(fee) > 0;
+}
+
 export function priceLines(p: { price: string; fee?: string; total?: string }): { label: string; value: string }[] {
   const lines = [{ label: "Price", value: `${p.price} USDC` }];
-  if (p.fee && p.total) lines.push({ label: "Agon routing fee", value: `${p.fee} USDC` }, { label: "Total", value: `${p.total} USDC` });
+  if (p.fee !== undefined && p.total && !hasFee(p.fee)) lines.push({ label: "Agon routing fee", value: "None" });
+  else if (p.fee && p.total) lines.push({ label: "Agon routing fee", value: `${p.fee} USDC` }, { label: "Total", value: `${p.total} USDC` });
   return lines;
+}
+
+/// A listing that names its input fields, so Agon can fill them from a task in plain words.
+export function hasNamedInputs(body: unknown): boolean {
+  const props = (body as { invocation?: { requestSchema?: { properties?: unknown } } } | null | undefined)?.invocation?.requestSchema?.properties;
+  return Boolean(props && typeof props === "object" && !Array.isArray(props) && Object.keys(props).length > 0);
 }
 
 export function sourceLabel(e: { source: "agon" | "circle"; provider: string; rating: RouteRating }): string {

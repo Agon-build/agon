@@ -19,7 +19,7 @@ export type ListingView = {
 };
 type ManifestBody = {
   service?: { name?: unknown; description?: unknown };
-  invocation?: { endpoint?: unknown; requestSchema?: { required?: unknown }; timeoutMs?: unknown };
+  invocation?: { endpoint?: unknown; requestSchema?: { properties?: unknown; required?: unknown }; timeoutMs?: unknown };
   pricing?: { amountUSDC?: unknown };
 };
 
@@ -31,12 +31,21 @@ export function listingLiteFrom(view: ListingView): AgonListingLite | null {
   const endpoint = body.invocation?.endpoint;
   const price = typeof body.pricing?.amountUSDC === "string" ? parseUsdc(body.pricing.amountUSDC) : null;
   if (typeof name !== "string" || typeof endpoint !== "string" || price === null) return null;
-  const required = Array.isArray(body.invocation?.requestSchema?.required) ? (body.invocation!.requestSchema!.required as unknown[]).filter((x): x is string => typeof x === "string") : [];
   return {
     reference: view.id, agentId: view.agentId, name, description: typeof body.service?.description === "string" ? body.service.description : "",
     category: view.category, endpoint, priceAtomic: price, latencyMs: typeof body.invocation?.timeoutMs === "number" ? body.invocation.timeoutMs : null,
-    status: typeof view.status === "string" ? view.status : "Unknown", verified: view.verification?.status === "Verified", requestRequired: required,
+    status: typeof view.status === "string" ? view.status : "Unknown", verified: view.verification?.status === "Verified", inputSchema: namedInputs(body.invocation?.requestSchema),
   };
+}
+
+/// The listing's named input fields, or null when it names none. Listings made
+/// before named inputs publish only made-up required names, which Agon cannot fill.
+function namedInputs(schema: { properties?: unknown; required?: unknown } | undefined): AgonListingLite["inputSchema"] {
+  const props = schema?.properties;
+  if (!props || typeof props !== "object" || Array.isArray(props) || Object.keys(props).length === 0) return null;
+  const properties = props as Record<string, Record<string, unknown>>;
+  const required = Array.isArray(schema!.required) ? schema!.required.filter((x): x is string => typeof x === "string" && x in properties) : [];
+  return { type: "object", properties, required };
 }
 
 /// Builds the aggregator from the live services: Agon's indexed listings with
@@ -85,6 +94,7 @@ export function startRouting(deps: {
     balanceOf: (network, address) => (network === "arc" ? (deps.outside?.balanceOf(address) ?? Promise.resolve(null)) : deps.testnetBalanceOf(address)),
     approvalUrl: deps.approvalUrl,
     newWalletAllowed: deps.newWalletAllowed,
+    directEntry: (reference) => agon.entryFor(reference),
     safeDestination: (url) => assertPublicHttpsDestination(url).then(() => true, () => false),
   });
 }

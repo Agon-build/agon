@@ -23,6 +23,21 @@ export const FEE_ATOMIC = 500_000n;
 const isHttps = (v: string) => { try { return new URL(v).protocol === "https:"; } catch { return false; } };
 const lines = (v: string) => v.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
 
+// The same rule the server applies: "name: what it is", "(optional)" at the end, or a bare field name.
+const INPUT_FORMAT = "Write each input as name: what it is, for example market: a Polymarket link. Add (optional) when it may be left out.";
+function inputProblem(raw: string): string | null {
+  const seen = new Set<string>();
+  for (const line of lines(raw)) {
+    const bare = line.replace(/\s*\(optional\)\s*$/i, "").trim();
+    const colon = bare.indexOf(":");
+    const name = (colon === -1 ? bare : bare.slice(0, colon)).trim();
+    if (!/^[A-Za-z][A-Za-z0-9_]{0,39}$/.test(name) || (colon !== -1 && !bare.slice(colon + 1).trim())) return `"${line.slice(0, 40)}" has no field name. ${INPUT_FORMAT}`;
+    if (seen.has(name)) return `The input ${name} is listed twice.`;
+    seen.add(name);
+  }
+  return null;
+}
+
 export function validateForm(f: DraftForm): Partial<Record<keyof DraftForm, string>> {
   const e: Partial<Record<keyof DraftForm, string>> = {};
   if (!f.name.trim() || f.name.trim().length > 80) e.name = "Give it a name of up to 80 characters.";
@@ -32,6 +47,8 @@ export function validateForm(f: DraftForm): Partial<Record<keyof DraftForm, stri
   if (!/^\d+(\.\d{1,6})?$/.test(f.priceUSDC.trim())) e.priceUSDC = "Use a price above 0 with at most six decimals.";
   else if (Number(f.priceUSDC) <= 0) e.priceUSDC = "Use a price above 0 with at most six decimals.";
   if (!isHttps(f.endpoint.trim())) e.endpoint = "Use the public https:// address that takes paid requests.";
+  const inputs = inputProblem(f.inputs);
+  if (inputs) e.inputs = inputs;
   if (lines(f.outputs).length === 0) e.outputs = "List at least one thing it returns.";
   if (!f.privacy.trim() || f.privacy.length > 2000) e.privacy = "Say what happens to the data it receives.";
   if (!f.failurePolicy.trim() || f.failurePolicy.length > 2000) e.failurePolicy = "Say what happens when it fails.";

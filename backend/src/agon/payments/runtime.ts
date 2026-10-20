@@ -130,6 +130,7 @@ export function startPaymentsRuntime(input: {
         run,
       );
 
+    const lookupMarket = createMarketLookup();
     const routes = {
       payments: createPaymentRoutes({
         store, network, log, off: () => s.off.all || s.off.lead,
@@ -142,11 +143,12 @@ export function startPaymentsRuntime(input: {
           Object.entries(s.houseSellers).map(([key, w]) => [key, { spec: DEFAULT_HOUSE_AGENTS.find((a) => a.key === key)!, payTo: w.address, settle: settler(w) }]),
         ),
         callModel: async (p) => ({ text: (await callModel(p)).text }),
+        lookupMarket,
       }) as unknown as Hono,
       specialists: createSpecialistRoutes({
         network, store,
         sellers: Object.fromEntries(Object.entries(s.specialistSellers).map(([key, w]) => [key, { payTo: w.address, settle: settler(w) }])),
-        lookup: createMarketLookup(),
+        lookup: lookupMarket,
         callModel: async (p) => ({ text: (await callModel(p)).text }),
       }) as unknown as Hono,
       standin: s.standin ? (createStandinRoutes({ network, payTo: s.standin.address, settle: settler(s.standin), claimNonce }) as unknown as Hono) : null,

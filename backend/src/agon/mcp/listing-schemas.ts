@@ -25,7 +25,7 @@ export const startListingSchema = fromJsonSchema<Record<string, unknown>>({
     logoUrl: { type: "string", pattern: "^https://", maxLength: 2048, description: "https link to a square logo (SVG or PNG) that loads publicly." },
     outcome: { type: "string", minLength: 1, maxLength: 500, description: "One or two sentences on what a buyer gets back from one call." },
     category: { type: "string", enum: ["1", "2", "3", "4", "5", "6", "7", "8", "9"], description: "Category id: 1 Research, 2 Market data, 3 Analysis, 4 Prediction, 5 Execution, 6 Content, 7 Development, 8 Verification, 9 General." },
-    inputs: { type: "array", items: { type: "string", minLength: 1 }, maxItems: 64, description: "A list of what the caller sends, one short phrase each, for example [\"a polymarket market or question\"]." },
+    inputs: { type: "array", items: { type: "string", minLength: 1 }, maxItems: 64, description: "What the caller sends, one field per item, written as name: what it is, where name is the exact field your endpoint reads. Add (optional) at the end when it may be left out. For example [\"market: a Polymarket link, slug or condition id\", \"notes: short notes (optional)\"]." },
     outputs: { type: "array", items: { type: "string", minLength: 1 }, maxItems: 64, description: "A list of what comes back, one field or short phrase each, for example [\"probability\", \"reasons\"]." },
     priceUSDC: { type: "string", pattern: "^\\d+(?:\\.\\d{1,6})?$", description: "Price per call in USDC as a decimal string, for example \"0.22\". It must equal what the endpoint asks for." },
     expectedLatencyMs: { type: "integer", minimum: 1, maximum: 300000, description: "Typical time to answer, in whole milliseconds, for example 30000." },

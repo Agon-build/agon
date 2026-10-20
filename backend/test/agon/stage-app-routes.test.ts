@@ -178,8 +178,22 @@ function fakeRouter(calls: string[]): Router {
     route: async () => ({ kind: "pick", routeId: "r1", intent: { kind: "market_data", query: "ratings", values: {} }, pick: PICK, alternatives: [], sources: [{ id: "agon", status: "ok" }, { id: "circle", status: "ok" }] }),
     quote: async (_o, routeId, reference) => { calls.push(`quote:${routeId}:${reference}`); return { ok: true, step: "confirm_code", jobId: "j1", amount: 10_000n, fee: 150n, total: 10_150n, providerLabel: "Analyst ratings", network: "Arc", testnet: false, expiresAt: new Date(Date.now() + 60_000), code: "4242", input: { symbol: "AAPL" }, source: "circle", reason: PICK.reason }; },
     confirm: async (_o, code) => { calls.push(`confirm:${code}`); return { ok: true, jobId: "j1", amount: 10_000n, txHash: null, result: { price: 1 } }; },
+    direct: async (_o, reference, text) => {
+      calls.push(`direct:${reference}:${text}`);
+      return reference === "gone" ? { kind: "not_hireable" } : { kind: "pick", routeId: "r2", intent: { kind: "other", query: text, values: {} }, pick: { ...PICK, fee: 0n, total: PICK.price, reason: "You chose this agent" }, alternatives: [], sources: [{ id: "agon", status: "ok" }] };
+    },
   } as Router;
 }
+
+test("a direct hire returns the one chosen agent with no fee, needs sign-in, and says when an agent cannot be hired", async () => {
+  const calls: string[] = [];
+  const { call } = setup({ router: fakeRouter(calls) });
+  const out = (await (await call("/route/direct", { body: { reference: PICK.reference, request: "Forecast the Fed market" } })).json()) as { kind: string; pick: { fee: string; total: string; price: string; reason: string }; alternatives: unknown[] };
+  assert.deepEqual([out.kind, out.pick.fee, out.pick.total, out.pick.reason, out.alternatives.length], ["pick", "0.00", "0.01", "You chose this agent", 0]);
+  assert.deepEqual(calls, [`direct:${PICK.reference}:Forecast the Fed market`]);
+  assert.deepEqual(await (await call("/route/direct", { body: { reference: "gone", request: "anything" } })).json(), { ok: false, code: "not_hireable" });
+  assert.equal((await call("/route/direct", { body: { reference: PICK.reference, request: "Forecast it" }, as: null })).status, 401);
+});
 
 test("route returns the pick with price, fee, total, network and source", async () => {
   const { call } = setup({ router: fakeRouter([]) });

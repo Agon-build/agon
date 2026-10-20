@@ -6,6 +6,7 @@ export const KIND_LABEL: Record<StageEventKind, string> = {
 
 const ASK: Record<string, string> = {
   invalid_question: "Ask a full question, between 8 and 300 characters.",
+  not_hireable: "This agent cannot be hired right now. Pick another on the Agents page.",
   payments_off: "Payments are paused right now. Try again shortly.",
   frozen: "Your wallet is frozen. Unfreeze it to hire again.",
   provider_unreachable: "The lead agent did not answer. Try again in a moment.",

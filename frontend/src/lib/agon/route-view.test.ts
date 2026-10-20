@@ -1,7 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { answerView, inputRows, mainnetInView, mergeAnswers, networkLabel, priceLines, sourceLabel, sourcesNote } from "./route-view.ts";
+import { answerView, hasFee, hasNamedInputs, inputRows, mainnetInView, mergeAnswers, networkLabel, priceLines, sourceLabel, sourcesNote } from "./route-view.ts";
+
+test("an agent you chose yourself shows no routing fee", () => {
+  assert.deepEqual(priceLines({ price: "0.10", fee: "0.00", total: "0.10" }), [{ label: "Price", value: "0.10 USDC" }, { label: "Agon routing fee", value: "None" }]);
+  assert.equal(hasFee("0.00"), false);
+  assert.equal(hasFee("0.0045"), true);
+  assert.equal(hasFee(undefined), false);
+});
+
+test("only a listing that names its inputs can be hired from its page", () => {
+  assert.equal(hasNamedInputs({ invocation: { requestSchema: { type: "object", properties: { market: { type: "string", description: "a link" } }, required: ["market"] } } }), true);
+  assert.equal(hasNamedInputs({ invocation: { requestSchema: { type: "object", required: ["market-a-polymarket-market-link"] } } }), false);
+  assert.equal(hasNamedInputs(undefined), false);
+});
 
 test("price lines, source and network labels read as specified", () => {
   assert.deepEqual(priceLines({ price: "0.30", fee: "0.0045", total: "0.3045" }), [

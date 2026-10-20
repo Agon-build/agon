@@ -8,6 +8,7 @@ import { DEFAULT_HOUSE_AGENTS } from "../../src/agon/playground/seasons/house-ag
 import { buyExact } from "../../src/agon/payments/exact-buyer.ts";
 import { negotiate, type SellerReply } from "../../src/agon/payments/bargain.ts";
 import { agonNetwork } from "../../src/agon/network.ts";
+import type { MarketLookup, MarketSnapshot } from "../../src/agon/agents/market-lookup.ts";
 import { MemoryPaymentsStore } from "./payments-memory-store.ts";
 import { BUYER_KEY, OTHER_KEY, fakeSettler, localSigner, show } from "./x402-test-helpers.ts";
 
@@ -18,13 +19,20 @@ const ATLAS = `0x${"a7".repeat(20)}` as Address;
 const json = (body: unknown, headers: Record<string, string> = {}) => ({ method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
 const forecastBody = { marketId: `0x${"ab".repeat(32)}`, question: "Will the price of Bitcoin be above $82,000 on October 30?", endDate: "2026-10-30T16:00:00Z", crowdBps: 4100, notes: ["BTC spot $82,953"] };
 
+const snapshot = (over: Partial<MarketSnapshot> = {}): MarketSnapshot => ({
+  conditionId: `0x${"cd".repeat(32)}`, slug: "fed-cut-december", url: "https://polymarket.com/event/fed-cut-december", question: "Will the Fed cut rates in December?",
+  endAt: new Date("2026-12-10T19:00:00Z"), yesBps: 6200, bestBid: 0.61, bestAsk: 0.63, spread: 0.02, liquidity: 90_000, volume24h: 12_000, weekChange: 0.03,
+  description: "Resolves Yes if the FOMC cuts.", tags: ["economy"], closed: false, ...over,
+});
+const lookup: MarketLookup = async (ref) => (ref.includes("closed") ? { ok: true, market: snapshot({ closed: true }) } : ref.includes("fed") ? { ok: true, market: snapshot() } : { ok: false, code: "market_not_found" });
+
 function setup(reply = '{"probability":0.34,"reasons":["a","b","c"]}') {
   const store = new MemoryPaymentsStore();
   const settler = fakeSettler();
   const prompts: string[] = [];
   let ids = 0;
   const app = createHouseSellerRoutes({
-    network, store, ask: 220_000n, floor: 160_000n,
+    network, store, ask: 220_000n, floor: 160_000n, lookupMarket: lookup,
     sellers: { atlas: { spec: DEFAULT_HOUSE_AGENTS[0]!, payTo: ATLAS, settle: settler.settle } },
     callModel: async (p) => {
       prompts.push(p.userPrompt);
@@ -94,6 +102,24 @@ test("malformed quote requests and forecast bodies are refused before payment", 
   assert.equal((await app.request("http://api.test/atlas/quote", json({ buyer: "nope", offer: "1", round: 1 }))).status, 400);
   assert.equal((await app.request("http://api.test/atlas/quote", json({ buyer: buyer.address, offer: "1", round: 9 }))).status, 400);
   assert.equal((await app.request("http://api.test/atlas/forecast", json({ question: "?" }))).status, 400);
+  assert.equal(settler.calls.length, 0);
+});
+
+test("a person can name a market by its link; the forecaster looks it up and forecasts it", async () => {
+  const { fetchImpl, prompts } = setup();
+  const out = await buyExact({ url: "http://api.test/atlas/forecast", init: json({ market: "https://polymarket.com/event/fed-cut-december", notes: ["Watch the CPI print"] }), network, maxAmount: 220_000n, signerFor: () => localSigner(buyer), fetchImpl });
+  assert.ok(out.ok, show(out));
+  assert.match(prompts[0]!, /Will the Fed cut rates in December\?/);
+  assert.match(prompts[0]!, /Watch the CPI print/);
+});
+
+test("an unknown or closed market is refused with a reason before any payment", async () => {
+  const { app, settler } = setup();
+  const unknown = await app.request("http://api.test/atlas/forecast", json({ market: "no-such-market" }));
+  assert.equal(unknown.status, 400);
+  assert.deepEqual(await unknown.json(), { error: "market_not_found" });
+  const closed = await app.request("http://api.test/atlas/forecast", json({ market: "closed-market" }));
+  assert.deepEqual([closed.status, await closed.json()], [400, { error: "market_closed" }]);
   assert.equal(settler.calls.length, 0);
 });
 

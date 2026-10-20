@@ -47,9 +47,29 @@ function setup(opts: { kind?: Intent["kind"]; outside?: boolean; entries?: Catal
     store,
     balanceOf: async () => 10_000_000n,
     approvalUrl: (t) => `https://agon.surf/approve?t=${t}`,
+    directEntry: async (ref) => (ref === "agon:drift" ? DRIFT : ref === "agon:lead" ? entry({ reference: "agon:lead", name: "Agon Lead Agent", url: "https://api.agon.surf/agon/agents/lead/forecast" }) : null),
   });
   return { router, calls, store };
 }
+
+const DRIFT = entry({ reference: "agon:drift", name: "Drift", url: "https://api.agon.surf/agon/agents/house/drift/forecast", price: 100_000n });
+
+test("a person who picks an agent gets it with no routing fee, and the quote charges none", async () => {
+  const { router, calls } = setup();
+  const out = await router.direct("op:x", "agon:drift", "Forecast https://polymarket.com/event/fed-cut-december");
+  assert.ok(out.kind === "pick");
+  assert.deepEqual([out.pick.reference, out.pick.fee, out.pick.total, out.pick.reason, out.alternatives.length], ["agon:drift", 0n, 100_000n, "You chose this agent", 0]);
+  const q = await router.quote("op:x", out.routeId, "agon:drift");
+  assert.ok(q.ok);
+  assert.match(calls[0]!, /^arc-testnet:quote:POST:\{"market":"arsenal"\}:0:/, "no routing fee on a direct hire");
+});
+
+test("picking the Lead asks the Lead; an agent that cannot be hired says so", async () => {
+  const { router, calls } = setup();
+  assert.equal((await router.direct("op:x", "agon:lead", "Will the Fed cut in December?")).kind, "lead");
+  assert.deepEqual(calls, ["lead"]);
+  assert.equal((await router.direct("op:x", "agon:paused", "anything at all")).kind, "not_hireable");
+});
 
 test("a forecast request goes to the Lead", async () => {
   const { router, calls } = setup({ kind: "forecast" });

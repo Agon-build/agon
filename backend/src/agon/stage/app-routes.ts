@@ -15,6 +15,7 @@ const askBody = z.object({ question: z.string().max(2000), maxPrice: z.string().
 const confirmBody = z.object({ code: z.string().max(16) });
 const termsBody = z.object({ version: z.string().max(64) });
 const routeBody = z.object({ request: z.string().trim().min(8).max(600) });
+const routeDirectBody = z.object({ reference: z.string().trim().min(1).max(600), request: z.string().trim().min(3).max(600) });
 const routeQuoteBody = z.object({ routeId: z.string().max(64), reference: z.string().max(600), input: z.record(z.unknown()).optional() });
 const limitsBody = z.object({ perHire: z.string().max(32).optional(), daily: z.string().max(32).optional() });
 const withdrawBody = z.object({ to: z.string().regex(/^0x[0-9a-fA-F]{40}$/), amount: z.string().max(32) });
@@ -141,6 +142,19 @@ export function createAppRoutes(deps: {
     if (out.kind === "lead") return c.json(out.ask ? { kind: "lead", ...askJson(out.ask) } : { kind: "lead" });
     if (out.kind === "none") return c.json({ kind: "none", sources: out.sources });
     return c.json({ kind: "pick", routeId: out.routeId, pick: rankedJson(out.pick), alternatives: out.alternatives.map(rankedJson), sources: out.sources });
+  });
+
+  // A person picked this agent on its page: no reading, no ranking, no routing fee.
+  app.post("/route/direct", async (c) => {
+    if (deps.off() || !deps.router) return c.json({ error: "web_off" }, 503);
+    const body = routeDirectBody.safeParse(await readJson(c));
+    if (!body.success) return c.json({ error: "invalid_body" }, 400);
+    if (!askLimit(c.get("address"))) return c.json({ error: "rate_limited" }, 429);
+    if (!(await deps.terms.isAccepted(owner(c)))) return c.json({ ok: false, code: "terms_required" });
+    const out = await deps.router.direct(owner(c), body.data.reference, body.data.request);
+    if (out.kind === "not_hireable") return c.json({ ok: false, code: "not_hireable" });
+    if (out.kind === "lead") return c.json(out.ask ? { kind: "lead", ...askJson(out.ask) } : { kind: "lead" });
+    return c.json({ kind: "pick", routeId: out.routeId, pick: rankedJson(out.pick), alternatives: [], sources: out.sources });
   });
 
   app.post("/route/quote", async (c) => {

@@ -61,11 +61,14 @@ export function createRouter(deps: {
   safeDestination?: (url: string) => Promise<boolean>;
   balanceOf?: (network: NetworkId, address: Address) => Promise<bigint | null>;
   approvalUrl: (token: string) => string;
+  /** One Agon listing a person chose themselves (listed, verified, with named inputs), or null. */
+  directEntry?: (reference: string) => Promise<CatalogEntry | null>;
   now?: () => Date;
   newId?: () => string;
 }) {
   const now = deps.now ?? (() => new Date());
-  const routes = new Map<string, { ownerRef: string; text: string; intent: Intent; entries: Ranked[]; expiresAt: number }>();
+  // A direct route is one the person picked themselves; it carries no routing fee.
+  const routes = new Map<string, { ownerRef: string; text: string; intent: Intent; entries: Ranked[]; expiresAt: number; direct?: boolean }>();
   const down = new Map<string, number>();
   const downranked = () => {
     const t = now().getTime();
@@ -102,6 +105,20 @@ export function createRouter(deps: {
       return { kind: "pick", routeId, intent, pick: ranked.pick, alternatives: ranked.alternatives, sources };
     },
 
+    /// The person chose this agent from its page: no reading, no ranking, no routing fee.
+    async direct(ownerRef: string, reference: string, text: string): Promise<Exclude<RouteResult, { kind: "none" }> | { kind: "not_hireable" }> {
+      const entry = deps.directEntry ? await deps.directEntry(reference) : null;
+      if (!entry) return { kind: "not_hireable" };
+      // The Lead runs its own hire, with its data purchases and forecaster.
+      if (/\/agon\/agents\/lead\//.test(entry.url)) return { kind: "lead", ask: await deps.leadAsk(ownerRef, text) };
+      const intent: Intent = { kind: "other", query: text, values: {} };
+      const pick: Ranked = { ...entry, fee: 0n, total: entry.price, reason: "You chose this agent" };
+      const routeId = (deps.newId ?? randomUUID)();
+      keepRoom(ownerRef);
+      routes.set(routeId, { ownerRef, text, intent, entries: [pick], expiresAt: now().getTime() + ROUTE_TTL_MS, direct: true });
+      return { kind: "pick", routeId, intent, pick, alternatives: [], sources: [{ id: "agon", status: "ok" }] };
+    },
+
     async quote(ownerRef: string, routeId: string, reference: string, given?: Record<string, unknown>): Promise<RouteQuote> {
       const route = routes.get(routeId);
       if (!route || route.ownerRef !== ownerRef || route.expiresAt <= now().getTime()) return { ok: false, code: "route_expired" };
@@ -123,7 +140,7 @@ export function createRouter(deps: {
       }
       const quoted = await runtime.quoteHire({
         ownerRef, providerUrl: entry.url, providerRef: entry.reference, providerLabel: entry.name, body: input, method: entry.method,
-        feeBps: deps.feeBps, feeAddress: deps.feeAddress[entry.network] ?? null,
+        feeBps: route.direct ? 0 : deps.feeBps, feeAddress: route.direct ? null : deps.feeAddress[entry.network] ?? null,
         // Checked before the quote is written, so a refused quote leaves no job or code behind.
         expect: { amount: entry.price, payTo: entry.payTo },
         ...(deps.balanceOf ? { balanceOf: (address: Address) => deps.balanceOf!(entry.network, address), reserve: FEE_GAS_RESERVE } : {}),

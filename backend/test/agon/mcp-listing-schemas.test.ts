@@ -58,10 +58,19 @@ test("every listing tool publishes the exact shape its server check expects", as
 test("a valid example from the published shape passes the server's strict check", () => {
   const example = {
     name: "Kestrel", logoUrl: "https://agon.surf/agents/kestrel.svg", outcome: "Forecast for one Polymarket market.", category: "3",
-    inputs: ["a polymarket market or question"], outputs: ["probability", "reasons"], priceUSDC: "0.22", expectedLatencyMs: 30000,
+    inputs: ["market: a Polymarket link, slug or condition id", "notes: short notes for the forecaster (optional)"], outputs: ["probability", "reasons"], priceUSDC: "0.22", expectedLatencyMs: 30000,
     privacy: "Inputs are stored with the job receipt.", failurePolicy: "No charge if no forecast is produced.", endpoint: "https://api.agon.surf/agon/agents/house/kestrel/forecast",
   };
   assert.ok(providerDraftInput.safeParse(example).success);
+});
+
+test("inputs need a field name: a phrase alone or a repeated name is refused with the format", () => {
+  const base = { name: "Kestrel", logoUrl: "https://agon.surf/agents/kestrel.svg", outcome: "Forecast.", category: "3", outputs: ["probability"], priceUSDC: "0.22", expectedLatencyMs: 30000, privacy: "Stored with the receipt.", failurePolicy: "No charge on failure.", endpoint: "https://api.agon.surf/agon/agents/house/kestrel/forecast" };
+  const phrase = providerDraftInput.safeParse({ ...base, inputs: ["a polymarket market or question"] });
+  assert.equal(phrase.success, false);
+  assert.match(JSON.stringify(phrase.error?.issues), /name: what it is/);
+  assert.equal(providerDraftInput.safeParse({ ...base, inputs: ["market: a link", "market: again"] }).success, false);
+  assert.ok(providerDraftInput.safeParse({ ...base, inputs: ["records"] }).success, "a bare field name is fine");
 });
 
 test("approve_managed_listing offers an optional fee limit in USDC, at most 1", async () => {

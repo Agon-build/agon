@@ -7,7 +7,7 @@ const view = {
   id: "5042002:0xreg:9", agentId: "9", category: "3", status: "Listed", verification: { status: "Verified" },
   manifest: { body: {
     service: { name: "Scout", description: "A trade, watch or avoid verdict for any Polymarket market.", category: "3" },
-    invocation: { endpoint: "https://api.agon.surf/agon/agents/specialists/scout", requestSchema: { type: "object", required: ["market"] }, timeoutMs: 15000 },
+    invocation: { endpoint: "https://api.agon.surf/agon/agents/specialists/scout", requestSchema: { type: "object", properties: { market: { type: "string", description: "a Polymarket link, slug or condition id" } }, required: ["market"] }, timeoutMs: 15000 },
     pricing: { amountUSDC: "0.10" },
   } },
 };
@@ -15,8 +15,14 @@ const view = {
 test("an indexed listing with its service record becomes a route entry", () => {
   assert.deepEqual(listingLiteFrom(view), {
     reference: "5042002:0xreg:9", agentId: "9", name: "Scout", description: "A trade, watch or avoid verdict for any Polymarket market.", category: "3",
-    endpoint: "https://api.agon.surf/agon/agents/specialists/scout", priceAtomic: 100_000n, latencyMs: 15000, status: "Listed", verified: true, requestRequired: ["market"],
+    endpoint: "https://api.agon.surf/agon/agents/specialists/scout", priceAtomic: 100_000n, latencyMs: 15000, status: "Listed", verified: true,
+    inputSchema: { type: "object", properties: { market: { type: "string", description: "a Polymarket link, slug or condition id" } }, required: ["market"] },
   });
+});
+
+test("a listing that names no input fields has no input schema, so routing leaves it out", () => {
+  const legacy = { ...view, manifest: { body: { ...view.manifest.body, invocation: { ...view.manifest.body.invocation, requestSchema: { type: "object", required: ["market-a-polymarket-market-link"] } } } } };
+  assert.equal(listingLiteFrom(legacy)!.inputSchema, null);
 });
 
 test("a listing without a readable service record is skipped", () => {

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { compileProviderManifest } from "../../src/agon/mcp/provider-manifest.ts";
+import { parseInputLine } from "../../src/agon/mcp/listing-inputs.ts";
 
 const draft = {
   name: "CRM helper",
@@ -24,6 +25,28 @@ test("provider drafts compile into a valid canonical Arc manifest", () => {
   assert.match(compiled.manifestHash, /^0x[0-9a-f]{64}$/);
   assert.match(compiled.serviceKey, /^0x[0-9a-f]{64}$/);
   assert.equal(compiled.body.pricing.amountUSDC, "0.04");
+});
+
+test("named inputs publish real field names with descriptions, and optional ones are not required", () => {
+  const body = compileProviderManifest({ ...draft, inputs: ["market: a Polymarket link, slug or condition id", "url: https://example.com/a:b", "notes: up to 5 short notes (optional)", "records"] }, { agentId: "42" }).body;
+  assert.deepEqual(body.invocation.requestSchema, {
+    type: "object",
+    properties: {
+      market: { type: "string", description: "a Polymarket link, slug or condition id" },
+      url: { type: "string", description: "https://example.com/a:b" },
+      notes: { type: "string", description: "up to 5 short notes" },
+      records: { type: "string", description: "records" },
+    },
+    required: ["market", "url", "records"],
+  });
+});
+
+test("parseInputLine names the field or says how to write it", () => {
+  assert.deepEqual(parseInputLine("market: a Polymarket link"), { name: "market", description: "a Polymarket link", optional: false });
+  assert.deepEqual(parseInputLine("crowdBps: Yes price in basis points (optional)"), { name: "crowdBps", description: "Yes price in basis points", optional: true });
+  assert.deepEqual(parseInputLine("question"), { name: "question", description: "question", optional: false });
+  assert.match((parseInputLine("a polymarket question") as { error: string }).error, /name: what it is/);
+  assert.match((parseInputLine("9lives: bad") as { error: string }).error, /name: what it is/);
 });
 
 test("the same provider draft and identity produce stable keys and hashes", () => {

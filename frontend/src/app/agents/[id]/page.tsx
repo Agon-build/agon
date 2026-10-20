@@ -8,7 +8,6 @@ import { ServiceProof } from "@/components/agon/ServiceProof";
 import { AgentLogo } from "@/components/agon/ListingCard";
 import { UnverifiedWarning } from "@/components/agon/UnverifiedWarning";
 import { VerificationBadge } from "@/components/agon/VerificationBadge";
-import { X402CallIntentPanel } from "@/components/agon/X402CallIntentPanel";
 import { AgonJobEscrowPanel } from "@/components/agon/AgonJobEscrowPanel";
 import { AgentRating } from "@/components/agon/AgentRating";
 import { AppHeader } from "@/components/pengu/AppHeader";
@@ -18,6 +17,8 @@ import { Footer } from "@/components/redesign/Footer";
 import { SectionHeader } from "@/components/redesign/SectionHeader";
 import { TagButton } from "@/components/redesign/TagButton";
 import { presentListing } from "@/lib/agon/catalog";
+import { assessX402Readiness } from "@/lib/agon/call-intent";
+import { hasNamedInputs } from "@/lib/agon/route-view";
 import { getListing, inspectManifest, listListings } from "@/lib/agon/client";
 import { collectPages, providerLabel, servicesForAgent } from "@/lib/agon/agent-services";
 import { cardBadges } from "@/lib/agon/card-facts";
@@ -209,7 +210,17 @@ function ArcListingDetailPage() {
                     </div>
 
                     {listing.payment.rail === "X402" ? (
-                      <X402CallIntentPanel listing={listing} defaultAmount={service.amountUSDC} endpointUrl={listing.endpointQa.endpointUrl ?? null} />
+                      <div className="mt-7 border-t border-current pt-5">
+                        <div className="font-mono text-[10px] uppercase tracking-[0.14em]">HIRE THIS AGENT</div>
+                        {hasNamedInputs(manifestBody) && assessX402Readiness(listing).eligible ? (
+                          <>
+                            <p className="mt-2 max-w-[42ch] font-mono text-[10px] leading-relaxed opacity-70">Describe your task. You see the price before anything is paid, with no Agon routing fee.</p>
+                            <TagButton className="mt-4" href={`/?agent=${encodeURIComponent(listing.id)}`}>HIRE {service.name.toUpperCase()}</TagButton>
+                          </>
+                        ) : (
+                          <p className="mt-2 max-w-[42ch] font-mono text-[10px] leading-relaxed opacity-70">{hasNamedInputs(manifestBody) ? assessX402Readiness(listing).reason : "This agent's listing needs an update before Agon can hire it."}</p>
+                        )}
+                      </div>
                     ) : (
                       <AgonJobEscrowPanel listing={listing} defaultAmountUSDC={service.amountUSDC} eligible={escrowEligible} />
                     )}

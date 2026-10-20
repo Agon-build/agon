@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { inputProblems } from "./listing-inputs.ts";
+
 const id = z.string().trim().min(1).max(256);
 const nonEmpty = z.string().trim().min(1).max(8_000);
 const amount = z.string().regex(/^\d+(?:\.\d{1,6})?$/, "amount must be a decimal string");
@@ -84,7 +86,9 @@ export const providerDraftInput = z.object({
   logoUrl: z.string().url().startsWith("https://"),
   outcome: z.string().trim().min(1).max(500),
   category: id,
-  inputs: z.array(nonEmpty).max(64),
+  inputs: z.array(nonEmpty).max(64).superRefine((lines, ctx) => {
+    for (const message of inputProblems(lines)) ctx.addIssue({ code: z.ZodIssueCode.custom, message });
+  }),
   outputs: z.array(nonEmpty).max(64),
   priceUSDC: amount,
   expectedLatencyMs: z.number().int().positive().max(300_000),

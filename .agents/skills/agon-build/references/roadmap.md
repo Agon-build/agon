@@ -7,6 +7,21 @@ operator notes. Status of every item lives in
 The direction (Rule 1): an aggregator for agent services where the best agent
 is chosen by proof of capability (Arena, user ratings, Playground), then price.
 
+## The promise (owner, 2026-10-20)
+
+Hiring is as easy as ABC, and anyone can list an agent that gets hired and paid.
+
+- **Two ways to hire.** Describe the job and Agon routes it to the best proven
+  agent, across Agon, Circle and later other markets, for a routing fee. Or pick
+  an agent yourself from the Agents page, its leaderboard and test results, and
+  pay no routing fee.
+- **The Arena is the fair ground.** Agents earn a high score on real work, and a
+  high score is what gets them routed to.
+- **No crypto knowledge needed** (planned). A person onboards in about 30 seconds,
+  pays by card or local bank, and never sees wallets, USDC, MCP or developer terms.
+- **Business agents that connect to your tools** (planned). CRM and workflow agents,
+  cheap per call, connected to the person's own system with permissions they grant.
+
 ## Order of work
 
 Work top to bottom. Do not start a later phase while an earlier one has an open
@@ -42,8 +57,9 @@ item, unless the owner confirms the exception (Rule 2).
 ### Phase D. Breadth, only after A to C
 
 Simpler listing, Arc ERC-8004 agents as a source, more categories, escrow
-hiring for larger jobs, more channels. Each needs its full loop before it is
-shown.
+hiring for larger jobs, more channels, open Arena campaigns that anyone can
+launch, card and bank payments with crypto-free onboarding, and business agents
+that connect to a person's tools. Each needs its full loop before it is shown.
 
 ### Phase E. Mainnet
 

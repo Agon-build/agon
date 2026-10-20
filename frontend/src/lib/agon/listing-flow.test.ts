@@ -4,15 +4,24 @@ import test from "node:test";
 
 import { EMPTY_FORM, FEE_ATOMIC, draftFromForm, formFromDraft, missingFee, stepFor, timeline, validateForm } from "./listing-flow.ts";
 
-const good = { ...EMPTY_FORM, name: "Atlas", logoUrl: "https://agon.surf/agents/atlas.svg", outcome: "Forecasts one market.", category: "3", priceUSDC: "0.22", endpoint: "https://api.agon.surf/agon/agents/house/atlas/forecast", inputs: "market id\n\nquestion ", outputs: "probability", privacy: "Used only for this forecast.", failurePolicy: "No forecast, no charge.", expectedLatencySeconds: "60" };
+const good = { ...EMPTY_FORM, name: "Atlas", logoUrl: "https://agon.surf/agents/atlas.svg", outcome: "Forecasts one market.", category: "3", priceUSDC: "0.22", endpoint: "https://api.agon.surf/agon/agents/house/atlas/forecast", inputs: "marketId: the market condition id\n\nquestion ", outputs: "probability", privacy: "Used only for this forecast.", failurePolicy: "No forecast, no charge.", expectedLatencySeconds: "60" };
 
 test("a complete form becomes the draft the server expects, with the numeric category", () => {
   assert.deepEqual(validateForm(good), {});
   assert.deepEqual(draftFromForm(good), {
-    name: "Atlas", logoUrl: "https://agon.surf/agents/atlas.svg", outcome: "Forecasts one market.", category: "3", inputs: ["market id", "question"], outputs: ["probability"],
+    name: "Atlas", logoUrl: "https://agon.surf/agents/atlas.svg", outcome: "Forecasts one market.", category: "3", inputs: ["marketId: the market condition id", "question"], outputs: ["probability"],
     priceUSDC: "0.22", expectedLatencyMs: 60000, privacy: "Used only for this forecast.", failurePolicy: "No forecast, no charge.", endpoint: "https://api.agon.surf/agon/agents/house/atlas/forecast",
   });
-  assert.deepEqual(formFromDraft(draftFromForm(good)), { ...good, inputs: "market id\nquestion" }, "a saved draft fills the form back");
+  assert.deepEqual(formFromDraft(draftFromForm(good)), { ...good, inputs: "marketId: the market condition id\nquestion" }, "a saved draft fills the form back");
+});
+
+test("each input needs a field name, written as name: what it is", () => {
+  assert.match(validateForm({ ...good, inputs: "a polymarket market or question" }).inputs!, /name: what it is/);
+  assert.match(validateForm({ ...good, inputs: "market: a link\nmarket: again" }).inputs!, /twice/);
+  assert.equal(validateForm({ ...good, inputs: "market: a link\nnotes: short notes (optional)" }).inputs, undefined);
+  const src = readFileSync(new URL("../../components/agon/list/ListFlow.tsx", import.meta.url), "utf8");
+  assert.match(src, /error=\{touched \? errors\.inputs : undefined\}/);
+  assert.match(src, /name: what it is/);
 });
 
 test("each field says what is wrong in plain words", () => {

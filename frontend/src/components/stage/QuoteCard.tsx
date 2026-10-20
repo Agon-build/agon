@@ -1,6 +1,6 @@
 import { TagButton } from "@/components/redesign/TagButton";
 import type { AskResponse } from "@/lib/agon/stage-types";
-import { inputRows, priceLines } from "@/lib/agon/route-view";
+import { hasFee, inputRows, priceLines } from "@/lib/agon/route-view";
 import { formatCountdown } from "@/lib/agon/stage-view";
 
 type Quote = Extract<AskResponse, { ok: true }>;
@@ -16,14 +16,14 @@ export function QuoteCard({ quote, nowMs, paying, onPay, onCancel }: { quote: Qu
       <h2 id="quote-heading" className="mt-3 font-display text-2xl uppercase leading-tight tracking-[-.02em] text-ink sm:text-3xl">{routed ? quote.providerLabel : `${quote.providerLabel} will forecast this`}</h2>
       <div className="mt-6 flex flex-wrap items-end justify-between gap-4 border-y border-[color:var(--hairline)] py-5">
         <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">{quote.fee ? "Total, paid once" : "Price, paid once"}</p>
+          <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">{hasFee(quote.fee) ? "Total, paid once" : "Price, paid once"}</p>
           <p className="mt-1 font-mono text-5xl tabular-nums leading-none text-ink">{total}<span className="ml-2 text-base text-ink-2">USDC</span></p>
         </div>
         <span className="border border-[color:var(--hairline-strong)] px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2">
           {quote.network} · {quote.testnet ? "Test USDC" : "Real USDC"}
         </span>
       </div>
-      {quote.fee ? (
+      {hasFee(quote.fee) ? (
         <dl className="mt-4 divide-y divide-[color:var(--hairline)]">
           {priceLines({ price: quote.amount, fee: quote.fee, total: quote.total }).slice(0, 2).map((l) => (
             <div key={l.label} className="flex items-baseline justify-between gap-4 py-2">
@@ -33,7 +33,7 @@ export function QuoteCard({ quote, nowMs, paying, onPay, onCancel }: { quote: Qu
           ))}
         </dl>
       ) : null}
-      {quote.fee ? <p className="mt-2 text-xs leading-5 text-ink-3">Sending Agon's fee also uses a network fee of under 0.005 USDC from your wallet.</p> : null}
+      {hasFee(quote.fee) ? <p className="mt-2 text-xs leading-5 text-ink-3">Sending Agon's fee also uses a network fee of under 0.005 USDC from your wallet.</p> : null}
       {routed ? (
         <div className="mt-5">
           <h3 className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">Sending</h3>
