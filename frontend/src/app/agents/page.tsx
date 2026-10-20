@@ -159,7 +159,7 @@ function ArcMarketPage() {
           <div className="border-b border-[color:var(--hairline)] pb-10">
             <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.14em] text-ink"><span aria-hidden className="text-accent">■</span>AGENTS</div>
             <h1 className="mt-5 font-sans text-[clamp(38px,3.8vw,56px)] font-semibold uppercase leading-[0.92] tracking-[-0.055em] text-ink">FIND AN AGENT FOR THE JOB</h1>
-            <p className="mt-5 font-sans text-[16px] leading-[1.55] text-ink-2">Compare price and test scores, then hire. <a href="/playground" className="underline decoration-[color:var(--hairline-strong)] underline-offset-4 hover:text-accent">Test any agent free in the Playground</a>.</p>
+            <p className="mt-5 font-sans text-[16px] leading-[1.55] text-ink-2">Compare price and test scores, then hire. <a href="/playground" className="whitespace-nowrap underline decoration-[color:var(--hairline-strong)] underline-offset-4 hover:text-accent">Test any agent free in the Playground</a>.</p>
           </div>
         </section>
 

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNotifications } from "@/hooks/useNotifications";
 import { IS_AGON_DEPLOYMENT } from "@/lib/product";
-import type { AppNotification } from "@/lib/notifications";
+import { staysUntilAcknowledged, type AppNotification } from "@/lib/notifications";
 import { setSoundMuted } from "@/lib/sounds";
 
 /// Bell in the top nav. Shows an unread badge, opens a dropdown feed, plays a
@@ -37,7 +37,8 @@ function timeAgo(iso: string): string {
 }
 
 export function NotificationBell() {
-  const { items, unread, markRead, markAllRead, clearAll, setSound, isSignedIn } = useNotifications();
+  const { items, unread, markRead, markAllRead, clearAll, acknowledge, setSound, isSignedIn } = useNotifications();
+  const clearable = items.some((n) => !staysUntilAcknowledged(n));
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const [soundOn, setSoundOn] = useState(true);
@@ -95,7 +96,7 @@ export function NotificationBell() {
                   MARK READ
                 </button>
               ) : null}
-              {items.length > 0 ? (
+              {clearable ? (
                 <button
                   onClick={() => void clearAll()}
                   className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3 hover:text-ink"
@@ -126,6 +127,7 @@ export function NotificationBell() {
                     n={n}
                     onRead={() => void markRead(n.id)}
                     onNavigate={() => setOpen(false)}
+                    onAcknowledge={() => void acknowledge(n.id)}
                   />
                 ))}
               </ul>
@@ -137,7 +139,18 @@ export function NotificationBell() {
   );
 }
 
-function Row({ n, onRead, onNavigate }: { n: AppNotification; onRead: () => void; onNavigate: () => void }) {
+/// An open critical alert stays until its owner acknowledges it, and says so.
+function Acknowledge({ onAcknowledge }: { onAcknowledge: () => void }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[color:var(--hairline)] bg-canvas-2 px-4 pb-3 pl-10">
+      <span className="font-mono text-[10px] text-ink-3">Stays until you acknowledge it.</span>
+      <button type="button" onClick={onAcknowledge} className="min-h-11 font-mono text-[10px] uppercase tracking-[0.12em] text-ink underline underline-offset-4 hover:text-accent">ACKNOWLEDGE</button>
+    </div>
+  );
+}
+
+function Row({ n, onRead, onNavigate, onAcknowledge }: { n: AppNotification; onRead: () => void; onNavigate: () => void; onAcknowledge: () => void }) {
+  const ack = staysUntilAcknowledged(n) ? <Acknowledge onAcknowledge={onAcknowledge} /> : null;
   const inner = (
     <div
       className={`flex gap-3 border-b border-[color:var(--hairline)] px-4 py-3 transition-colors hover:bg-canvas-2 last:border-0 ${
@@ -166,6 +179,7 @@ function Row({ n, onRead, onNavigate }: { n: AppNotification; onRead: () => void
         >
           {inner}
         </a>
+        {ack}
       </li>
     );
   }
@@ -175,6 +189,7 @@ function Row({ n, onRead, onNavigate }: { n: AppNotification; onRead: () => void
       <button type="button" onClick={onRead} className="block w-full text-left">
         {inner}
       </button>
+      {ack}
     </li>
   );
 }

@@ -242,7 +242,7 @@ export class PostgresAgonOperationsAlertRepository {
         });
       }
       for (const [recipientOperator, channels] of recipients) {
-        const recipient = await client.query<{ notification_id: string | null }>(
+        const recipient = await client.query<{ notification_id: string | null; dismissed_at: Date | null }>(
           `insert into agon_alert_recipients
              (alert_id, recipient_operator, in_app, telegram)
            values ($1,$2,$3,$4)
@@ -250,11 +250,13 @@ export class PostgresAgonOperationsAlertRepository {
              in_app = agon_alert_recipients.in_app or excluded.in_app,
              telegram = agon_alert_recipients.telegram or excluded.telegram,
              updated_at = now()
-           returning notification_id::text`,
+           returning notification_id::text, dismissed_at`,
           [row.alert_id, recipientOperator, channels.inApp, channels.telegram],
         );
         let notificationId = recipient.rows[0]?.notification_id ?? null;
-        if (channels.inApp && !notificationId) {
+        // A recipient who cleared this alert hears about it again only if it turns critical.
+        const dismissed = Boolean(recipient.rows[0]?.dismissed_at) && row.severity !== "critical";
+        if (channels.inApp && !notificationId && !dismissed) {
           const notification = await client.query<{ id: string }>(
             `insert into notifications (operator, kind, title, body, href, context)
              values ($1,$2,$3,$4,$5,$6) returning id::text`,
@@ -269,7 +271,7 @@ export class PostgresAgonOperationsAlertRepository {
           );
           notificationId = notification.rows[0]!.id;
           await client.query(
-            "update agon_alert_recipients set notification_id = $3, updated_at = now() where alert_id = $1 and recipient_operator = $2",
+            "update agon_alert_recipients set notification_id = $3, dismissed_at = null, updated_at = now() where alert_id = $1 and recipient_operator = $2",
             [row.alert_id, recipientOperator, notificationId],
           );
         } else if (notificationId) {
@@ -322,6 +324,55 @@ export class PostgresAgonOperationsAlertRepository {
       [normalizeOperator(operator), fingerprint],
     );
     return (result.rowCount ?? 0) > 0;
+  }
+
+  /// Clears an operator's feed (or the given rows). Open critical alerts stay until
+  /// acknowledged; every cleared alert is remembered, so it does not come back
+  /// while it stays open, unless it turns critical.
+  async clearNotifications(operator: string, ids: number[] = []): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const doomed = await client.query<{ id: string }>(
+        `select n.id::text from notifications n
+          where n.operator = $1 ${ids.length > 0 ? "and n.id = any($2::bigint[])" : ""}
+            and not exists (
+              select 1 from agon_alert_recipients ar
+              join agon_operations_alerts a on a.alert_id = ar.alert_id
+              where ar.notification_id = n.id and a.severity = 'critical' and a.status = 'open'
+            )`,
+        ids.length > 0 ? [normalizeOperator(operator), ids] : [normalizeOperator(operator)],
+      );
+      const doomedIds = doomed.rows.map((r) => r.id);
+      if (doomedIds.length > 0) {
+        await client.query("update agon_alert_recipients set dismissed_at = now(), updated_at = now() where notification_id = any($1::bigint[])", [doomedIds]);
+        await client.query("delete from notifications where id = any($1::bigint[])", [doomedIds]);
+      }
+      await client.query("commit");
+    } catch (error) {
+      await rollback(client);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /// The alert's own operator acknowledges it from the bell: the alert is marked
+  /// acknowledged and its notification leaves the feed. Anyone else gets false.
+  async acknowledgeNotification(operator: string, notificationId: number): Promise<boolean> {
+    const op = normalizeOperator(operator);
+    const found = await this.pool.query<{ alert_id: string }>(
+      `select a.alert_id from notifications n
+         join agon_alert_recipients ar on ar.notification_id = n.id
+         join agon_operations_alerts a on a.alert_id = ar.alert_id
+        where n.id = $1 and n.operator = $2 and a.operator = $2 and a.status = 'open'`,
+      [notificationId, op],
+    );
+    const alertId = found.rows[0]?.alert_id;
+    if (!alertId) return false;
+    await this.acknowledge(alertId, `operator:${op}`);
+    await this.clearNotifications(op, [notificationId]);
+    return true;
   }
 
   async acknowledge(alertId: string, acknowledgedBy: string): Promise<AgonOperationsAlert | null> {

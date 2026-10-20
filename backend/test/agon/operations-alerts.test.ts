@@ -46,6 +46,38 @@ test("deduplicates repeated certification failures and keeps one shared notifica
   assert.equal(deliveries.rowCount, 1);
 });
 
+test("a cleared warning stays cleared while the same alert keeps firing, and returns only if it turns critical", async () => {
+  const OWNER = `0x${"c7".repeat(20)}`;
+  await database.pool.query("insert into operators (address) values ($1)", [OWNER]);
+  const raise = (severity: "warning" | "critical") => repository.raise({ operator: OWNER, fingerprint: "season:stale", source: "arena", severity, title: "Season 1 leaderboard is older than 6 hours", body: "The last commit was long ago." });
+  const feed = async () => (await database.pool.query("select id from notifications where operator = $1", [OWNER])).rowCount;
+  await raise("warning");
+  assert.equal(await feed(), 1);
+  await repository.clearNotifications(OWNER);
+  assert.equal(await feed(), 0);
+  await raise("warning");
+  await raise("warning");
+  assert.equal(await feed(), 0, "the same open warning does not come back after it was cleared");
+  await raise("critical");
+  assert.equal(await feed(), 1, "it comes back once it becomes critical");
+});
+
+test("the owner can acknowledge a critical alert from the bell, which then clears it for good", async () => {
+  const OWNER = `0x${"d7".repeat(20)}`;
+  const OTHER = `0x${"e7".repeat(20)}`;
+  await database.pool.query("insert into operators (address) values ($1), ($2)", [OWNER, OTHER]);
+  const alert = await repository.raise({ operator: OWNER, fingerprint: "refund:job-1", source: "stage", severity: "critical", title: "A refund failed", body: "Send it by hand." });
+  const id = Number((await database.pool.query<{ id: string }>("select id::text from notifications where operator = $1", [OWNER])).rows[0]!.id);
+  await repository.clearNotifications(OWNER);
+  assert.equal((await database.pool.query("select 1 from notifications where id = $1", [id])).rowCount, 1, "clear keeps an open critical alert");
+  assert.equal(await repository.acknowledgeNotification(OTHER, id), false, "only its owner can acknowledge it");
+  assert.equal(await repository.acknowledgeNotification(OWNER, id), true);
+  assert.equal((await repository.list()).find((a) => a.alertId === alert.alertId)?.status, "acknowledged");
+  assert.equal((await database.pool.query("select 1 from notifications where id = $1", [id])).rowCount, 0);
+  await repository.raise({ operator: OWNER, fingerprint: "refund:job-1", source: "stage", severity: "critical", title: "A refund failed", body: "Send it by hand." });
+  assert.equal((await database.pool.query("select 1 from notifications where operator = $1", [OWNER])).rowCount, 1, "a new incident after acknowledgement notifies again");
+});
+
 test("critical Arena incidents remain open until an authenticated acknowledgement path records them", async () => {
   await alertAgonArenaOperator({
     operator: OPERATOR,

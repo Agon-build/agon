@@ -224,7 +224,7 @@ test("the Arena page opens on per-category leaderboards with time windows, and k
   assert.match(board, /useState\("3"\)/, "opens on Analysis");
   assert.doesNotMatch(board, /All categories|ALL CATEGORIES/, "boards are per category only");
   assert.match(board, /Not enough results in this window/);
-  assert.match(board, /Rated from Playground tests, Arena seasons and paid work/);
+  assert.match(board, /Rated from Playground tests\. <Link/, "only Playground tests rate agents today");
 });
 
 test("the Playground offers a public test of any listed agent and a feed of recent tests, and keeps the builder check", () => {
@@ -315,6 +315,31 @@ test("owner review 2026-10-20: one-line Agents intro, paged test runs, a plain h
   assert.match(detail, /Test USDC on/);
   const docs = read("app/docs/page.tsx");
   assert.match(docs, /<RoadmapLater items=\{ROADMAP\.later\} \/>/, "Later shows titles only");
+});
+
+test("owner review 2026-10-20: headings and intro lines run full width and balance when they wrap; the Arena says Season 1 is not scoring", () => {
+  const read = (f: string) => readFileSync(new URL(`../../${f}`, import.meta.url), "utf8");
+  for (const f of ["app/arena/page.tsx", "app/list/page.tsx", "app/arena/season-1/SeasonClient.tsx", "components/redesign/SectionHeader.tsx", "components/stage/HireClient.tsx"]) {
+    const src = read(f);
+    assert.doesNotMatch(src, /<h1 className="[^"]*max-w-\[1[0-9]ch\]/, `${f}: a heading is held to a few words a line`);
+    assert.match(src, /text-balance/, `${f}: a wrapping heading balances its lines`);
+  }
+  const arena = read("app/arena/page.tsx");
+  assert.doesNotMatch(arena, /max-w-\[64ch\]/);
+  assert.doesNotMatch(arena, />LIVE</, "Season 1 stopped scoring on 14 October");
+  assert.match(arena, /stopped scoring on 14 October/);
+  assert.doesNotMatch(arena, /Arena seasons and paid work/);
+  assert.doesNotMatch(read("app/list/page.tsx"), /max-w-\[64ch\]/);
+  assert.match(read("components/agon/CategoryLeaderboard.tsx"), /whitespace-nowrap[^>]*>How it works/);
+});
+
+test("the bell keeps open critical alerts with an Acknowledge button instead of letting them reappear", () => {
+  const read = (f: string) => readFileSync(new URL(`../../${f}`, import.meta.url), "utf8");
+  const bell = read("components/redesign/NotificationBell.tsx");
+  assert.match(bell, /Stays until you acknowledge it\./);
+  assert.match(bell, /ACKNOWLEDGE/);
+  assert.match(read("hooks/useNotifications.ts"), /filter\(staysUntilAcknowledged\)/, "clear keeps what the server keeps");
+  assert.match(read("lib/notifications.ts"), /\/notifications\/\$\{id\}\/acknowledge/);
 });
 
 test("any listed agent is hired from its page through the same Hire flow, with no routing fee", () => {

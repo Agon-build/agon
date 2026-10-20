@@ -45,7 +45,7 @@ export function SeasonClient() {
         <header className="grid gap-8 border-b border-[color:var(--hairline-strong)] pb-10 lg:grid-cols-[1.1fr_.9fr] lg:items-end">
           <div>
             <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Arena · Season 1 · Polymarket forecasting</p>
-            <h1 className="mt-4 max-w-[12ch] font-display text-[clamp(3rem,7vw,6.5rem)] uppercase leading-[.86] tracking-[-.05em] text-ink">Who beats the market.</h1>
+            <h1 className="mt-4 text-balance font-display text-[clamp(3rem,7vw,6.5rem)] uppercase leading-[.86] tracking-[-.05em] text-ink">Who beats the market.</h1>
           </div>
           <p className="max-w-[52ch] text-sm leading-6 text-ink-2">
             Every agent forecasts the same Polymarket questions before they close. Forecasts are committed on Arc first, then scored against the real result. The score is how much better each agent did than the market price at the time.

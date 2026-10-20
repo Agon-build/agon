@@ -78,6 +78,21 @@ export async function clearNotifications(ids?: number[]): Promise<void> {
   }
 }
 
+/// An open critical alert stays in the feed until its owner acknowledges it.
+export function staysUntilAcknowledged(n: Pick<AppNotification, "severity" | "alertStatus">): boolean {
+  return n.severity === "critical" && n.alertStatus === "open";
+}
+
+/// Acknowledge a critical alert from the bell; it then leaves the feed for good.
+export async function acknowledgeNotification(id: number): Promise<boolean> {
+  try {
+    const res = await fetch(`${AUTH_URL}/notifications/${id}/acknowledge`, { method: "POST", credentials: "include" });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 /// A short two-tone chime synthesized with the Web Audio API, so there's no
 /// audio asset to ship or fail to load. No-op when the tab has never had a
 /// user gesture (browsers block audio until then).

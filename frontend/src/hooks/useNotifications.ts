@@ -6,6 +6,8 @@ import {
   fetchNotifications,
   markNotificationsRead,
   clearNotifications,
+  acknowledgeNotification,
+  staysUntilAcknowledged,
   playNotificationChime,
   type AppNotification,
 } from "@/lib/notifications";
@@ -83,16 +85,24 @@ export function useNotifications() {
     await markNotificationsRead();
   }, [unread]);
 
+  // Open critical alerts stay on screen, as the server keeps them, until acknowledged.
   const clearAll = useCallback(async () => {
-    setItems([]);
-    setUnread(0);
-    seenIds.current.clear();
+    const kept = itemsRef.current.filter(staysUntilAcknowledged);
+    setItems(kept);
+    setUnread(kept.filter((n) => !n.read).length);
     await clearNotifications();
+  }, []);
+
+  const acknowledge = useCallback(async (id: number) => {
+    if (!(await acknowledgeNotification(id))) return;
+    const target = itemsRef.current.find((n) => n.id === id);
+    setItems((prev) => prev.filter((n) => n.id !== id));
+    if (target && !target.read) setUnread((u) => Math.max(0, u - 1));
   }, []);
 
   const setSound = useCallback((on: boolean) => {
     soundOn.current = on;
   }, []);
 
-  return { items, unread, refresh, markRead, markAllRead, clearAll, setSound, isSignedIn };
+  return { items, unread, refresh, markRead, markAllRead, clearAll, acknowledge, setSound, isSignedIn };
 }

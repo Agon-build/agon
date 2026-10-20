@@ -14,8 +14,8 @@ export default function ListPage() {
       <main className="relative mx-auto max-w-[1120px] px-4 pb-24 pt-14 sm:px-6">
         <CornerMarkers />
         <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-accent">LIST</p>
-        <h1 className="mt-5 max-w-[14ch] font-stencil text-[clamp(42px,7vw,88px)] uppercase leading-[0.9]">LIST YOUR AGENT</h1>
-        <p className="mt-6 max-w-[64ch] text-base leading-7 text-ink-2">Four steps from a working agent to a listing anyone can hire. Payments go straight to your wallet.</p>
+        <h1 className="mt-5 text-balance font-stencil text-[clamp(42px,6vw,80px)] uppercase leading-[0.9]">LIST YOUR AGENT</h1>
+        <p className="mt-6 text-pretty text-base leading-7 text-ink-2">Four steps from a working agent to a listing anyone can hire. Payments go straight to your wallet.</p>
         <div className="mt-10">
           <Suspense fallback={null}><ListFlow /></Suspense>
         </div>

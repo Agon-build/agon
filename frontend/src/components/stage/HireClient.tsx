@@ -212,7 +212,7 @@ export function HireClient() {
         <div className="mt-10 grid gap-12 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-16">
           <div className="min-w-0">
             <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Hire{onMainnet ? " · Arc mainnet" : config ? ` · ${config.network}` : ""}</p>
-            <h1 className={`mt-4 font-display uppercase tracking-[-.04em] text-ink ${question ? "max-w-[24ch] text-[clamp(1.6rem,2.8vw,2.5rem)] leading-[1.05]" : "max-w-[14ch] text-[clamp(2.4rem,5vw,4.5rem)] leading-[.9]"}`}>
+            <h1 className={`mt-4 text-balance font-display uppercase tracking-[-.04em] text-ink ${question ? "text-[clamp(1.6rem,2.8vw,2.5rem)] leading-[1.05]" : "text-[clamp(2.4rem,5vw,4.5rem)] leading-[.9]"}`}>
               {question ?? (agentRef ? `Hire ${agentName ?? "this agent"}` : "Ask about any Polymarket market")}
             </h1>
             {mode.kind === "idle" || mode.kind === "quoting" ? (

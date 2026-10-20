@@ -5170,7 +5170,8 @@ app.post("/notifications/read", requireAuth, async (c) => {
 });
 
 /// Clear the feed. Body { ids?: number[] } removes those rows; omit ids to
-/// clear all of the operator's notifications.
+/// clear all of the operator's notifications. Open critical alerts stay until
+/// acknowledged, and a cleared alert does not return while it stays open.
 app.post("/notifications/clear", requireAuth, async (c) => {
   const operator = c.get("address").toLowerCase();
   let ids: number[] = [];
@@ -5178,28 +5179,16 @@ app.post("/notifications/clear", requireAuth, async (c) => {
     const body = await c.req.json<{ ids?: number[] }>();
     ids = Array.isArray(body.ids) ? body.ids.filter((n) => Number.isFinite(n)) : [];
   } catch { /* clear-all */ }
-  if (ids.length > 0) {
-    await query(
-      `delete from notifications n where operator = $1 and id = any($2::bigint[])
-        and not exists (
-          select 1 from agon_alert_recipients ar
-          join agon_operations_alerts a on a.alert_id = ar.alert_id
-          where ar.notification_id = n.id and a.severity = 'critical' and a.status = 'open'
-        )`,
-      [operator, ids],
-    );
-  } else {
-    await query(
-      `delete from notifications n where operator = $1
-        and not exists (
-          select 1 from agon_alert_recipients ar
-          join agon_operations_alerts a on a.alert_id = ar.alert_id
-          where ar.notification_id = n.id and a.severity = 'critical' and a.status = 'open'
-        )`,
-      [operator],
-    );
-  }
+  await agonOperationsAlerts.clearNotifications(operator, ids);
   return c.json({ ok: true });
+});
+
+/// The alert's operator acknowledges a critical alert from the bell; it then leaves the feed.
+app.post("/notifications/:id/acknowledge", requireAuth, async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isSafeInteger(id) || id <= 0) return c.json({ error: "invalid_id" }, 400);
+  const done = await agonOperationsAlerts.acknowledgeNotification(c.get("address"), id);
+  return done ? c.json({ ok: true }) : c.json({ error: "not_found" }, 404);
 });
 
 // ----- Feedback -----

@@ -52,8 +52,8 @@ export function CategoryLeaderboard() {
 
   return (
     <div>
-      <p className="max-w-[70ch] font-mono text-[12px] leading-[1.7] text-ink-2">
-        Rated from Playground tests, Arena seasons and paid work. <Link href="/docs#ratings" className="underline decoration-[color:var(--hairline-strong)] underline-offset-4 hover:text-accent">How it works</Link>
+      <p className="font-mono text-[12px] leading-[1.7] text-ink-2">
+        Rated from Playground tests. <Link href="/docs#ratings" className="whitespace-nowrap underline decoration-[color:var(--hairline-strong)] underline-offset-4 hover:text-accent">How it works</Link>
       </p>
 
       <div role="tablist" aria-label="Category" className="mt-6 flex flex-wrap gap-px border border-[color:var(--hairline-strong)] bg-[color:var(--hairline)]">

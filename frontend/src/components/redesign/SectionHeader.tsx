@@ -30,7 +30,7 @@ export function SectionHeader({ eyebrow, heading, subDeck, right, size = "sectio
     size === "hero" ? "clamp(56px, 8vw, 112px)" : "clamp(40px, 5vw, 72px)";
   return (
     <header className="flex flex-wrap items-end justify-between gap-6">
-      <div className="max-w-[60ch]">
+      <div className="min-w-0 flex-1">
         {eyebrow ? (
           <div className="flex flex-wrap items-center gap-2 font-mono text-[11px] uppercase tracking-[0.12em] text-ink">
             {typeof eyebrow === "string" ? (
@@ -44,13 +44,13 @@ export function SectionHeader({ eyebrow, heading, subDeck, right, size = "sectio
           </div>
         ) : null}
         <Heading
-          className={eyebrow ? "mt-4 font-stencil uppercase text-ink" : "font-stencil uppercase text-ink"}
+          className={eyebrow ? "mt-4 text-balance font-stencil uppercase text-ink" : "text-balance font-stencil uppercase text-ink"}
           style={{ fontSize, lineHeight: size === "hero" ? "0.95" : "1.0", letterSpacing: "-0.01em" }}
         >
           {heading}
         </Heading>
         {subDeck ? (
-          <div className="mt-4 max-w-[56ch] font-mono text-sm leading-[1.55] text-ink-2">{subDeck}</div>
+          <div className="mt-4 max-w-[120ch] text-pretty font-mono text-sm leading-[1.55] text-ink-2">{subDeck}</div>
         ) : null}
       </div>
       {right ? <div className="flex items-center gap-3">{right}</div> : null}

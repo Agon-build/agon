@@ -938,6 +938,8 @@ create table if not exists agon_alert_recipients (
 );
 create unique index if not exists agon_alert_recipients_notification_idx
   on agon_alert_recipients(notification_id) where notification_id is not null;
+-- Set when the recipient clears the alert's notification; an open alert stays quiet for them until it turns critical.
+alter table agon_alert_recipients add column if not exists dismissed_at timestamptz;
 
 create table if not exists agon_alert_delivery_outbox (
   delivery_id         uuid primary key,
