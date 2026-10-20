@@ -22,6 +22,8 @@ export type ManagedPublisherState = {
   /** The exact publish calldata Circle was sent, so a later check confirms it without preparing again. Absent on older rows. */
   publishCallData?: `0x${string}` | null;
   reference: string | null;
+  /** Set on an update: the existing listing this record publishes a new version of. */
+  listingId?: string | null;
 };
 
 export type ManagedPublisherRecord = {
@@ -37,6 +39,8 @@ export type ManagedPublisherStore = {
   get(actor: string, draftId: string): Promise<ManagedPublisherRecord | null>;
   getPublic(publicId: string): Promise<ManagedPublisherRecord | null>;
   save(record: ManagedPublisherRecord, next: ManagedPublisherState): Promise<ManagedPublisherRecord | null>;
+  /** This account's published record for a listing reference: the wallet and agent an update reuses. */
+  findByReference(actor: string, reference: string): Promise<ManagedPublisherRecord | null>;
 };
 
 export function publisherUuid(value: string): string {
@@ -82,6 +86,9 @@ export function createMemoryManagedPublisherStore(): ManagedPublisherStore {
     },
     async get(actor, draftId) { return rows.get(key(actor, draftId)) ?? null; },
     async getPublic(publicId) { return [...rows.values()].find((row) => row.publicId === publicId) ?? null; },
+    async findByReference(actor, reference) {
+      return [...rows.values()].find((row) => row.actor === address(actor) && row.state.reference === reference && row.state.walletId && row.state.agentId) ?? null;
+    },
     async save(record, next) {
       const k = key(record.actor, record.draftId);
       const current = rows.get(k);
@@ -113,6 +120,14 @@ export function createPostgresManagedPublisherStore(pool: Pool): ManagedPublishe
     },
     async get(actor, draftId) {
       const result = await pool.query(`${select} where actor_address = $1 and draft_id = $2`, [address(actor), draftId]);
+      return result.rows[0] ? view(result.rows[0]) : null;
+    },
+    async findByReference(actor, reference) {
+      const result = await pool.query(
+        `${select} where actor_address = $1 and state->>'reference' = $2 and state->>'walletId' is not null and state->>'agentId' is not null
+          order by version desc limit 1`,
+        [address(actor), reference],
+      );
       return result.rows[0] ? view(result.rows[0]) : null;
     },
     async getPublic(publicId) {

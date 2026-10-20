@@ -25,11 +25,12 @@ export type BuilderListingDeps = {
     list(actor: string, limit: number): Promise<{ draftId: string; draft: ProviderDraftInput; state: string }[]>;
     get(actor: string, draftId: string): Promise<{ draftId: string; draft: ProviderDraftInput; state: string } | null>;
   };
-  publisher?: Pick<ManagedPublisher, "setup" | "approve" | "status" | "advance">;
+  publisher?: Pick<ManagedPublisher, "setup" | "setupVersion" | "publishedDraft" | "approve" | "status" | "advance">;
 };
 
 /// Publisher messages that are safe and useful to show a builder as they are.
-const SAFE_PUBLISHER_MESSAGE = /^(?:Run the listing checks|Create a listing draft|The exact draft digest|Provision the publisher|Publisher state changed)/;
+const SAFE_PUBLISHER_MESSAGE = /^(?:Run the listing checks|Create a listing draft|The exact draft digest|Provision the publisher|Publisher state changed|Only a listing published through Agon|This draft is already set up)/;
+const setupBody = z.object({ updates: z.string().regex(/^\d+:0x[0-9a-fA-F]{40}:[1-9]\d*$/).optional() }).strict();
 
 /// Signed-in builder routes (browser session only): Agent access tokens, and
 /// the web listing flow over the same draft store, checker and publisher as MCP.
@@ -113,7 +114,22 @@ export function createBuilderRoutes(deps: {
       return c.json({ error: out.code, message: out.message }, out.code === "rate_limited" ? 429 : 400);
     });
 
-    app.post("/drafts/:id/setup", (c) => publisherCall(c, async (p) => ({ ...(await p.setup(c.get("address"), c.req.param("id"))), feeUSDC: LISTING_FEE_USDC })));
+    // With { updates: <listing reference> } the draft becomes the next version of that listing.
+    app.post("/drafts/:id/setup", async (c) => {
+      const body = setupBody.safeParse(await c.req.json().catch(() => ({})));
+      if (!body.success) return c.json({ error: "invalid_request", message: "Send the listing reference to update, or nothing." }, 400);
+      const updates = body.data.updates;
+      return publisherCall(c, async (p) => ({
+        ...(updates ? await p.setupVersion(c.get("address"), c.req.param("id"), updates) : await p.setup(c.get("address"), c.req.param("id"))),
+        feeUSDC: LISTING_FEE_USDC,
+      }));
+    });
+
+    // The details one of this account's listings was published with, to start an update from.
+    app.get("/listings/:reference/draft", async (c) => {
+      const draft = listing.publisher ? await listing.publisher.publishedDraft(c.get("address"), c.req.param("reference")).catch(() => null) : null;
+      return draft ? c.json({ draft }) : c.json({ error: "not_yours", message: "Only a listing published through Agon from this account can be updated here." }, 404);
+    });
     app.post("/drafts/:id/advance", (c) => publisherCall(c, async (p) => ({ ...(await p.advance(c.get("address"), c.req.param("id"))), feeUSDC: LISTING_FEE_USDC })));
     app.post("/drafts/:id/approve", async (c) => {
       const parsed = approveBody.safeParse(await c.req.json().catch(() => null));

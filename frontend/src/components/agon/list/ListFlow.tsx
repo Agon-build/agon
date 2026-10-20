@@ -10,7 +10,7 @@ import { sendErrorText, useUsdcSend } from "@/components/stage/useUsdcSend";
 import { useAgonNetwork } from "@/hooks/useAgonNetwork";
 import { useAuth } from "@/hooks/useAuth";
 import { useHydrated } from "@/hooks/useHydrated";
-import { advancePublishing, approvePublishing, createDraft, getDraft, runChecks, setupPublishing, type CheckResult, type PublishingResult } from "@/lib/agon/builder-api";
+import { advancePublishing, approvePublishing, createDraft, getDraft, getListingDraft, runChecks, setupPublishing, type CheckResult, type PublishingResult } from "@/lib/agon/builder-api";
 import { AGON_CATEGORIES } from "@/lib/agon/catalog";
 import { getListing } from "@/lib/agon/client";
 import { EMPTY_FORM, FEE_ATOMIC, LIVE_MAX_FAILURES, afterLiveAttempt, draftFromForm, feeLanding, formFromDraft, liveOutcome, missingFee, stepAfterError, stepFor, timeline, validateForm, type DraftForm, type FlowStep } from "@/lib/agon/listing-flow";
@@ -60,6 +60,8 @@ export function ListFlow() {
   const testnet = network.chainId === 5_042_002;
   const { path: payPath, send } = useUsdcSend(testnet);
   const draftId = params.get("draft");
+  // Updating a listing this account published through Agon: it becomes the next version of that listing.
+  const updates = params.get("update");
 
   const [step, setStep] = useState<FlowStep>("describe");
   const [form, setForm] = useState<DraftForm>(EMPTY_FORM);
@@ -97,6 +99,16 @@ export function ListFlow() {
     }).catch(() => { if (active) setError("That draft could not be found. Start a new one."); });
     return () => { active = false; };
   }, [draftId, me]);
+
+  // An update starts from the details the listing was published with.
+  useEffect(() => {
+    if (!updates || draftId || !me) return;
+    let active = true;
+    void getListingDraft(updates)
+      .then((d) => { if (active) setForm(formFromDraft(d.draft)); })
+      .catch((e) => { if (active) setError(errorText(e, "This listing could not be loaded for an update.")); });
+    return () => { active = false; };
+  }, [updates, draftId, me]);
 
   // Live: wait for a paid fee to land, advance publishing until listed, then watch for Verified.
   useEffect(() => {
@@ -191,6 +203,7 @@ export function ListFlow() {
         ))}
       </ol>
 
+      {updates ? <p className="border-l-[3px] border-accent bg-canvas-2 px-4 py-3 text-sm text-ink">You are updating {form.name || "your agent"}. It keeps its agent ID, tests and scores; the changes publish as its next version.</p> : null}
       {error ? <p role="alert" className="border-l-[3px] border-[color:var(--err)] bg-canvas-2 px-4 py-3 text-sm text-ink">{error}</p> : null}
 
       {step === "describe" ? (
@@ -202,7 +215,7 @@ export function ListFlow() {
             if (Object.keys(errors).length) return;
             void run("save", async () => {
               const out = await createDraft(draftFromForm(form));
-              router.replace(`/list?draft=${encodeURIComponent(out.draftId)}`);
+              router.replace(`/list?draft=${encodeURIComponent(out.draftId)}${updates ? `&update=${encodeURIComponent(updates)}` : ""}`);
               setStep("check");
             }, "The draft could not be saved. Try again.");
           }}
@@ -262,12 +275,15 @@ export function ListFlow() {
           busy={busy}
           payTx={payTx}
           payPath={payPath}
-          onSetup={() => run("setup", async () => { setPublishing(await setupPublishing(draftId!)); }, "Publishing is not available right now.")}
+          updating={Boolean(updates)}
+          onSetup={() => run("setup", async () => { setPublishing(await setupPublishing(draftId!, updates ?? undefined)); }, "Publishing is not available right now.")}
           onPay={() => run("pay", async () => {
-            let p = publishing ?? await setupPublishing(draftId!);
+            let p = publishing ?? await setupPublishing(draftId!, updates ?? undefined);
             if (p.status === "review_terms") p = await approvePublishing(draftId!, p.termsDigest);
             setPublishing(p);
             if (!p.fundingAddress) throw new Error("no wallet");
+            // An update is paid from the publishing wallet's balance; the builder sends gas only when it is short.
+            if (updates && p.status !== "fund_wallet") { setStep("live"); return; }
             // Without a wallet Agon can send from, the builder sends the fee to the address shown and continues.
             if (payPath !== "address-only") try {
               const { tx } = await send(p.fundingAddress, p.status === "fund_wallet" && Number(p.balanceUSDC ?? "0") > 0 ? missingFee(p.nextAction) : FEE_ATOMIC);
@@ -310,7 +326,7 @@ export function ListFlow() {
   );
 }
 
-function ApproveStep(props: { draftId: string | null; form: DraftForm; publishing: PublishingResult | null; busy: string | null; payTx: string | null; payPath: string; onSetup: () => void; onPay: () => void }) {
+function ApproveStep(props: { draftId: string | null; form: DraftForm; publishing: PublishingResult | null; busy: string | null; payTx: string | null; payPath: string; updating: boolean; onSetup: () => void; onPay: () => void }) {
   const { publishing, onSetup } = props;
   const asked = useRef(false);
   useEffect(() => {
@@ -323,18 +339,18 @@ function ApproveStep(props: { draftId: string | null; form: DraftForm; publishin
     <div className="grid gap-4">
       <dl className="grid gap-px border border-[color:var(--hairline)] bg-[color:var(--hairline)] sm:grid-cols-2">
         {[
-          ["Identity", "A new ERC-8004 agent identity, held in an Agon-managed wallet"],
+          ["Identity", props.updating ? `Your agent's existing identity${publishing?.agentId ? `, Agent #${publishing.agentId}` : ""}` : "A new ERC-8004 agent identity, held in an Agon-managed wallet"],
           ["Listing", `${props.form.name} at ${props.form.priceUSDC} USDC per call`],
-          ["Network fee", short ? "The publishing wallet needs a little more gas" : props.payPath === "circle" ? "0.50 USDC from your sign-in wallet (see Account)" : "0.50 USDC from your connected wallet"],
+          ["Network fee", short ? "The publishing wallet needs a little more gas" : props.updating ? "Paid from the publishing wallet's balance" : props.payPath === "circle" ? "0.50 USDC from your sign-in wallet (see Account)" : "0.50 USDC from your connected wallet"],
           ["Publishing wallet", publishing?.fundingAddress ?? "Preparing"],
         ].map(([k, v]) => <div key={k} className="bg-canvas p-3"><dt className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">{k}</dt><dd className="mt-1 break-all text-sm text-ink">{v}</dd></div>)}
       </dl>
       {publishing ? <p className="break-all font-mono text-xs text-ink-3">Terms digest {publishing.termsDigest}</p> : null}
-      {props.payPath === "address-only" && publishing?.fundingAddress
+      {props.payPath === "address-only" && publishing?.fundingAddress && (!props.updating || short)
         ? <p className="text-sm text-ink-2">Send 0.50 USDC on Arc to {publishing.fundingAddress}, then continue.</p>
         : null}
       {!publishing && props.busy === null ? <div><TagButton variant="ghost" onClick={onSetup}>Try again</TagButton></div> : null}
-      <div><TagButton disabled={props.busy !== null || !publishing} onClick={props.onPay}>{props.busy === "pay" ? "Waiting for your wallet" : props.payPath === "address-only" ? "I sent it, publish" : short ? "Add gas and continue" : "Pay 0.50 USDC and publish"}</TagButton></div>
+      <div><TagButton disabled={props.busy !== null || !publishing} onClick={props.onPay}>{props.busy === "pay" ? "Waiting for your wallet" : short ? "Add gas and continue" : props.updating ? "Approve and publish the update" : props.payPath === "address-only" ? "I sent it, publish" : "Pay 0.50 USDC and publish"}</TagButton></div>
     </div>
   );
 }

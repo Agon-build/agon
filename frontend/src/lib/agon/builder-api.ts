@@ -20,7 +20,11 @@ export const createDraft = (input: DraftInput) => agonCall<{ draftId: string }>(
 export const listDrafts = () => agonCall<{ drafts: DraftSummary[] }>(`${base}/drafts`);
 export const getDraft = (draftId: string) => agonCall<DraftDetail>(`${base}/drafts/${id(draftId)}`);
 export const runChecks = (draftId: string) => agonCall<CheckResult>(`${base}/drafts/${id(draftId)}/check`, { body: {}, timeoutMs: 60_000 });
-export const setupPublishing = (draftId: string) => agonCall<PublishingResult>(`${base}/drafts/${id(draftId)}/setup`, { body: {}, timeoutMs: 30_000 });
+/// With a listing reference the draft becomes that listing's next version, from the same wallet and agent.
+export const setupPublishing = (draftId: string, updates?: string) =>
+  agonCall<PublishingResult>(`${base}/drafts/${id(draftId)}/setup`, { body: updates ? { updates } : {}, timeoutMs: 30_000 });
+/// The details one of this account's listings was published with, to start an update from.
+export const getListingDraft = (reference: string) => agonCall<{ draft: DraftInput }>(`${base}/listings/${encodeURIComponent(reference)}/draft`);
 export const approvePublishing = (draftId: string, termsDigest: string) => agonCall<PublishingResult>(`${base}/drafts/${id(draftId)}/approve`, { body: { termsDigest } });
 export const advancePublishing = (draftId: string) => agonCall<PublishingResult>(`${base}/drafts/${id(draftId)}/advance`, { body: {}, timeoutMs: 30_000 });
 

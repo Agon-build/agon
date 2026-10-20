@@ -87,6 +87,11 @@ function listingFakes(opts: { checks?: boolean; publisher?: boolean } = {}) {
   const result = (status: string) => ({ status, nextAction: "x", draftId: "draft-1", chainId: 5042002, fundingAddress: "0x" + "2".repeat(40), fundingAsset: "Arc Testnet native USDC", balanceUSDC: "0", termsDigest: "0x" + "d".repeat(64), custody: "AGON-managed Circle developer-controlled wallet", agentId: null, reference: null, txHash: null });
   const publisher = opts.publisher === false ? undefined : {
     async setup() { return result("review_terms"); },
+    async setupVersion(_a: string, _d: string, reference: string) {
+      if (!reference.endsWith(":6")) throw new Error("Only a listing published through Agon from this account can be updated here.");
+      return { ...result("review_terms"), agentId: "897385" };
+    },
+    async publishedDraft(_a: string, reference: string) { return reference.endsWith(":6") ? { ...draftBody, name: "Drift" } : null; },
     async approve(_a: string, _d: string, digest: string) { if (digest !== "0x" + "d".repeat(64)) throw new Error("The exact draft digest and explicit approval are required"); return result("ready"); },
     async status() { return result("review_terms"); },
     async advance() { throw new Error("secret internal detail"); },
@@ -142,4 +147,20 @@ test("a hidden publisher failure is logged on the server with the draft, while t
   assert.match(logged[0]!, /advance/);
   assert.match(logged[0]!, /draft-1/);
   assert.match(logged[0]!, /secret internal detail/);
+});
+
+test("an update starts from the listing's published details and sets up its next version; others are refused plainly", async () => {
+  const app = createBuilderRoutes({ tokens: fakeTokens(), requireAuth: auth(true), listing: listingFakes() });
+  const ref = `5042002:0x${"4".repeat(40)}`;
+  const mine = await app.request(`http://x/listings/${encodeURIComponent(`${ref}:6`)}/draft`);
+  assert.equal(((await mine.json()) as { draft: { name: string } }).draft.name, "Drift");
+  const notMine = await app.request(`http://x/listings/${encodeURIComponent(`${ref}:7`)}/draft`);
+  assert.equal(notMine.status, 404);
+  assert.match(((await notMine.json()) as { message: string }).message, /published through Agon/);
+  const setup = (await (await app.request("http://x/drafts/draft-1/setup", json({ updates: `${ref}:6` }))).json()) as { agentId: string; feeUSDC: string };
+  assert.deepEqual([setup.agentId, setup.feeUSDC], ["897385", "0.50"]);
+  const refused = await app.request("http://x/drafts/draft-1/setup", json({ updates: `${ref}:7` }));
+  assert.equal(refused.status, 400);
+  assert.match(((await refused.json()) as { message: string }).message, /published through Agon/);
+  assert.equal((await app.request("http://x/drafts/draft-1/setup", json({ updates: "not-a-reference" }))).status, 400);
 });

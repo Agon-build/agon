@@ -88,6 +88,20 @@ test("publishing stops after 3 failures in a row and asks the builder to try aga
   assert.deepEqual(afterLiveAttempt(state, false), { failures: 3, stalled: true });
 });
 
+test("an update starts from the published details, publishes the next version from the same wallet and pays only for missing gas", () => {
+  const src = readFileSync(new URL("../../components/agon/list/ListFlow.tsx", import.meta.url), "utf8");
+  assert.match(src, /params\.get\("update"\)/);
+  assert.match(src, /getListingDraft\(updates\)/);
+  assert.match(src, /setupPublishing\(draftId!, updates \?\? undefined\)/);
+  assert.match(src, /updates && p\.status !== "fund_wallet"/, "an update sends no fee unless the wallet is short");
+  assert.match(src, /keeps its agent ID, tests and scores/);
+  const api = readFileSync(new URL("./builder-api.ts", import.meta.url), "utf8");
+  assert.match(api, /\/listings\/\$\{encodeURIComponent\(reference\)\}\/draft/);
+  assert.match(api, /updates \? \{ updates \} : \{\}/);
+  const detail = readFileSync(new URL("../../app/agents/[id]/page.tsx", import.meta.url), "utf8");
+  assert.match(detail, /\/list\?update=\$\{encodeURIComponent\(listing\.id\)\}/);
+});
+
 test("while stalled the page shows the reason and Try again, never the under-a-minute line", () => {
   const src = readFileSync(new URL("../../components/agon/list/ListFlow.tsx", import.meta.url), "utf8");
   assert.match(src, /afterLiveAttempt/);

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { decodeEventLog, encodeFunctionData, parseAbi, type Transaction, type TransactionReceipt } from "viem";
+import type { ProviderDraftInput } from "./contract.ts";
 import type { ProviderDraftStore } from "./provider-draft-store.ts";
 import type { createMcpAccessAdapter } from "./adapter.ts";
 import { publisherKey, type ManagedPublisherRecord, type ManagedPublisherState, type ManagedPublisherStore, type PinnedFee } from "./managed-publisher-store.ts";
@@ -281,7 +282,8 @@ export function createManagedPublisher(options: {
 
     // A publish that already reached the chain is recovered from its event, never prepared or sent twice.
     // This holds whether or not its Circle transaction ID was saved before the run that sent it stopped.
-    if (options.recoverPublished) {
+    // An update has no such event to find: the listing it versions already exists.
+    if (options.recoverPublished && !record.state.listingId) {
       const found = await options.recoverPublished(record.state.walletAddress!, record.state.agentId!);
       if (found) {
         record = await save(record, { ...record.state, reference: found.reference, publishTxHash: found.txHash });
@@ -293,22 +295,29 @@ export function createManagedPublisher(options: {
     // the contract to simulate a listing that already exists, which it refuses.
     if (record.state.publishTxId && record.state.publishCallData) return finishPublish(record, draftId, record.state.publishCallData);
 
+    // A new listing calls publish; an update calls publishVersion on the listing it versions.
+    const listingId = record.state.listingId ?? null;
+    const expectedCall = listingId ? "publishVersion" : "publish";
+    const prepare = () => listingId
+      ? options.access.publishListingVersion(record.state.walletAddress!, { draftId, approval: "approve" })
+      : options.access.publishListing(record.state.walletAddress!, { draftId, approval: "approve" });
+
     if (!record.state.operationId) {
       const draft = await options.draftStore.get(actor, draftId);
       if (!draft) throw new Error("Publisher draft disappeared");
       const started = await options.access.startListing(record.state.walletAddress!, draft.draft);
       if (!started.ok) throw new Error(started.message);
       if (started.value.draftId !== draftId) throw new Error("Managed draft digest differs from the approved draft");
-      const compiled = await options.access.compileListing(record.state.walletAddress!, { draftId, agentId: record.state.agentId });
+      const compiled = await options.access.compileListing(record.state.walletAddress!, { draftId, agentId: record.state.agentId, ...(listingId ? { listingId } : {}) });
       if (!compiled.ok || !compiled.value.manifestUri) throw new Error(compiled.ok ? "Hosted manifest unavailable" : compiled.message);
-      const prepared = await options.access.publishListing(record.state.walletAddress!, { draftId, approval: "approve" });
+      const prepared = await prepare();
       if (!prepared.ok || !prepared.value.operationId || !prepared.value.transaction) throw new Error(prepared.ok ? "Publication was not prepared" : prepared.message);
       if (prepared.value.transaction.chainId !== String(chainId) || !sameAddress(prepared.value.transaction.to, options.serviceRegistry)
-        || prepared.value.transaction.functionName !== "publish") throw new Error("Publication target is not the active Arc registry");
+        || prepared.value.transaction.functionName !== expectedCall) throw new Error("Publication target is not the active Arc registry");
       record = await save(record, { ...record.state, operationId: prepared.value.operationId });
     }
 
-    const prepared = await options.access.publishListing(record.state.walletAddress!, { draftId, approval: "approve" });
+    const prepared = await prepare();
     if (!prepared.ok) throw new Error(`Publication could not be prepared: ${prepared.message}`);
     if (!prepared.value.transaction || !prepared.value.operationId) throw new Error("Publication was not prepared");
     if (prepared.value.operationId !== record.state.operationId) {
@@ -319,7 +328,7 @@ export function createManagedPublisher(options: {
       record = await save(record, { ...record.state, operationId: prepared.value.operationId });
     }
     const tx = prepared.value.transaction;
-    if (tx.chainId !== String(chainId) || !sameAddress(tx.to, options.serviceRegistry) || tx.functionName !== "publish") throw new Error("Publication target changed");
+    if (tx.chainId !== String(chainId) || !sameAddress(tx.to, options.serviceRegistry) || tx.functionName !== expectedCall) throw new Error("Publication target changed");
     if (!/^0x(?:[0-9a-fA-F]{2})+$/.test(tx.data)) throw new Error("Prepared publication calldata is invalid");
     const submitted = await submit(record, "publish", options.serviceRegistry, tx.data as Hash);
     if ("status" in submitted) return submitted;
@@ -363,6 +372,32 @@ export function createManagedPublisher(options: {
           .then((fee) => ({ action: "register" as const, worstCaseUSDC: formatUSDC(feeCeiling(fee)) }), () => undefined);
       }
       return view(record, phase(record), record.state.approvedAt ? "continue_managed_listing" : "Review the draft and approve its exact terms digest before any onchain write.", null, first);
+    },
+    /// The details a listing was published with, for this account's own listings only, so an update starts from them.
+    async publishedDraft(actor: string, reference: string): Promise<ProviderDraftInput | null> {
+      const source = await options.store.findByReference(actor, reference);
+      if (!source) return null;
+      return (await options.draftStore.get(actor, source.draftId))?.draft ?? null;
+    },
+    /// An update to a listing this account published through Agon: the new draft is published as
+    /// the next version from the same Agon-managed wallet and agent, with no new identity.
+    async setupVersion(actor: string, draftId: string, reference: string): Promise<ManagedPublisherResult> {
+      const source = await options.store.findByReference(actor, reference);
+      const listingId = /^\d+:0x[0-9a-fA-F]{40}:([1-9]\d*)$/.exec(reference)?.[1];
+      if (!source?.state.walletId || !source.state.walletAddress || !source.state.agentId || !listingId) {
+        throw new Error("Only a listing published through Agon from this account can be updated here.");
+      }
+      const draft = await options.draftStore.get(actor, draftId);
+      if (!draft) throw new Error("Create a listing draft before requesting its publisher wallet");
+      let record = await options.store.create(actor, draftId, digest({ draft: draft.draft, chainId, identityRegistry: options.identityRegistry,
+        serviceRegistry: options.serviceRegistry, custody: "AGON-managed Circle developer-controlled wallet" }));
+      if (!record.state.walletId) {
+        record = await save(record, { ...record.state, walletId: source.state.walletId, walletAddress: source.state.walletAddress,
+          agentId: source.state.agentId, registerTxHash: source.state.registerTxHash, listingId });
+      } else if (record.state.listingId !== listingId) {
+        throw new Error("This draft is already set up for another listing.");
+      }
+      return view(record, phase(record), record.state.approvedAt ? "continue_managed_listing" : "Review the update and approve its exact terms digest before any onchain write.");
     },
     async approve(actor: string, draftId: string, termsDigest: string, approval: string, maxFeeUSDC?: string): Promise<ManagedPublisherResult> {
       if (maxFeeUSDC !== undefined && !FEE_LIMIT.test(maxFeeUSDC)) throw new Error("The fee limit must be a USDC amount above 0 and at most 1, such as 0.5.");

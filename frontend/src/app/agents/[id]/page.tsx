@@ -26,6 +26,7 @@ import { networkHref } from "@/lib/agon/network";
 import type { AgonListing } from "@/lib/agon/types";
 import { assessListingAssurance, canUseEscrow, verifyManifestAnchor } from "@/lib/agon/verify";
 import { useAgonNetwork } from "@/hooks/useAgonNetwork";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function ListingDetailPage() {
   return <ArcListingDetailPage />;
@@ -36,6 +37,7 @@ function ArcListingDetailPage() {
     try { return decodeURIComponent(params.id); } catch { return params.id; }
   }, [params.id]);
   const { network, networkKey } = useAgonNetwork();
+  const { me } = useAuth();
   const [listing, setListing] = useState<AgonListing | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -95,7 +97,7 @@ function ArcListingDetailPage() {
             eyebrow={service?.category.label ?? `AGON MARKET / ${network.brand} SERVICE`}
             heading={service?.name ?? "SERVICE DETAILS"}
             subDeck={service?.description ?? "Reading this service from the Agon catalog."}
-            right={<><TagButton variant="ghost" href="/agents">BACK TO AGENTS</TagButton>{listing?.verification.status !== "Verified" && listing ? <TagButton href={`/playground?listing=${encodeURIComponent(listing.id)}`}>TEST IN THE PLAYGROUND</TagButton> : null}</>}
+            right={<><TagButton variant="ghost" href="/agents">BACK TO AGENTS</TagButton>{me && listing ? <TagButton variant="ghost" href={`/list?update=${encodeURIComponent(listing.id)}`}>UPDATE LISTING</TagButton> : null}{listing?.verification.status !== "Verified" && listing ? <TagButton href={`/playground?listing=${encodeURIComponent(listing.id)}`}>TEST IN THE PLAYGROUND</TagButton> : null}</>}
           />
         </section>
 

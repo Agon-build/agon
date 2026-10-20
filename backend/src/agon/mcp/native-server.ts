@@ -247,15 +247,22 @@ export function createAgonNativeMcpHandler(access: AccessAdapter, publisher?: Ma
           const message = error instanceof Error ? error.message : "";
           // The tool answer stays safe; the real reason goes to the server log.
           console.warn(`[agon-listing] ${tool} failed for draft ${draftId}: ${(message || String(error)).slice(0, 500)}`);
-          const safe = /^(?:Run the listing checks|No managed publisher|Create a listing draft|draft changed|Publisher |The exact draft digest|Provision the publisher|Gas quote|Pinned gas quote|Circle refused|Circle rejected the request|Circle fee estimate|The fee limit|Circle transaction does not match|Identity receipt|Registered identity|Prepared publication|Publication target|Publication receipt|Hosted manifest|Managed draft digest|Publisher state changed)/.test(message);
+          const safe = /^(?:Run the listing checks|No managed publisher|Create a listing draft|draft changed|Publisher |The exact draft digest|Provision the publisher|Gas quote|Pinned gas quote|Circle refused|Circle rejected the request|Circle fee estimate|The fee limit|Circle transaction does not match|Identity receipt|Registered identity|Prepared publication|Publication target|Publication receipt|Hosted manifest|Managed draft digest|Publisher state changed|Only a listing published through Agon|This draft is already set up)/.test(message);
           return failure("managed_publisher_failed", safe ? message : "Managed publisher action failed. Check its status before retrying.");
         }
       };
       server.registerTool("setup_managed_publisher", {
         title: "Get a publisher wallet to fund",
-        description: "Provision one Circle-custodied Arc Testnet wallet for an existing listing draft. This does not sign or publish. Fund its address with native USDC for gas. The result shows the fee limit and the worst-case fee of the next write (nextFee) so the user can choose a limit before approving.",
-        inputSchema: draftSchema,
-      }, async ({ draftId }) => managed("setup_managed_publisher", draftId, "listing:prepare", (owner) => publisher.setup(owner, draftId)));
+        description: "Provision one Circle-custodied Arc Testnet wallet for an existing listing draft. This does not sign or publish. Fund its address with native USDC for gas. The result shows the fee limit and the worst-case fee of the next write (nextFee) so the user can choose a limit before approving. To update a listing this account already published through Agon, pass its listingReference: the draft becomes its next version, from the same wallet and agent, with no new identity.",
+        inputSchema: fromJsonSchema<{ draftId: string; listingReference?: string }>({
+          type: "object",
+          properties: {
+            draftId: { type: "string", minLength: 1, maxLength: 256 },
+            listingReference: { type: "string", pattern: "^\\d+:0x[0-9a-fA-F]{40}:[1-9]\\d*$", description: "Only when updating: the reference of a listing this account published through Agon, chainId:registry:listingId." },
+          },
+          required: ["draftId"], additionalProperties: false,
+        }),
+      }, async ({ draftId, listingReference }) => managed("setup_managed_publisher", draftId, "listing:prepare", (owner) => listingReference ? publisher.setupVersion(owner, draftId, listingReference) : publisher.setup(owner, draftId)));
       server.registerTool("get_managed_listing", {
         title: "Get managed listing status",
         description: "Read the publisher wallet, funding, identity, and listing progress after a restart.",

@@ -25,9 +25,10 @@ const draft: ProviderDraftInput = {
   expectedLatencyMs: 1000, privacy: "No retention", failurePolicy: "No charge if unavailable",
   endpoint: "https://example.com/run",
 };
-const draftId = `draft-${createHash("sha256").update(JSON.stringify(draft)).digest("hex").slice(0, 24)}`;
+const idOf = (value: ProviderDraftInput) => `draft-${createHash("sha256").update(JSON.stringify(value)).digest("hex").slice(0, 24)}`;
+const draftId = idOf(draft);
 
-async function fixture(balance = 1_000_000_000_000_000_000n, badTransaction = false, uncertainOnce = false, highFee = false, writerReady = true, extra: { checksPassed?: (a: string, d: string) => Promise<boolean>; refuseFees?: number; publishPendingOnce?: boolean; estimate?: { gasLimit: string; maxFee: string; priorityFee: string } } = {}) {
+async function fixture(balance = 1_000_000_000_000_000_000n, badTransaction = false, uncertainOnce = false, highFee = false, writerReady = true, extra: { checksPassed?: (a: string, d: string) => Promise<boolean>; refuseFees?: number; publishPendingOnce?: boolean; estimate?: { gasLimit: string; maxFee: string; priorityFee: string }; recoverPublished?: (w: `0x${string}`, agentId: string) => Promise<{ reference: string; txHash: `0x${string}` } | null> } = {}) {
   const store = createMemoryManagedPublisherStore();
   const draftStore = createMemoryProviderDraftStore();
   await draftStore.create(actor, draftId, draft);
@@ -37,6 +38,7 @@ async function fixture(balance = 1_000_000_000_000_000_000n, badTransaction = fa
   let refusals = extra.refuseFees ?? 0;
   let publishPending = extra.publishPendingOnce ?? false;
   let prepares = 0;
+  const compiles: Record<string, unknown>[] = [];
   const estimates: string[] = [];
   const circle: ManagedPublisherCircle = {
     async createWallet(_ref, _key) { walletCreates++; return { walletId: "wallet-one", address: wallet }; },
@@ -83,10 +85,16 @@ async function fixture(balance = 1_000_000_000_000_000_000n, badTransaction = fa
   let storePublicId = "";
   const access = {
     async startListing(publisher: string, value: ProviderDraftInput) {
-      await draftStore.create(publisher, draftId, value);
-      return { ok: true, value: { draftId, draft: value, nextAction: "run_listing_checks" } };
+      const id = idOf(value);
+      await draftStore.create(publisher, id, value);
+      return { ok: true, value: { draftId: id, draft: value, nextAction: "run_listing_checks" } };
     },
-    async compileListing() { return { ok: true, value: { manifestUri: "https://api.example.com/manifest.json" } }; },
+    async compileListing(_publisher: string, input: Record<string, unknown>) { compiles.push(input); return { ok: true, value: { manifestUri: "https://api.example.com/manifest.json" } }; },
+    async publishListingVersion() {
+      return { ok: true, value: { status: "prepared", operationId: "operation-version", transaction: {
+        chainId: "5042002", to: registry, data: "0xbeef", functionName: "publishVersion", args: [],
+      } } };
+    },
     async publishListing() {
       prepares++;
       // Once the publish is on chain the contract refuses a second simulation (ServiceKeyAlreadyPublished).
@@ -109,7 +117,7 @@ async function fixture(balance = 1_000_000_000_000_000_000n, badTransaction = fa
   const publisher = make();
   const setup = await publisher.setup(actor, draftId);
   storePublicId = (await store.get(actor, draftId))!.publicId;
-  return { publisher, make, setup, calls, access, store, estimates, prepares: () => prepares, publicId: storePublicId, walletCreates: () => walletCreates };
+  return { publisher, make, setup, calls, access, store, draftStore, compiles, estimates, prepares: () => prepares, publicId: storePublicId, walletCreates: () => walletCreates };
 }
 
 test("a new draft gets one Circle wallet and requires an exact approval before writes", async () => {
@@ -372,4 +380,37 @@ test("a publish whose transaction is on record but never confirmed is recovered,
   const out = await f.publisher.advance(actor, draftId);
   assert.equal(out.status, "published");
   assert.equal(out.reference, `5042002:${registry}:1`);
+});
+
+test("updating a listing published through Agon reuses its wallet and agent, skips registration and publishes a new version", async () => {
+  // The publisher would recover the original listing for this wallet; an update must still write its version.
+  const f = await fixture(undefined, false, false, false, true, { recoverPublished: async () => ({ reference: `5042002:${registry}:7`, txHash: `0x${"9".repeat(64)}` }) });
+  await f.publisher.approve(actor, draftId, f.setup.termsDigest, "approve");
+  const first = await f.publisher.advance(actor, draftId);
+  assert.equal(first.reference, `5042002:${registry}:7`);
+  assert.equal(f.calls.length, 1, "the identity registration only; the listing was recovered");
+  const updated: ProviderDraftInput = { ...draft, inputs: ["question: your question in plain words"] };
+  const updatedId = idOf(updated);
+  await f.draftStore.create(actor, updatedId, updated);
+  const setup = await f.publisher.setupVersion(actor, updatedId, first.reference!);
+  assert.deepEqual([setup.status, setup.fundingAddress, setup.agentId, f.walletCreates()], ["review_terms", wallet, "42", 1]);
+  await f.publisher.approve(actor, updatedId, setup.termsDigest, "approve");
+  const out = await f.publisher.advance(actor, updatedId);
+  assert.equal(out.status, "published");
+  assert.equal(f.calls.length, 2, "one more write, the version, and no second identity");
+  assert.deepEqual([f.calls[1]!.to, f.calls[1]!.data], [registry, "0xbeef"]);
+  assert.deepEqual(f.compiles.at(-1), { draftId: updatedId, agentId: "42", listingId: "7" });
+});
+
+test("only the account that published a listing through Agon can update it", async () => {
+  const f = await fixture();
+  await f.publisher.approve(actor, draftId, f.setup.termsDigest, "approve");
+  const first = await f.publisher.advance(actor, draftId);
+  const updated: ProviderDraftInput = { ...draft, outcome: "A clearer outcome" };
+  const updatedId = idOf(updated);
+  const stranger = `0x${"5".repeat(40)}` as const;
+  await f.draftStore.create(stranger, updatedId, updated);
+  await assert.rejects(f.publisher.setupVersion(stranger, updatedId, first.reference!), /published through Agon/);
+  await f.draftStore.create(actor, updatedId, updated);
+  await assert.rejects(f.publisher.setupVersion(actor, updatedId, `5042002:${registry}:99`), /published through Agon/);
 });
