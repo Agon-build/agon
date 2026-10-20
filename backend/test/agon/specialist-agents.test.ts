@@ -89,8 +89,8 @@ function setup(opts: { tags?: string[]; reply?: string } = {}) {
   const prompts: string[] = [];
   const app = createSpecialistRoutes({
     network, store,
-    sellers: { pitch: { payTo: `0x${"c1".repeat(20)}` as Address, settle: settler.settle }, scout: { payTo: `0x${"c2".repeat(20)}` as Address, settle: settler.settle } },
-    lookup: createMarketLookup({ fetchImpl: gammaFetch([gammaMarket()], opts.tags) }),
+    sellers: { pitch: { payTo: `0x${"c1".repeat(20)}` as Address, settle: settler.settle }, scout: { payTo: `0x${"c2".repeat(20)}` as Address, settle: settler.settle }, rules: { payTo: `0x${"c3".repeat(20)}` as Address, settle: settler.settle } },
+    lookup: createMarketLookup({ fetchImpl: gammaFetch([gammaMarket(), gammaMarket({ slug: "closed-one", conditionId: `0x${"e0".repeat(32)}`, closed: true }), gammaMarket({ slug: "rules-one", conditionId: `0x${"d0".repeat(32)}`, description: RULES, umaResolutionStatuses: `["proposed", "disputed"]` })], opts.tags) }),
     callModel: async (p) => { prompts.push(`${p.systemPrompt} ${p.userPrompt}`); return { text: opts.reply ?? '{"probability":0.6,"reasons":["Arsenal lead the table","Strong home record","Squad depth"]}' }; },
   });
   const fetchImpl = ((url: string, init?: RequestInit) => app.request(url, init)) as typeof fetch;
@@ -135,4 +135,73 @@ test("an agent without a wallet is not for sale, and a bad body is refused", asy
   const { app } = setup();
   assert.equal((await app.request("http://api.test/nobody", json({ market: EPL_SLUG }))).status, 404);
   assert.equal((await app.request("http://api.test/pitch", json({ wrong: 1 }))).status, 400);
+});
+
+const RULES = `This market will resolve to "Yes" if the United States and Ukraine enact or sign any deal between March 31 and April 30, 2025, 11:59 PM ET, that explicitly involves Ukrainian minerals.
+
+Announcements of an agreement will not alone qualify for a "Yes" resolution.
+
+The resolution source for this market will be official information from the governments of the US and Ukraine and a consensus of credible reporting.`;
+
+test("the lookup keeps the full rules and the market's proposal and dispute history", async () => {
+  const lookup = createMarketLookup({ fetchImpl: gammaFetch([
+    gammaMarket({ description: "x".repeat(7_000), umaResolutionStatuses: '["proposed", "disputed"]' }),
+    gammaMarket({ slug: "as-array", conditionId: `0x${"a0".repeat(32)}`, umaResolutionStatuses: ["proposed"] }),
+    gammaMarket({ slug: "broken", conditionId: `0x${"b0".repeat(32)}`, umaResolutionStatuses: "not json" }),
+  ]) });
+  const m = await lookup(EPL_SLUG);
+  assert.ok(m.ok);
+  assert.equal(m.market.description.length, 7_000);
+  assert.deepEqual(m.market.umaStatuses, ["proposed", "disputed"]);
+  const arr = await lookup("as-array");
+  assert.ok(arr.ok && arr.market.umaStatuses.length === 1);
+  const broken = await lookup("broken");
+  assert.ok(broken.ok && broken.market.umaStatuses.length === 0);
+});
+
+test("rules check sells quote-checked traps and a dispute risk, and never sees the price", async () => {
+  const reply = JSON.stringify({
+    decides: { source: { text: "US and Ukraine governments and credible reporting", quote: "official information from the governments of the US and Ukraine" }, cutoff: { text: "30 April 2025, 11:59 PM ET", quote: "April 30, 2025, 11:59 PM ET" }, threshold: null },
+    traps: [
+      { category: "definition", kind: "ambiguous", quote: "enact or sign any deal", explain: "A framework deal may or may not count as signed." },
+      { category: "source", kind: "ambiguous", quote: "decided by Polymarket staff", explain: "Invented." },
+    ],
+  });
+  const { fetchImpl, settler, prompts } = setup({ reply });
+  const out = await buyExact({ url: "http://api.test/rules", init: json({ market: "rules-one" }), network, maxAmount: SPECIALISTS.rules.price, signerFor: () => localSigner(buyer), fetchImpl });
+  assert.ok(out.ok, show(out));
+  assert.equal(out.amount, 250_000n);
+  const data = out.data as { agent: string; risk: string; traps: { quote: string }[]; decides: { cutoff: unknown }; signals: { disputes: number }; market: Record<string, unknown> };
+  assert.equal(data.agent, "Rules Check");
+  assert.deepEqual(data.traps.map((t) => t.quote), ["enact or sign any deal"]);
+  assert.equal(data.risk, "high");
+  assert.equal(data.signals.disputes, 1);
+  assert.ok(data.decides.cutoff);
+  assert.ok(!("crowdBps" in data.market), "no price in the answer");
+  assert.doesNotMatch(prompts[0]!, /63\.5|0\.635/, "no price in the prompt");
+  assert.equal(settler.calls.length, 1);
+});
+
+test("rules check refuses a closed market before any money moves", async () => {
+  const { fetchImpl, settler } = setup();
+  const out = await buyExact({ url: "http://api.test/rules", init: json({ market: "closed-one" }), network, maxAmount: SPECIALISTS.rules.price, signerFor: () => localSigner(buyer), fetchImpl });
+  assert.ok(!out.ok);
+  assert.equal(settler.calls.length, 0);
+});
+
+test("the rules check endpoint answers the market-rules test with its own reading, free and without payment", async () => {
+  const reply = JSON.stringify({ traps: [{ category: "definition", kind: "ambiguous", quote: "wears a suit", explain: "Suit is not defined." }] });
+  const { app, settler } = setup({ reply });
+  const res = await app.request("http://api.test/rules", json({
+    protocol: "agon-playground/1", category: "verification",
+    task: { id: "market-rules", title: "Market rules", adversarialPrompt: "Read the rules.", capability: "market rules review" },
+    input: { question: "Will Zelensky wear suit?", rules: "Yes if Volodymyr Zelenskyy wears a suit while meeting Trump. The resolution source will be a consensus of credible reporting." },
+    scope: { listingReference: "public-test", listingVersion: "0" },
+  }));
+  assert.equal(res.status, 200);
+  const body = await res.json() as { externalWrites: boolean; output: { risk: string; traps: { quote: string }[] } };
+  assert.equal(body.externalWrites, false);
+  assert.equal(body.output.risk, "high");
+  assert.deepEqual(body.output.traps.map((t) => t.quote), ["wears a suit"]);
+  assert.equal(settler.calls.length, 0);
 });

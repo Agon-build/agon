@@ -60,3 +60,22 @@ test("minor: the mainnet wallet stays in view through paying and the answer", ()
   assert.equal(mainnetInView({ kind: "refused", network: "arc" }), true);
   assert.equal(mainnetInView({ kind: "idle" }), false);
 });
+
+test("a Rules Check answer reads as dispute risk, what decides it and each trap with its quote", () => {
+  const view = answerView({
+    agent: "Rules Check", market: { question: "Will the Democratic Party control the Senate?", url: "https://polymarket.com/event/x/y" }, risk: "medium",
+    decides: { source: { text: "State electoral authorities and Congress", quote: "official information from relevant state electoral authorities" }, cutoff: null, threshold: { text: "A majority of voting seats", quote: "wins a majority of the chamber’s voting seats" } },
+    traps: [
+      { category: "definition", kind: "fine_print", quote: "wins half of the voting seats and holds the Vice Presidency", explain: "A 50-50 split goes to the Vice President's party." },
+      { category: "fallback", kind: "ambiguous", quote: "first selected President Pro Tempore", explain: "If still unclear, a different test decides." },
+    ],
+    signals: { source: "mixed", discretion: false, fallback: true, timezone: true, disputes: 0 }, model: "m",
+  });
+  assert.ok(view && view.kind === "rules");
+  assert.equal(view.riskText, "Some dispute risk");
+  assert.deepEqual(view.decides.map((d) => d.label), ["Decided by", "The line"]);
+  assert.deepEqual(view.traps.map((t) => t.label), ["Definition · Fine print", "If it is unclear · Open to argument"]);
+  assert.equal(view.traps[1]!.quote, "first selected President Pro Tempore");
+  assert.equal(view.marketQuestion, "Will the Democratic Party control the Senate?");
+  assert.deepEqual(answerView({ risk: "maybe", traps: [] })!.kind, "rows");
+});

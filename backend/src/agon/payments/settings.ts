@@ -3,6 +3,10 @@ import type { Address } from "viem";
 
 import { agonNetwork, type AgonNetwork } from "../network.ts";
 
+/// The specialist agents that can have a seller wallet (agents/routes.ts SPECIALISTS).
+const SPECIALIST_KEYS = ["pitch", "scout", "rules"] as const;
+type SpecialistKey = (typeof SPECIALIST_KEYS)[number];
+
 export const HIREABLE_HOUSE_KEYS = ["atlas", "vesper", "kestrel", "drift"] as const;
 
 export type WalletHandle = { walletId: string; address: Address };
@@ -13,8 +17,8 @@ export type PaymentSettings = {
   lead: WalletHandle;
   standin: WalletHandle | null;
   houseSellers: Record<string, WalletHandle>;
-  /** Pitch and Scout, the specialist agents Agon sells per call; empty when not set up. */
-  specialistSellers: Partial<Record<"pitch" | "scout", WalletHandle>>;
+  /** Pitch, Scout and Rules Check, the specialist agents Agon sells per call; empty when not set up. */
+  specialistSellers: Partial<Record<SpecialistKey, WalletHandle>>;
   leadPrice: bigint;
   subHireBudget: bigint;
   houseAsk: bigint;
@@ -91,15 +95,15 @@ export function resolvePaymentSettings(env: Record<string, string | undefined>):
     problems.push(`AGON_HOUSE_SELLER_WALLETS must map ${HIREABLE_HOUSE_KEYS.join(", ")} to wallet handles`);
   }
 
-  const specialistSellers: Partial<Record<"pitch" | "scout", WalletHandle>> = {};
+  const specialistSellers: Partial<Record<SpecialistKey, WalletHandle>> = {};
   try {
     const raw = z.record(handleShape).parse(JSON.parse(env.AGON_SPECIALIST_WALLETS ?? "{}"));
     for (const [key, value] of Object.entries(raw)) {
-      if (key !== "pitch" && key !== "scout") throw new Error(key);
-      specialistSellers[key] = { walletId: value.walletId, address: value.address.toLowerCase() as Address };
+      if (!SPECIALIST_KEYS.includes(key as SpecialistKey)) throw new Error(key);
+      specialistSellers[key as SpecialistKey] = { walletId: value.walletId, address: value.address.toLowerCase() as Address };
     }
   } catch {
-    problems.push("AGON_SPECIALIST_WALLETS must map pitch and scout to wallet handles");
+    problems.push("AGON_SPECIALIST_WALLETS must map pitch, scout or rules to wallet handles");
   }
 
   let routingFeeBps = 150;

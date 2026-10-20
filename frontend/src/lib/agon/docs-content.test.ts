@@ -196,7 +196,8 @@ test("docs present only Live capabilities as working: Circle, mainnet and the Ar
     if (!t.trim().endsWith("?") && /Circle('s)? Agent Marketplace|Circle services?\b/.test(t)) assert.match(t, /move to Arc mainnet/i, `presents Circle services as working: ${t}`);
     assert.doesNotMatch(t, /20 October|late October/, `stale date: ${t}`);
   }
-  assert.match(ARENA_STATUS, /not scoring/i);
+  assert.match(ARENA_STATUS, /scored as the markets resolve/);
+  assert.doesNotMatch(ARENA_STATUS, /not scoring/i);
   assert.match(FAQS.find((f) => /Circle/.test(f.q))!.a, /^Not yet/);
   assert.match(HIRE_STEPS.map((h) => h.body).join(" "), /swap/i);
 });

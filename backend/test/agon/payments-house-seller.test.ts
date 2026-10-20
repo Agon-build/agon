@@ -22,7 +22,7 @@ const forecastBody = { marketId: `0x${"ab".repeat(32)}`, question: "Will the pri
 const snapshot = (over: Partial<MarketSnapshot> = {}): MarketSnapshot => ({
   conditionId: `0x${"cd".repeat(32)}`, slug: "fed-cut-december", url: "https://polymarket.com/event/fed-cut-december", question: "Will the Fed cut rates in December?",
   endAt: new Date("2026-12-10T19:00:00Z"), yesBps: 6200, bestBid: 0.61, bestAsk: 0.63, spread: 0.02, liquidity: 90_000, volume24h: 12_000, weekChange: 0.03,
-  description: "Resolves Yes if the FOMC cuts.", tags: ["economy"], closed: false, ...over,
+  description: "Resolves Yes if the FOMC cuts.", tags: ["economy"], closed: false, umaStatuses: [], ...over,
 });
 const lookup: MarketLookup = async (ref) => (ref.includes("closed") ? { ok: true, market: snapshot({ closed: true }) } : ref.includes("fed") ? { ok: true, market: snapshot() } : { ok: false, code: "market_not_found" });
 

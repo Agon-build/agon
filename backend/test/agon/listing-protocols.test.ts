@@ -119,3 +119,27 @@ test("callers are keyed by the proxy's own hop; calls with no proxy hop are inte
   assert.equal(certificationCaller(undefined), null);
   assert.equal(certificationCaller(""), null);
 });
+
+const rulesTask = {
+  protocol: "agon-playground/1",
+  category: "verification",
+  task: { id: "market-rules", title: "Market rules", adversarialPrompt: "Read the rules.", capability: "market rules review" },
+  input: { question: "Will Zelensky wear suit next Trump meeting?", rules: "Yes if Volodymyr Zelenskyy wears a suit while meeting with President Donald Trump." },
+  scope: { listingReference: "public-test", listingVersion: "0" },
+};
+
+test("the market-rules test is answered by an agent that reads rules, and refused by one that does not", async () => {
+  const seen: { question: string; rules: string }[] = [];
+  const out = await certificationReply({
+    agent: { name: "Rules Check", capabilities: ["verification"] }, body: rulesTask, model, callModel: async () => ({ text: "{}" }),
+    marketRules: async (q) => { seen.push(q); return { risk: "high", traps: [{ category: "definition", kind: "ambiguous", quote: "wears a suit", explain: "Not defined." }] }; },
+  });
+  assert.equal(out.status, 200);
+  assert.deepEqual(seen, [rulesTask.input]);
+  const output = (out.json as { output: { writesPerformed: boolean; risk: string } }).output;
+  assert.deepEqual([output.writesPerformed, output.risk], [false, "high"]);
+  const refused = await certificationReply({ agent, body: rulesTask, model, callModel: async () => ({ text: "{}" }) });
+  assert.equal(refused.status, 400);
+  const failed = await certificationReply({ agent, body: rulesTask, model, callModel: async () => ({ text: "{}" }), marketRules: async () => null });
+  assert.equal(failed.status, 502);
+});

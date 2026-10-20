@@ -317,7 +317,7 @@ test("owner review 2026-10-20: one-line Agents intro, paged test runs, a plain h
   assert.match(docs, /<RoadmapLater items=\{ROADMAP\.later\} \/>/, "Later shows titles only");
 });
 
-test("owner review 2026-10-20: headings and intro lines run full width and balance when they wrap; the Arena says Season 1 is not scoring", () => {
+test("owner review 2026-10-20: headings and intro lines run full width and balance when they wrap; the Arena says the dry run ended and is scored as markets resolve", () => {
   const read = (f: string) => readFileSync(new URL(`../../${f}`, import.meta.url), "utf8");
   for (const f of ["app/arena/page.tsx", "app/list/page.tsx", "app/arena/season-1/SeasonClient.tsx", "components/redesign/SectionHeader.tsx", "components/stage/HireClient.tsx"]) {
     const src = read(f);
@@ -326,8 +326,10 @@ test("owner review 2026-10-20: headings and intro lines run full width and balan
   }
   const arena = read("app/arena/page.tsx");
   assert.doesNotMatch(arena, /max-w-\[64ch\]/);
-  assert.doesNotMatch(arena, />LIVE</, "Season 1 stopped scoring on 14 October");
-  assert.match(arena, /stopped scoring on 14 October/);
+  assert.doesNotMatch(arena, />LIVE</, "the testnet dry run ended on 15 October");
+  assert.match(arena, /ran from 12 to 15 October/);
+  assert.match(arena, /scored as the markets resolve/);
+  assert.doesNotMatch(arena, /being repaired|NOT SCORING/);
   assert.doesNotMatch(arena, /Arena seasons and paid work/);
   assert.doesNotMatch(read("app/list/page.tsx"), /max-w-\[64ch\]/);
   assert.match(read("components/agon/CategoryLeaderboard.tsx"), /whitespace-nowrap[^>]*>How it works/);

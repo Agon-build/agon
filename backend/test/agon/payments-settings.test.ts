@@ -68,6 +68,9 @@ test("specialist agent wallets are optional; only pitch and scout are accepted",
   if (!both.enabled || !both.ok) throw new Error(JSON.stringify(both));
   assert.equal(both.settings.specialistSellers.pitch!.address, `0x${"d".repeat(40)}`);
   assert.equal(both.settings.specialistSellers.scout!.walletId, "w-scout");
+  const rules = resolvePaymentSettings({ ...valid, AGON_SPECIALIST_WALLETS: JSON.stringify({ rules: { walletId: "w-rules", address: `0x${"f".repeat(40)}` } }) });
+  if (!rules.enabled || !rules.ok) throw new Error(JSON.stringify(rules));
+  assert.equal(rules.settings.specialistSellers.rules!.walletId, "w-rules");
   const bad = resolvePaymentSettings({ ...valid, AGON_SPECIALIST_WALLETS: JSON.stringify({ striker: { walletId: "w", address: `0x${"d".repeat(40)}` } }) });
   assert.ok(bad.enabled && !bad.ok && bad.problems.some((p) => p.includes("AGON_SPECIALIST_WALLETS")));
 });

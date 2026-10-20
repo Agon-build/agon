@@ -34,7 +34,30 @@ export function inputRows(input: Record<string, unknown>): { label: string; valu
   return Object.entries(input).map(([label, v]) => ({ label, value: typeof v === "string" ? v : JSON.stringify(v) }));
 }
 
-export type AnswerView = { kind: "text"; text: string } | { kind: "rows"; rows: { label: string; value: string }[] };
+export type RulesAnswerView = {
+  kind: "rules"; risk: "low" | "medium" | "high"; riskText: string; marketQuestion: string | null; marketUrl: string | null;
+  decides: { label: string; text: string; quote: string }[]; traps: { label: string; explain: string; quote: string }[];
+};
+export type AnswerView = { kind: "text"; text: string } | { kind: "rows"; rows: { label: string; value: string }[] } | RulesAnswerView;
+
+const RISK_TEXT = { low: "Low dispute risk", medium: "Some dispute risk", high: "High dispute risk" } as const;
+const DECIDES_LABEL = { source: "Decided by", cutoff: "Cutoff", threshold: "The line" } as const;
+const TRAP_LABEL: Record<string, string> = { definition: "Definition", timing: "Timing", source: "Source", threshold: "The line", fallback: "If it is unclear", discretion: "Judgment call" };
+const str = (v: unknown) => (typeof v === "string" ? v : "");
+
+/// A Rules Check answer: dispute risk, what decides the market, and each trap with the words it quotes.
+function rulesView(r: Record<string, unknown>): RulesAnswerView | null {
+  if ((r.risk !== "low" && r.risk !== "medium" && r.risk !== "high") || !Array.isArray(r.traps)) return null;
+  const decides = (r.decides ?? {}) as Record<string, { text?: unknown; quote?: unknown } | null>;
+  const market = (r.market ?? {}) as { question?: unknown; url?: unknown };
+  return {
+    kind: "rules", risk: r.risk, riskText: RISK_TEXT[r.risk], marketQuestion: str(market.question) || null, marketUrl: str(market.url) || null,
+    decides: (["source", "cutoff", "threshold"] as const).flatMap((k) => (decides[k] && str(decides[k]!.text) ? [{ label: DECIDES_LABEL[k], text: str(decides[k]!.text), quote: str(decides[k]!.quote) }] : [])),
+    traps: (r.traps as Record<string, unknown>[]).filter((t) => t && str(t.quote)).map((t) => ({
+      label: `${TRAP_LABEL[str(t.category)] ?? "Rule"} · ${t.kind === "ambiguous" ? "Open to argument" : "Fine print"}`, explain: str(t.explain), quote: str(t.quote),
+    })),
+  };
+}
 
 /// What a routed service returned, readable: text as text, a flat object as rows, a file by type and size.
 export function answerView(result: unknown): AnswerView | null {
@@ -45,6 +68,8 @@ export function answerView(result: unknown): AnswerView | null {
   if (typeof r.contentType === "string" && typeof r.text === "string") return { kind: "text", text: r.text };
   if (typeof r.contentType === "string" && typeof r.bytes === "number") return { kind: "text", text: `The service sent a file: ${r.contentType}, ${r.bytes} bytes.` };
   if (Array.isArray(result)) return { kind: "text", text: JSON.stringify(result, null, 1) };
+  const rules = rulesView(result as Record<string, unknown>);
+  if (rules) return rules;
   return { kind: "rows", rows: inputRows(result as Record<string, unknown>) };
 }
 

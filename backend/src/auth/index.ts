@@ -939,6 +939,7 @@ if (agonPayments) {
       log: (m) => console.warn(`[stage] ${m}`),
       check: () => checkStage({
         store: monitorStore, wallets: watched, balanceOf: agonPayments.balanceOf, siteUrl: stage.settings.siteUrl, now: () => new Date(),
+        seasonEndsAt: agonSeason?.season.endsAt ?? null,
         lastCommitAt: async () => {
           if (!agonSeason) return null;
           const rounds = await agonSeason.store.listRounds(agonSeason.season.seasonId, 12);

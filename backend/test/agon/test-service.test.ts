@@ -14,6 +14,8 @@ const listings: Record<string, TestableListing> = {
   "5042002:0xreg:2": { agentId: "42", categoryId: "6", listed: true, listingReference: "5042002:0xreg:2", manifestBody: manifest },
   "5042002:0xreg:3": { agentId: "43", categoryId: "3", listed: false, listingReference: "5042002:0xreg:3", manifestBody: manifest },
   "5042002:0xreg:4": { agentId: "44", categoryId: "3", listed: true, listingReference: "5042002:0xreg:4", manifestBody: null },
+  "5042002:0xreg:6": { agentId: "46", categoryId: "8", listed: true, listingReference: "5042002:0xreg:6", manifestBody: { ...manifest, invocation: { requestSchema: { type: "object", properties: { market: { type: "string" } }, required: ["market"] } } } },
+  "5042002:0xreg:7": { agentId: "47", categoryId: "8", listed: true, listingReference: "5042002:0xreg:7", manifestBody: manifest },
   "5042002:0xreg:5": { agentId: "45", categoryId: "3", listed: true, listingReference: "5042002:0xreg:5", manifestBody: { service: { name: "No endpoint" } } },
 };
 
@@ -115,4 +117,11 @@ test("an Agon check is recorded as agon_check with no runner and does not use up
 test("short addresses keep the first and last four hex digits", () => {
   assert.equal(shortAddress("0x1234567890abcdef1234567890abcdef12345678"), "0x1234…5678");
   assert.equal(shortAddress(null), null);
+});
+
+test("a Verification agent that takes a market is tested on market rules; one that does not keeps the manifest test", async () => {
+  const { service, calls } = setup();
+  await service.runAgonCheck("5042002:0xreg:6");
+  await service.runAgonCheck("5042002:0xreg:7");
+  assert.deepEqual(calls.map((c) => c.family), ["market-rules", undefined]);
 });

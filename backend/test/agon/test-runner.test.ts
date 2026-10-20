@@ -45,3 +45,15 @@ test("a private address is never called, and untestable categories return null",
   assert.equal(await runAgentTest({ endpoint: "https://a.example", categoryId: "6", variant: 0, ctx, deps: deps(fetch) }), null);
   assert.ok(buildTestCase("3", 0, ctx));
 });
+
+test("a test family is sent as its own task with the market and its rules", async () => {
+  let body: { task: { id: string }; input: { question: string; rules: string } } | null = null;
+  const out = await runAgentTest({ endpoint: "https://agent.example/test", categoryId: "8", family: "market-rules", variant: 1, ctx, deps: deps((async (_url: string, init: RequestInit) => {
+    body = JSON.parse(String(init.body));
+    return reply({ risk: "high", traps: [] });
+  }) as typeof fetch) });
+  assert.ok(out);
+  assert.equal(body!.task.id, "market-rules");
+  assert.match(body!.input.question, /mineral/i);
+  assert.equal(out.taskId, "market-rules");
+});

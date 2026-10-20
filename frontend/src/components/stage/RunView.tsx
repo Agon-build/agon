@@ -1,4 +1,4 @@
-import { answerView, type AnswerView } from "@/lib/agon/route-view";
+import { answerView, type AnswerView, type RulesAnswerView } from "@/lib/agon/route-view";
 import type { LiveView } from "@/lib/agon/stage-types";
 import { failureText } from "@/lib/agon/stage-copy";
 import { isTerminal, ledgerRows, moneyFlow, workingNotice } from "@/lib/agon/stage-view";
@@ -17,7 +17,50 @@ function Notice({ eyebrow, title, body }: { eyebrow: string; title: string; body
   );
 }
 
+function RulesAnswer({ view }: { view: RulesAnswerView }) {
+  return (
+    <section aria-labelledby="answer-heading" className="stage-print border-y border-[color:var(--hairline-strong)] py-8">
+      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Delivered</p>
+      <h2 id="answer-heading" className="mt-3 font-display text-3xl uppercase leading-[.95] tracking-[-.03em] text-ink sm:text-4xl">The rules</h2>
+      {view.marketQuestion ? (
+        <p className="mt-4 break-words text-sm leading-6 text-ink-2">
+          {view.marketUrl ? <a href={view.marketUrl} target="_blank" rel="noreferrer" className="underline decoration-[color:var(--hairline-strong)] underline-offset-4 hover:text-ink">{view.marketQuestion}</a> : view.marketQuestion}
+        </p>
+      ) : null}
+      <p className="mt-5 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.14em] text-ink">
+        <span aria-hidden className={`inline-block h-2 w-2 ${view.risk === "low" ? "bg-[color:var(--ok)]" : "bg-[color:var(--warn)]"}`} />
+        {view.riskText}
+      </p>
+      {view.decides.length > 0 ? (
+        <dl className="mt-5 divide-y divide-[color:var(--hairline)] border-y border-[color:var(--hairline)]">
+          {view.decides.map((d) => (
+            <div key={d.label} className="grid gap-1 py-2.5 sm:grid-cols-[minmax(0,8rem)_minmax(0,1fr)] sm:gap-4">
+              <dt className="font-mono text-[11px] uppercase tracking-[0.12em] text-ink-3">{d.label}</dt>
+              <dd className="break-words text-sm leading-6 text-ink">{d.text}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+      {view.traps.length > 0 ? (
+        <ol className="mt-6 space-y-5">
+          {view.traps.map((t, i) => (
+            <li key={i} className="min-w-0">
+              <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">{t.label}</p>
+              <p className="mt-1.5 break-words text-sm leading-6 text-ink">{t.explain}</p>
+              <blockquote className="mt-2 break-words border-l-2 border-accent pl-3 font-mono text-[12px] leading-5 text-ink-2">“{t.quote}”</blockquote>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="mt-6 text-sm leading-6 text-ink-2">No traps found in these rules.</p>
+      )}
+      <p className="mt-6 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">Quotes checked word for word against the rules</p>
+    </section>
+  );
+}
+
 function RoutedAnswer({ view }: { view: AnswerView }) {
+  if (view.kind === "rules") return <RulesAnswer view={view} />;
   return (
     <section aria-labelledby="answer-heading" className="stage-print border-y border-[color:var(--hairline-strong)] py-8">
       <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Delivered</p>

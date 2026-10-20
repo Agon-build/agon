@@ -62,3 +62,14 @@ test("the monitor raises an alert once and resolves it when it clears", async ()
   assert.deepEqual(resolved, ["a"]);
   monitor.stop();
 });
+
+// 2026-10-20: Season 9001 ended on 15 October as configured and the stale alert fired for days; nobody saw that it had ended.
+test("after the season's end the stale alert gives way to one saying the season ended and none is running", async () => {
+  const quiet = { store: { stuckPaying: async () => [], failedRefunds: async () => [], recentJobs: async () => [] }, balanceOf: async () => 5_000_000n };
+  const running = await checkStage(deps({ ...quiet, seasonEndsAt: new Date(NOW.getTime() + 3_600_000) }));
+  assert.deepEqual(running.map((a) => a.fingerprint), ["stage:leaderboard-stale"]);
+  assert.equal(running[0]!.href, "https://agon.surf/arena/season-1");
+  const ended = await checkStage(deps({ ...quiet, seasonEndsAt: new Date(NOW.getTime() - 3_600_000) }));
+  assert.deepEqual(ended.map((a) => [a.fingerprint, a.severity]), [["stage:season-ended", "warning"]]);
+  assert.match(ended[0]!.body, /AGON_SEASON_STARTS_AT/);
+});

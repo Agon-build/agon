@@ -1,5 +1,5 @@
 import { CERTIFY_TIMEOUT_MS, CHECK_MAX_BODY_BYTES, cappedFetch } from "../listing/endpoint-check.ts";
-import { buildTestCase, scoreAnswer } from "./tasks.ts";
+import { buildTestCase, scoreAnswer, type TestFamily } from "./tasks.ts";
 
 export type TestRunOutcome = {
   taskId: string;
@@ -23,11 +23,13 @@ const CATEGORY_SLUGS: Record<string, string> = { "1": "research", "3": "analysis
 export async function runAgentTest(input: {
   endpoint: string;
   categoryId: string;
+  /** The category's alternative test, when the agent declares the input it needs. */
+  family?: TestFamily;
   variant: number;
   ctx: { arcChainId: number; arcBlock: bigint };
   deps: TestRunDeps;
 }): Promise<TestRunOutcome | null> {
-  const test = buildTestCase(input.categoryId, input.variant, { arcBlock: input.ctx.arcBlock });
+  const test = buildTestCase(input.categoryId, input.variant, { arcBlock: input.ctx.arcBlock, family: input.family });
   if (!test) return null;
   const now = input.deps.now ?? Date.now;
   const started = now();

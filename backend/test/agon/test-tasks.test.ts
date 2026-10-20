@@ -77,3 +77,33 @@ test("every score comes with the rules it was checked against, so a person can s
   assert.deepEqual(out.checks.map((k) => [k.points, k.max]), [[50, 50], [40, 40], [10, 10]]);
   assert.equal(out.checks.reduce((s, k) => s + k.points, 0), out.score);
 });
+
+const MARKET_RULES = { family: "market-rules" as const };
+
+test("Market rules: a Verification agent that takes a market gets four real markets, others keep their test", () => {
+  const cases = [0, 1, 2, 3].map((v) => buildTestCase("8", v, MARKET_RULES)!);
+  assert.deepEqual(cases.map((c) => c.taskId), ["market-rules", "market-rules", "market-rules", "market-rules"]);
+  assert.equal(new Set(cases.map((c) => (c.input as { question: string }).question)).size, 4);
+  assert.ok(cases.every((c) => (c.input as { rules: string }).rules.length > 200));
+  assert.equal(buildTestCase("8", 0)!.taskId, "manifest-anchor");
+  assert.equal(buildTestCase("3", 0, MARKET_RULES)!.taskId, "evidence-under-pressure");
+});
+
+test("Market rules: the known trap, quotes found in the rules and a fair risk earn the points", () => {
+  const ctx = { arcChainId: 5042002, arcBlock: 1n };
+  const suit = buildTestCase("8", 0, MARKET_RULES)!;
+  const good = { risk: "high", traps: [{ category: "definition", kind: "ambiguous", quote: "wears a suit", explain: "Suit is not defined." }] };
+  assert.equal(scoreAnswer(suit, good, ctx).score, 100);
+  const invented = { risk: "high", traps: [{ category: "definition", kind: "ambiguous", quote: "a suit means a two piece business suit", explain: "Invented." }] };
+  const scored = scoreAnswer(suit, invented, ctx);
+  assert.equal(scored.passed, false);
+  assert.ok(scored.notes.some((n) => n.includes("word for word")));
+  assert.equal(scoreAnswer(suit, { risk: "low", traps: good.traps }, ctx).score, 75);
+  const control = buildTestCase("8", 3, MARKET_RULES)!;
+  const calm = { risk: "medium", traps: [{ category: "threshold", kind: "fine_print", quote: "A tie in the number of minutes will resolve to \"No\".", explain: "A tie counts as No." }] };
+  assert.equal(scoreAnswer(control, calm, ctx).score, 100);
+  assert.equal(scoreAnswer(control, { ...calm, risk: "high" }, ctx).score, 75);
+  assert.equal(scoreAnswer(suit, "not an object", ctx).score, 0);
+  const titled = { risk: "high", traps: [{ category: "timing", kind: "ambiguous", quote: "Will Zelensky wear suit next Trump meeting?", explain: "Title says next." }] };
+  assert.equal(scoreAnswer(suit, titled, ctx).checks.find((c) => c.label.includes("word for word"))!.points, 30);
+});

@@ -1,7 +1,7 @@
 import { testEndpointFromManifest } from "../manifest-derived-provider.ts";
 import type { TestRunDeps, TestRunOutcome, runAgentTest } from "./runner.ts";
 import type { NewTestResult, TestLimits, TestResult, TestResultsStore } from "./results-store.ts";
-import { buildTestCase, pickVariant } from "./tasks.ts";
+import { buildTestCase, pickVariant, type TestFamily } from "./tasks.ts";
 
 export const DEFAULT_TEST_LIMITS: TestLimits = { perUserHour: 5, perAgentDay: 20 };
 
@@ -9,6 +9,13 @@ export const DEFAULT_TEST_LIMITS: TestLimits = { perUserHour: 5, perAgentDay: 20
 export type TestableListing = { agentId: string; categoryId: string; listed: boolean; listingReference: string; manifestBody: unknown | null };
 
 /// A run as anyone may see it in lists: no input, no answer, runner shortened.
+/// A Verification agent whose service file takes a `market` reads market rules; the test follows the declared input.
+export function testFamilyFor(listing: Pick<TestableListing, "categoryId" | "manifestBody">): TestFamily | undefined {
+  if (listing.categoryId !== "8") return undefined;
+  const props = (listing.manifestBody as { invocation?: { requestSchema?: { properties?: unknown } } } | null)?.invocation?.requestSchema?.properties;
+  return props && typeof props === "object" && Object.hasOwn(props, "market") ? "market-rules" : undefined;
+}
+
 export type PublicTestView = {
   id: string;
   agentId: string;
@@ -74,7 +81,7 @@ export function createTestService(deps: {
     try {
       endpoint = testEndpointFromManifest(listing.manifestBody);
     } catch {
-      const test = buildTestCase(listing.categoryId, variant)!;
+      const test = buildTestCase(listing.categoryId, variant, { family: testFamilyFor(listing) })!;
       return { taskId: test.taskId, variant: test.variant, score: 0, passed: false, durationMs: 0, input: test.input, output: null, error: "manifest_endpoint_missing", notes: [], checks: [{ label: "The service file declares a test endpoint", points: 0, max: 100 }] };
     }
     let ctx: { arcChainId: number; arcBlock: bigint };
@@ -84,7 +91,7 @@ export function createTestService(deps: {
       // Without Agon's own reading the Research test cannot be scored fairly, so nothing is recorded.
       return "unavailable";
     }
-    const outcome = await deps.run({ endpoint, categoryId: listing.categoryId, variant, ctx, deps: deps.fetchDeps });
+    const outcome = await deps.run({ endpoint, categoryId: listing.categoryId, family: testFamilyFor(listing), variant, ctx, deps: deps.fetchDeps });
     return outcome ?? "unavailable";
   }
 

@@ -91,7 +91,7 @@ export const ARENA_FACTS: readonly { title: string; body: string }[] = [
   { title: "The rating", body: "Every agent has an overall rating and one per category. A category rank appears after 10 resolved forecasts there; the overall rank after 20." },
   { title: "Entry", body: "Entry is free for any ERC-8004 agent, through MCP or the API. Agon's own house agents are rated but cannot win prizes." },
 ];
-export const ARENA_STATUS = "Season 1 is in a dry run on Arc Testnet and is not scoring yet, so no Arena ratings are shown.";
+export const ARENA_STATUS = "The Season 1 dry run on Arc Testnet ran from 12 to 15 October; its forecasts are scored as the markets resolve.";
 
 export const LISTING_STEPS: readonly { title: string; body: string }[] = [
   { title: "Describe", body: "Name, logo, what it does, category, price per call, your x402 endpoint, and what it takes: one field per line as name: what it is, with the exact field names your endpoint reads." },

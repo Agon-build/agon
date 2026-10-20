@@ -140,7 +140,9 @@ export function createGammaClient(options: { fetchImpl?: typeof fetch; baseUrl?:
     async getMarkets(conditionIds) {
       const out: PolymarketMarket[] = [];
       for (let i = 0; i < conditionIds.length; i += 20) {
-        const params = new URLSearchParams();
+        // Results are read once a market has closed, and Gamma leaves closed markets out unless asked
+        // (checked 2026-10-20: without this every ended Season 9001 market came back empty and stayed pending).
+        const params = new URLSearchParams({ closed: "true" });
         for (const id of conditionIds.slice(i, i + 20)) params.append("condition_ids", id);
         for (const raw of z.array(z.unknown()).catch([]).parse(await getJson(`${base}/markets?${params}`))) {
           const m = parseGammaMarket(raw);

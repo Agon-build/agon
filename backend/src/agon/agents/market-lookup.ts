@@ -17,6 +17,8 @@ export type MarketSnapshot = {
   description: string;
   tags: string[];
   closed: boolean;
+  /** Polymarket's proposal and dispute rounds for this market, oldest first ("proposed", "disputed"). */
+  umaStatuses: string[];
 };
 export type LookupResult = { ok: true; market: MarketSnapshot } | { ok: false; code: "market_not_found" | "market_unavailable" | "not_yes_no" };
 export type MarketLookup = (ref: string) => Promise<LookupResult>;
@@ -55,8 +57,20 @@ const market = z.object({
   endDate: z.string(),
   closed: z.boolean().optional(),
   description: z.string().nullable().optional(),
+  umaResolutionStatuses: z.unknown().optional(),
   events: z.array(z.object({ slug: z.string() })).optional(),
 });
+
+/// Gamma sends the rounds as a JSON string, sometimes as an array; anything else reads as none.
+function umaStatuses(value: unknown): string[] {
+  let parsed = value;
+  try {
+    if (typeof value === "string") parsed = JSON.parse(value);
+  } catch {
+    return [];
+  }
+  return Array.isArray(parsed) ? parsed.filter((s): s is string => typeof s === "string") : [];
+}
 
 export function createMarketLookup(options: { fetchImpl?: typeof fetch; baseUrl?: string } = {}): MarketLookup {
   const fetchImpl = options.fetchImpl ?? fetch;
@@ -101,9 +115,11 @@ export function createMarketLookup(options: { fetchImpl?: typeof fetch; baseUrl?
           liquidity: m.data.liquidityNum ?? 0,
           volume24h: m.data.volume24hr ?? 0,
           weekChange: m.data.oneWeekPriceChange ?? 0,
-          description: (m.data.description ?? "").slice(0, 2_000),
+          // Long enough for the full rules: Rules Check quotes from them.
+          description: (m.data.description ?? "").slice(0, 8_000),
           tags,
           closed: m.data.closed ?? false,
+          umaStatuses: umaStatuses(m.data.umaResolutionStatuses),
         },
       };
     } catch {

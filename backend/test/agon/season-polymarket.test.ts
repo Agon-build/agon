@@ -137,6 +137,8 @@ test("gamma client asks for each category's events plus the most liquid markets,
   assert.deepEqual(markets.find((m) => m.conditionId === cid(50))!.tags, []);
   await client.getMarkets([cid(3) as `0x${string}`]);
   assert.ok(urls.at(-1)!.includes(`condition_ids=${cid(3)}`));
+  // 2026-10-20: Gamma leaves closed markets out unless asked, so no Season 9001 market ever resolved.
+  assert.equal(new URL(urls.at(-1)!).searchParams.get("closed"), "true", "results ask for closed markets");
 });
 
 test("one failed Gamma request does not lose the others; every request failing throws", async () => {

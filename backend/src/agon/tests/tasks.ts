@@ -1,11 +1,15 @@
 import { createHash } from "node:crypto";
 
+import { quoteFound } from "../agents/rules-check.ts";
 import { canonicalHash } from "../playground.ts";
+import { MARKET_RULES_SET } from "./market-rules-set.ts";
 
 export const TESTABLE_CATEGORIES = ["1", "3", "5", "7", "8"] as const;
 export const VARIANT_COUNT = 4;
 export const PASS_SCORE = 80;
 
+/// A category's alternative test, chosen by what the agent declares it takes (see tests/service.ts).
+export type TestFamily = "market-rules";
 export type TestCase = { categoryId: string; taskId: string; title: string; prompt: string; capability: string; variant: number; input: unknown; expected: unknown };
 type Ctx = { arcChainId: number; arcBlock: bigint };
 
@@ -54,8 +58,12 @@ const TXS = [
 ];
 const rotate = <T,>(xs: readonly T[], k: number, n: number) => Array.from({ length: n }, (_, i) => xs[(k + i) % xs.length]!);
 
-export function buildTestCase(categoryId: string, variant: number, _ctx: { arcBlock?: bigint } = {}): TestCase | null {
+export function buildTestCase(categoryId: string, variant: number, ctx: { arcBlock?: bigint; family?: TestFamily } = {}): TestCase | null {
   const v = ((variant % VARIANT_COUNT) + VARIANT_COUNT) % VARIANT_COUNT;
+  if (categoryId === "8" && ctx.family === "market-rules") {
+    const m = MARKET_RULES_SET[v % MARKET_RULES_SET.length]!;
+    return { categoryId, taskId: "market-rules", title: "Market rules", prompt: "Read this prediction market's resolution rules. Return risk (low, medium or high) and traps: each with category (definition, timing, source, threshold, fallback, discretion), kind (ambiguous or fine_print), a quote copied word for word from the rules, and explain.", capability: "market rules review", variant: v, input: { question: m.question, rules: m.rules }, expected: { slug: m.slug, categories: m.expected } };
+  }
   switch (categoryId) {
     case "3": {
       const set = EVIDENCE_SETS[v]!;
@@ -145,6 +153,24 @@ export function scoreAnswer(test: TestCase, output: unknown, ctx: Ctx): ScoredAn
         const ok = Boolean(g) && g!.accepted === want.accepted && (!want.accepted || String(g!.manifestHash).toLowerCase() === want.hash);
         return check(want.accepted ? `${id} is accepted with its exact canonical hash` : `${id} is flagged as unsafe`, ok, pts[i]!);
       }), extra);
+    }
+    case "market-rules": {
+      const ex = test.expected as { categories: string[] | null };
+      const { question, rules } = test.input as { question: string; rules: string };
+      const risk = typeof o.risk === "string" ? o.risk : "";
+      const shaped = ["low", "medium", "high"].includes(risk) && Array.isArray(o.traps);
+      const traps = list(o.traps).map((t) => rec(t)).filter(Boolean).map((t) => ({ category: String(t!.category), kind: String(t!.kind), quote: typeof t!.quote === "string" ? t!.quote : "" }));
+      const verified = traps.filter((t) => quoteFound(t.quote, `${question}
+${rules}`));
+      const caught = ex.categories
+        ? verified.some((t) => t.kind === "ambiguous" && ex.categories!.includes(t.category))
+        : verified.some((t) => /\btie\b/i.test(t.quote));
+      return finish([
+        check("The answer has a risk (low, medium or high) and a list of traps", shaped, 10),
+        { label: "Every trap quote is in the title or rules word for word", points: shaped ? Math.round(30 * (traps.length === 0 ? 1 : verified.length / traps.length)) : 0, max: 30 },
+        check(ex.categories ? `An ambiguous trap of the kind that was argued (${ex.categories.join(", ")}), quoted from the rules` : "The tie rule is caught, quoted from the rules", caught, 35),
+        check(ex.categories ? "Dispute risk is medium or high" : "Dispute risk is low or medium", ex.categories ? risk === "medium" || risk === "high" : risk === "low" || risk === "medium", 25),
+      ], extra);
     }
     default:
       return { score: 0, passed: false, notes: ["Unknown task."], checks: [] };
