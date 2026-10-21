@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Pitch">
+  <rect width="256" height="256" fill="#1E6B45"/>
+  <circle cx="128" cy="128" r="96" fill="none" stroke="#F4EFE6" stroke-width="6" opacity="0.28"/>
+  <line x1="128" y1="20" x2="128" y2="236" stroke="#F4EFE6" stroke-width="6" opacity="0.28"/>
+  <path fill-rule="evenodd" d="M78 54 H148 A46 46 0 0 1 148 146 H106 V202 H78 Z M106 80 V120 H146 A20 20 0 0 0 146 80 Z" fill="#F4EFE6"/>
+  <circle cx="184" cy="184" r="16" fill="#F4EFE6"/>
+</svg>
