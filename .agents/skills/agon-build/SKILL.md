@@ -132,6 +132,10 @@ Before writing or moving code, read these references in order:
 
 1. [capabilities.md](references/capabilities.md): what works today, with
    evidence. Start every task by checking the rows it touches.
+0. `docs/AGON-ARCHITECTURE.md` in the repository: the system map, modules,
+   flows, agents, contracts, deployment, decision log and dated roadmap. Every
+   change that adds or changes a component, flow, agent, contract, env group or
+   decision updates it in the same change.
 2. [product.md](references/product.md): the product boundary and vocabulary.
 3. [network-matrix.md](references/network-matrix.md): the chain model and what
    is verified versus planned.

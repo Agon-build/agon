@@ -199,3 +199,26 @@ test("hires list newest first with a receipt link each", () => {
     ["Will BTC close above 120k?", "Delivered", "0.30", "/r/0b9e0b4c-3c2f-4b0e-9d1a-2f5a6b7c8d9e"],
   ]);
 });
+
+import { seasonFromQuery, seasonStatus } from "./stage-view.ts";
+
+const SEASON = { seasonId: "9002", network: "Arc Testnet", commitsAddress: "0x", commitsUrl: "https://explorer.testnet.arc.io/address/0x", startsAt: "2026-10-21T12:00:00.000Z", endsAt: "2026-11-18T12:00:00.000Z", roundHours: 6, currentRound: null };
+
+test("a season reads as starting, running with its round, or ended, from its own dates", () => {
+  const before = seasonStatus(SEASON, Date.parse("2026-10-21T08:00:00Z"));
+  assert.deepEqual([before.state, before.label], ["upcoming", "Starts 21 October, 12:00 UTC"]);
+  assert.match(before.sentence, /Dry run 2 on Arc Testnet starts 21 October and runs to 18 November\./);
+  const during = seasonStatus({ ...SEASON, currentRound: "3" }, Date.parse("2026-10-22T07:00:00Z"));
+  assert.deepEqual([during.state, during.label], ["running", "Running · Round 4"]);
+  assert.match(during.sentence, /runs from 21 October to 18 November/);
+  const after = seasonStatus({ ...SEASON, seasonId: "9001", startsAt: "2026-10-12T00:00:45.000Z", endsAt: "2026-10-15T00:00:45.000Z" }, Date.parse("2026-10-20T00:00:00Z"));
+  assert.deepEqual([after.state, after.label, after.name], ["ended", "Ended", "Dry run 1"]);
+  assert.match(after.sentence, /ran from 12 October to 15 October, and its forecasts are scored as the markets resolve\./);
+});
+
+test("the season page takes a season from the link only when it is a plain number", () => {
+  assert.equal(seasonFromQuery("9001", "9002"), "9001");
+  assert.equal(seasonFromQuery(null, "9002"), "9002");
+  assert.equal(seasonFromQuery("../admin", "9002"), "9002");
+  assert.equal(seasonFromQuery("12345678901", "9002"), "9002");
+});

@@ -1,4 +1,4 @@
-import { SEASON_CATEGORY_TABS, type BargainStep, type HistoryItem, type LeaderboardResponse, type LeaderboardRow, type LivePhase, type RatingsResponse, type ReceiptNode, type SeasonEntry, type StageAnswer, type StageEvent, type StageEventKind } from "./stage-types.ts";
+import { SEASON_CATEGORY_TABS, type BargainStep, type HistoryItem, type LeaderboardResponse, type LeaderboardRow, type LivePhase, type RatingsResponse, type ReceiptNode, type SeasonEntry, type SeasonInfo, type StageAnswer, type StageEvent, type StageEventKind } from "./stage-types.ts";
 
 export type FlowStatus = "pending" | "settled" | "failed";
 export type FlowNode = { id: string; role: "lead" | "data" | "forecaster" | "refund"; label: string; sublabel: string; amount: string; status: FlowStatus; txUrl: string | null };
@@ -220,4 +220,29 @@ export function categoryHref(search: string, key: string): string {
   if (key === "overall") params.delete("category"); else params.set("category", key);
   const query = params.toString();
   return `/arena/season-1${query ? `?${query}` : ""}`;
+}
+
+/// Testnet dry runs are numbered from 9001 so Season 1 stays free for the mainnet start.
+const SEASON_NAMES: Record<string, string> = { "9001": "Dry run 1", "9002": "Dry run 2" };
+export const seasonName = (seasonId: string) => SEASON_NAMES[seasonId] ?? `Season ${seasonId}`;
+const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", timeZone: "UTC" });
+const clock = (iso: string) => new Date(iso).toISOString().slice(11, 16);
+
+/// Where a season stands, read from its own dates and round, never from copy.
+export function seasonStatus(s: SeasonInfo, nowMs: number): { state: "upcoming" | "running" | "ended"; name: string; label: string; sentence: string } {
+  const name = seasonName(s.seasonId);
+  const where = `${name} on ${s.network}`;
+  if (nowMs < Date.parse(s.startsAt)) {
+    return { state: "upcoming", name, label: `Starts ${day(s.startsAt)}, ${clock(s.startsAt)} UTC`, sentence: `${where} starts ${day(s.startsAt)} and runs to ${day(s.endsAt)}.` };
+  }
+  if (nowMs < Date.parse(s.endsAt)) {
+    const round = s.currentRound !== null ? ` · Round ${Number(s.currentRound) + 1}` : "";
+    return { state: "running", name, label: `Running${round}`, sentence: `${where} runs from ${day(s.startsAt)} to ${day(s.endsAt)}.` };
+  }
+  return { state: "ended", name, label: "Ended", sentence: `${where} ran from ${day(s.startsAt)} to ${day(s.endsAt)}, and its forecasts are scored as the markets resolve.` };
+}
+
+/// A season id from the page link, only as a plain number; anything else falls back to the configured season.
+export function seasonFromQuery(value: string | null | undefined, fallback: string): string {
+  return value && /^\d{1,10}$/.test(value) ? value : fallback;
 }

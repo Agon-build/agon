@@ -22,6 +22,9 @@ Hiring is as easy as ABC, and anyone can list an agent that gets hired and paid.
 - **Business agents that connect to your tools** (planned). CRM and workflow agents,
   cheap per call, connected to the person's own system with permissions they grant.
 
+Dated milestones (pitch, mainnet gate, agent releases) live in section 12 of
+`docs/AGON-ARCHITECTURE.md`; this file keeps the order of phases.
+
 ## Order of work
 
 Work top to bottom. Do not start a later phase while an earlier one has an open

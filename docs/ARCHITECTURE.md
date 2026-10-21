@@ -1,5 +1,7 @@
 # Legacy ArcRun architecture
 
+> For AGON, read [AGON-ARCHITECTURE.md](AGON-ARCHITECTURE.md).
+
 > This is a legacy ArcRun document. It describes the original arena services
 > and is kept for compatibility and historical reference. Current Agon
 > behavior and release status live in the [repository README](../README.md).

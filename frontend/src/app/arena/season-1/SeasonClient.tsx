@@ -6,7 +6,7 @@ import { StageShell } from "@/components/stage/StageShell";
 import { useNow } from "@/components/stage/useNow";
 import { AGON_SEASON_ID, getLeaderboard, getRounds, getSeason, StageApiError } from "@/lib/agon/stage";
 import { SEASON_CATEGORY_TABS, type LeaderboardResponse, type SeasonCategoryKey, type SeasonInfo, type SeasonRoundSummary } from "@/lib/agon/stage-types";
-import { beatsMarketText, boardNotice, categoryHref, explorerBase, shortHash, timeAgo } from "@/lib/agon/stage-view";
+import { beatsMarketText, boardNotice, categoryHref, explorerBase, seasonFromQuery, seasonName, shortHash, timeAgo } from "@/lib/agon/stage-view";
 
 const isBenchmark = (name: string) => name.toLowerCase().includes("market copy");
 const signed = (n: number) => `${n > 0 ? "+" : n < 0 ? "−" : ""}${Math.abs(n).toFixed(3)}`;
@@ -16,6 +16,7 @@ export function SeasonClient() {
   const router = useRouter();
   const params = useSearchParams();
   const initial = params?.get("category");
+  const seasonId = seasonFromQuery(params?.get("season"), AGON_SEASON_ID);
   const [tab, setTab] = useState<"overall" | SeasonCategoryKey>(SEASON_CATEGORY_TABS.find((t) => t.key === initial)?.key ?? "overall");
   const [board, setBoard] = useState<LeaderboardResponse | null>(null);
   const [season, setSeason] = useState<SeasonInfo | null>(null);
@@ -25,14 +26,14 @@ export function SeasonClient() {
   useEffect(() => {
     let stopped = false;
     const load = () => {
-      Promise.all([getLeaderboard(AGON_SEASON_ID, tab), getSeason(AGON_SEASON_ID), getRounds(AGON_SEASON_ID)])
+      Promise.all([getLeaderboard(seasonId, tab), getSeason(seasonId), getRounds(seasonId)])
         .then(([b, s, r]) => { if (!stopped) { setBoard(b); setSeason(s); setRounds(r.rounds); setError(null); } })
         .catch((e) => { if (!stopped) setError(e instanceof StageApiError ? e.code : "network_unavailable"); });
     };
     load();
     const t = window.setInterval(load, 60_000);
     return () => { stopped = true; window.clearInterval(t); };
-  }, [tab]);
+  }, [tab, seasonId]);
 
   const explorer = season ? explorerBase(season.commitsUrl) : null;
   const stale = board?.lastCommitAt ? now - Date.parse(board.lastCommitAt) > 6 * 3_600_000 : false;
@@ -44,7 +45,7 @@ export function SeasonClient() {
       <div className="mx-auto max-w-[1536px] px-4 pb-24 pt-8 sm:px-6">
         <header className="grid gap-8 border-b border-[color:var(--hairline-strong)] pb-10 lg:grid-cols-[1.1fr_.9fr] lg:items-end">
           <div>
-            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Arena · Season 1 · Polymarket forecasting</p>
+            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Arena · {seasonName(seasonId)} · Polymarket forecasting</p>
             <h1 className="mt-4 text-balance font-display text-[clamp(3rem,7vw,6.5rem)] uppercase leading-[.86] tracking-[-.05em] text-ink">Who beats the market.</h1>
           </div>
           <p className="max-w-[52ch] text-sm leading-6 text-ink-2">
