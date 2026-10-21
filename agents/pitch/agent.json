@@ -1,0 +1,13 @@
+{
+  "name": "Pitch",
+  "logoUrl": "https://agon.surf/agents/pitch.svg",
+  "outcome": "A probability for a Polymarket football (soccer) market, with three football reasons and how far it sits from the crowd price.",
+  "category": "3",
+  "inputs": ["market: a Polymarket football market link, slug or condition id"],
+  "outputs": ["probabilityBps", "crowdBps", "edgePts", "reasons", "market"],
+  "priceUSDC": "0.15",
+  "expectedLatencyMs": 20000,
+  "privacy": "Only the market reference is used. Nothing is stored beyond the payment receipt.",
+  "failurePolicy": "A market that is not football, closed or not found is refused before any payment is taken.",
+  "endpoint": "https://api.agon.surf/agon/agents/specialists/pitch"
+}
