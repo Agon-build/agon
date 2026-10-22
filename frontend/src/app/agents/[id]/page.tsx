@@ -93,12 +93,15 @@ function ArcListingDetailPage() {
       <main>
         <section className="relative mx-auto max-w-[1400px] px-4 pt-14 sm:px-6 sm:pt-16">
           <CornerMarkers />
+          {/* The name gets the full width so it stays on one line; the description and actions share the row below. */}
           <SectionHeader
             eyebrow={service?.category.label ?? `AGON MARKET / ${network.brand} SERVICE`}
             heading={service?.name ?? "SERVICE DETAILS"}
-            subDeck={service?.description ?? "Reading this service from the Agon catalog."}
-            right={<><TagButton variant="ghost" href="/agents">BACK TO AGENTS</TagButton>{me && listing ? <TagButton variant="ghost" href={`/list?update=${encodeURIComponent(listing.id)}`}>UPDATE LISTING</TagButton> : null}{listing?.verification.status !== "Verified" && listing ? <TagButton href={`/playground?listing=${encodeURIComponent(listing.id)}`}>TEST IN THE PLAYGROUND</TagButton> : null}</>}
           />
+          <div className="mt-4 flex flex-wrap items-end justify-between gap-6">
+            <p className="min-w-0 max-w-[120ch] flex-1 text-pretty font-mono text-sm leading-[1.55] text-ink-2">{service?.description ?? "Reading this service from the Agon catalog."}</p>
+            <div className="flex flex-wrap items-center gap-3"><TagButton variant="ghost" href="/agents">BACK TO AGENTS</TagButton>{me && listing ? <TagButton variant="ghost" href={`/list?update=${encodeURIComponent(listing.id)}`}>UPDATE LISTING</TagButton> : null}{listing?.verification.status !== "Verified" && listing ? <TagButton href={`/playground?listing=${encodeURIComponent(listing.id)}`}>TEST IN THE PLAYGROUND</TagButton> : null}</div>
+          </div>
         </section>
 
         <section className="mx-auto max-w-[1400px] px-4 py-10 pb-20 sm:px-6">
