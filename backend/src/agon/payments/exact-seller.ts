@@ -134,6 +134,8 @@ export function exactPayment(opts: {
   beforeSettle?: (payment: VerifiedPayment, c: Context) => Promise<string | null>;
   now?: () => Date;
   maxTimeoutSeconds?: number;
+  /** Where a failed settlement is reported (an unfunded seller wallet fails every sale). */
+  log?: (message: string) => void;
 }): MiddlewareHandler<{ Variables: { x402: X402Paid } }> {
   return async (c, next) => {
     const now = (opts.now ?? (() => new Date()))();
@@ -166,7 +168,8 @@ export function exactPayment(opts: {
     let txHash: Hex;
     try {
       txHash = await opts.settle(payment);
-    } catch {
+    } catch (error) {
+      (opts.log ?? console.error)(`[x402] settlement failed for seller ${opts.payTo} on ${opts.network.id}: ${(error as Error)?.message ?? error}`);
       return demand("settlement_failed");
     }
     c.set("x402", { payer: payment.payer, amount: payment.amount, txHash, network: opts.network });

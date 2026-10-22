@@ -17,7 +17,7 @@ const network = agonNetwork("arc-testnet");
 const PAY_TO = `0x${"c".repeat(40)}` as Address;
 const terms = { network, payTo: PAY_TO, amount: 2_000n };
 
-function seller(opts: { beforeSettle?: (p: unknown) => Promise<string | null>; maxTimeoutSeconds?: number } = {}) {
+function seller(opts: { beforeSettle?: (p: unknown) => Promise<string | null>; maxTimeoutSeconds?: number; log?: (m: string) => void } = {}) {
   const store = new MemoryPaymentsStore();
   const settler = fakeSettler();
   let handled = 0;
@@ -27,7 +27,7 @@ function seller(opts: { beforeSettle?: (p: unknown) => Promise<string | null>; m
     exactPayment({
       network, payTo: PAY_TO, price: async () => 2_000n, settle: settler.settle,
       claimNonce: (n, payer, nonce) => store.claimSellerNonce(n, payer, nonce),
-      description: "Test data", beforeSettle: opts.beforeSettle as never, maxTimeoutSeconds: opts.maxTimeoutSeconds,
+      description: "Test data", beforeSettle: opts.beforeSettle as never, maxTimeoutSeconds: opts.maxTimeoutSeconds, log: opts.log,
     }),
     (c) => {
       handled += 1;
@@ -113,6 +113,16 @@ test("a settlement failure returns 402 and the handler never runs", async () => 
   const res = await post(app as never, await signedPaymentHeader(buyer, terms));
   assert.equal(((await res.json()) as { error: string }).error, "settlement_failed");
   assert.equal(handled(), 0);
+});
+
+test("a settlement failure is logged with the seller wallet and the reason, so an unfunded seller is visible", async () => {
+  const lines: string[] = [];
+  const { app, settler } = seller({ log: (m) => lines.push(m) });
+  settler.fail(true);
+  await post(app as never, await signedPaymentHeader(buyer, terms));
+  assert.equal(lines.length, 1);
+  assert.match(lines[0]!, new RegExp(PAY_TO, "i"));
+  assert.match(lines[0]!, /settlement failed/);
 });
 
 test("the Circle settler calls transferWithAuthorization with split v, r, s and an idempotency key bound to payee, payer and nonce", async () => {

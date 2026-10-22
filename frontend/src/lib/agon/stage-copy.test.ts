@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { KIND_LABEL, approvalFailureText, askRefusalText, confirmFailureText, failureText, hireHeading } from "./stage-copy.ts";
+import { KIND_LABEL, approvalFailureText, askRefusalText, confirmFailureText, failureText, hireHeading, showConfirmError } from "./stage-copy.ts";
 
 test("every refusal a person can hit has a plain sentence", () => {
   assert.equal(askRefusalText("insufficient_balance", "0.30"), "Your agent wallet needs 0.30 USDC for this hire.");
@@ -32,4 +32,13 @@ test("a hire's input shown as a list under the agent's name, a question as the h
   assert.deepEqual(hireHeading("https://polymarket.com/event/x/y-z-2026", null), { title: "Hire this agent", lines: ["https://polymarket.com/event/x/y-z-2026"] });
   assert.deepEqual(hireHeading("Will BTC close above 120k on Friday?", "Lead"), { title: "Will BTC close above 120k on Friday?", lines: null });
   assert.deepEqual(hireHeading(null, null), { title: null, lines: null });
+});
+
+test("'still confirming' gives way once the job has a final outcome", () => {
+  assert.equal(showConfirmError("payment_unknown", "paying"), true);
+  assert.equal(showConfirmError("payment_unknown", "failed"), false);
+  assert.equal(showConfirmError("payment_unknown", "answered"), false);
+  assert.equal(showConfirmError("payment_unknown", "refunded"), false);
+  assert.equal(showConfirmError("market_closed", "failed"), true, "a refusal stays: it is the reason");
+  assert.equal(showConfirmError(null, "paying"), false);
 });

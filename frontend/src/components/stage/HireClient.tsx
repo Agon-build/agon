@@ -20,7 +20,7 @@ import { presentListing } from "@/lib/agon/catalog";
 import { getListing, inspectManifest } from "@/lib/agon/client";
 import { canAfford } from "@/lib/agon/hire-panel";
 import { mainnetInView, mergeAnswers, sourcesNote } from "@/lib/agon/route-view";
-import { askRefusalText, confirmFailureText, hireHeading } from "@/lib/agon/stage-copy";
+import { askRefusalText, confirmFailureText, hireHeading, showConfirmError } from "@/lib/agon/stage-copy";
 import type { AskResponse, HistoryItem, LeaderboardRow, RoutePick, StageConfig, StageWallet } from "@/lib/agon/stage-types";
 import { beatsMarketText, phaseStep } from "@/lib/agon/stage-view";
 
@@ -232,8 +232,8 @@ export function HireClient() {
                 <button type="button" onClick={reset} className="mt-4 min-h-11 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 underline underline-offset-4 hover:text-accent">Describe something else</button>
               </div>
             ) : null}
-            {mode.kind === "run" && mode.confirmError ? (
-              <p role="alert" className="mt-6 border-l-2 border-[color:var(--err)] pl-3 text-sm leading-6 text-ink">{confirmFailureText(mode.confirmError)}</p>
+            {mode.kind === "run" && showConfirmError(mode.confirmError, shown?.phase) ? (
+              <p role="alert" className="mt-6 border-l-2 border-[color:var(--err)] pl-3 text-sm leading-6 text-ink">{confirmFailureText(mode.confirmError!)}</p>
             ) : null}
           </div>
 

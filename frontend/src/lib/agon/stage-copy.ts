@@ -97,3 +97,9 @@ export function hireHeading(question: string | null, agentName: string | null): 
   const isInput = lines.length > 1 || (lines.length === 1 && !/\s/.test(lines[0]!) && lines[0]!.length > 24);
   return isInput ? { title: `Hire ${agentName ?? "this agent"}`, lines } : { title: question, lines: null };
 }
+
+/// "The payment is still confirming" is only true until the job settles one way or the other.
+export function showConfirmError(code: string | null | undefined, phase: string | null | undefined): boolean {
+  if (!code) return false;
+  return !(code === "payment_unknown" && (phase === "failed" || phase === "answered" || phase === "refunded"));
+}
