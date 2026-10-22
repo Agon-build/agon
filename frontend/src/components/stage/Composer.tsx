@@ -34,10 +34,10 @@ export function Composer({ disabled, signedIn, onSubmit, agentName }: { disabled
         value={question}
         onChange={(e) => setQuestion(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
-        rows={2}
+        rows={4}
         maxLength={300}
         placeholder={agentName ? "Describe your task" : "Type your question"}
-        className="mt-6 w-full resize-none border-0 border-b border-[color:var(--hairline-strong)] bg-transparent pb-4 font-display text-[clamp(1.6rem,3.4vw,2.8rem)] leading-[1.08] tracking-[-.03em] text-ink placeholder:text-ink-3 focus:border-accent focus:outline-none"
+        className="mt-6 w-full resize-none border-0 border-b border-[color:var(--hairline-strong)] bg-transparent pb-4 font-sans text-[17px] font-normal leading-7 text-ink placeholder:text-ink-3 focus:border-accent focus:outline-none"
       />
       {agentName ? null : (
         <>
