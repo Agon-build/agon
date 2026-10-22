@@ -1,9 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Drift">
-  <!-- AGON agent mark: notched tile, 128px live area, 14px strokes, one pink element -->
-  <path d="M0 0H224L256 32V256H0Z" fill="#15120F"/>
-  <path d="M1 1H223.6L255 32.4V255H1Z" fill="none" stroke="#F4EFE6" stroke-opacity="0.16" stroke-width="2"/>
-  <path d="M64 116H88V140H64Z" fill="#FF4D8A"/>
-  <path d="M100 120L184 78" fill="none" stroke="#F4EFE6" stroke-width="14" stroke-linecap="square" stroke-linejoin="miter"/>
-  <path d="M100 136L184 178" fill="none" stroke="#F4EFE6" stroke-width="14" stroke-linecap="square" stroke-linejoin="miter"/>
-  <path d="M192 68V188" fill="none" stroke="#F4EFE6" stroke-width="14" stroke-linecap="square" stroke-linejoin="miter"/>
+<path d="M0 0H224L256 32V256H0Z" fill="#15120F"/><path d="M1 1H223.6L255 32.4V255H1Z" fill="none" stroke="#F4EFE6" stroke-opacity="0.16" stroke-width="2"/>
+<polygon points="132,48 132,160 196,160" fill="#F4EFE6"/>
+<polygon points="124,64 124,160 72,160" fill="#CFC3B3"/>
+<polygon points="132,48 164,104 132,104" fill="#E3D9CB"/>
+<polygon points="124,64 124,112 96,112" fill="#B8AC9C"/>
+<polygon points="60,168 196,168 178,190 78,190" fill="#FF4D8A"/>
+<polygon points="36,206 86,198 128,210 170,198 220,206 220,214 36,214" fill="#B8AC9C"/>
 </svg>

@@ -10,6 +10,10 @@ import { parseFirstPartyAgents, providerRefFor } from "../first-party.ts";
 import { createHouseSellerRoutes } from "../playground/seasons/house-seller.ts";
 import { createMarketLookup } from "../agents/market-lookup.ts";
 import { createSpecialistRoutes } from "../agents/routes.ts";
+import { PostgresWatchStore } from "../agents/watch-store.ts";
+import { createGammaWatchReader, startWatchWorker } from "../agents/watch-worker.ts";
+import { parseOwnerRef } from "../stage/settings.ts";
+import { notify } from "../../notifications/index.js";
 import { stableUuid } from "../playground/seasons/committer.ts";
 import { computeLeaderboard } from "../playground/seasons/scoring.ts";
 import type { SeasonRuntime } from "../playground/seasons/runtime.ts";
@@ -131,6 +135,13 @@ export function startPaymentsRuntime(input: {
       );
 
     const lookupMarket = createMarketLookup();
+    const watchStore = new PostgresWatchStore(pool);
+    /// The Agon account behind an agent wallet, for bell and Telegram alerts; outside payers have none.
+    const ownerOfWallet = async (address: Address): Promise<string | null> => {
+      const { rows } = await pool.query<{ owner_ref: string }>("select owner_ref from agon_budget_wallets where lower(address) = $1 and network = $2", [address.toLowerCase(), network.id]);
+      const owner = rows[0] ? parseOwnerRef(rows[0].owner_ref) : null;
+      return owner?.kind === "operator" ? owner.address.toLowerCase() : null;
+    };
     const routes = {
       payments: createPaymentRoutes({
         store, network, log, off: () => s.off.all || s.off.lead,
@@ -150,6 +161,7 @@ export function startPaymentsRuntime(input: {
         sellers: Object.fromEntries(Object.entries(s.specialistSellers).map(([key, w]) => [key, { payTo: w.address, settle: settler(w) }])),
         lookup: lookupMarket,
         callModel: async (p) => ({ text: (await callModel(p)).text }),
+        watch: { store: watchStore, ownerOf: ownerOfWallet, statusBase: `${s.publicApiUrl}/agon/agents/specialists/watch` },
       }) as unknown as Hono,
       standin: s.standin ? (createStandinRoutes({ network, payTo: s.standin.address, settle: settler(s.standin), claimNonce }) as unknown as Hono) : null,
     };
@@ -182,6 +194,13 @@ export function startPaymentsRuntime(input: {
       }, 5 * 60_000).unref();
     }
     log(`payments on ${network.label}; lead agent ${s.lead.address}; ${Object.keys(s.houseSellers).length} house sellers`);
+    if (s.specialistSellers.watch) {
+      startWatchWorker({
+        store: watchStore, readMarkets: createGammaWatchReader(), now: () => new Date(), log: (m) => console.log(`[watch] ${m}`),
+        notify: (owner, a) => notify(owner, { kind: "agon_resolution_watch", title: a.title.slice(0, 180), body: a.body, href: a.href, context: { watchId: a.watchId, alert: a.kind } }),
+      });
+      log("resolution watch worker on");
+    }
     const balanceOf = async (address: Address): Promise<bigint | null> => {
       try {
         return (await client.readContract({ address: network.usdc, abi: USDC_BALANCE_ABI, functionName: "balanceOf", args: [address] })) as bigint;

@@ -205,3 +205,60 @@ test("the rules check endpoint answers the market-rules test with its own readin
   assert.deepEqual(body.output.traps.map((t) => t.quote), ["wears a suit"]);
   assert.equal(settler.calls.length, 0);
 });
+
+function watchSetup(owner: string | null) {
+  const store = new MemoryPaymentsStore();
+  const settler = fakeSettler();
+  const created: { watch: { watchId: string; ownerAddress: string | null; payer: string }; markets: { conditionId: string; state: { status: string; yesBps: number | null } }[] }[] = [];
+  const app = createSpecialistRoutes({
+    network, store,
+    sellers: { watch: { payTo: `0x${"c4".repeat(20)}` as Address, settle: settler.settle } },
+    lookup: createMarketLookup({ fetchImpl: gammaFetch([gammaMarket(), gammaMarket({ slug: "closed-one", conditionId: `0x${"e0".repeat(32)}`, closed: true })]) }),
+    callModel: async () => ({ text: "{}" }),
+    watch: {
+      store: {
+        createWatch: async (w: never, markets: never) => { created.push({ watch: w, markets }); },
+        getWatch: async (id: string) => (id === "known" ? { watch: { watchId: "known", ownerAddress: OWNER_ADDR, payer: "0xp", network: "arc-testnet", status: "active", createdAt: NOW, endsAt: NOW }, markets: [], alerts: [] } : null),
+      } as never,
+      ownerOf: async () => owner,
+      statusBase: "https://api.test/agon/agents/specialists/watch",
+      newId: () => "w-123",
+    },
+  });
+  const fetchImpl = ((url: string, init?: RequestInit) => app.request(url, init)) as typeof fetch;
+  return { app, settler, created, fetchImpl };
+}
+const OWNER_ADDR = `0x${"1".repeat(40)}`;
+
+test("resolution watch sells a watch of up to 10 markets, tied to the buyer's Agon account, with a status link", async () => {
+  const { fetchImpl, settler, created } = watchSetup(OWNER_ADDR);
+  const out = await buyExact({ url: "http://api.test/watch", init: json({ markets: `https://polymarket.com/event/epl-2027-champion/${EPL_SLUG}` }), network, maxAmount: SPECIALISTS.watch.price, signerFor: () => localSigner(buyer), fetchImpl });
+  assert.ok(out.ok, show(out));
+  assert.equal(out.amount, 250_000n);
+  const data = out.data as { agent: string; watchId: string; statusUrl: string; markets: { question: string; status: string }[] };
+  assert.deepEqual([data.agent, data.watchId, data.statusUrl], ["Resolution Watch", "w-123", "https://api.test/agon/agents/specialists/watch/w-123"]);
+  assert.equal(data.markets[0]!.status, "open");
+  assert.equal(created[0]!.watch.ownerAddress, OWNER_ADDR);
+  assert.equal(created[0]!.watch.payer.toLowerCase(), buyer.address.toLowerCase());
+  assert.equal(created[0]!.markets[0]!.state.yesBps, 6350);
+  assert.equal(settler.calls.length, 1);
+});
+
+test("resolution watch refuses a closed market, a bad list or too many markets before any money moves", async () => {
+  const { app, fetchImpl, settler } = watchSetup(null);
+  const closed = await buyExact({ url: "http://api.test/watch", init: json({ markets: `${EPL_SLUG}\nclosed-one` }), network, maxAmount: SPECIALISTS.watch.price, signerFor: () => localSigner(buyer), fetchImpl });
+  assert.ok(!closed.ok);
+  assert.equal(settler.calls.length, 0);
+  assert.equal((await app.request("http://api.test/watch", json({ markets: "https://evil.example/x" }))).status, 400);
+  assert.equal((await app.request("http://api.test/watch", json({ markets: Array.from({ length: 11 }, (_, i) => `market-${i}-x`).join("\n") }))).status, 400);
+  assert.equal((await app.request("http://api.test/watch", json({ market: EPL_SLUG }))).status, 400, "watch takes markets, not market");
+});
+
+test("a watch's status page is public by its id and never shows the owner", async () => {
+  const { app } = watchSetup(null);
+  const res = await app.request("http://api.test/watch/known");
+  assert.equal(res.status, 200);
+  const body = await res.json() as Record<string, unknown>;
+  assert.ok(!JSON.stringify(body).includes(OWNER_ADDR));
+  assert.equal((await app.request("http://api.test/watch/unknown")).status, 404);
+});

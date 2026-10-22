@@ -1,14 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Agon Lead Agent">
-  <!-- AGON agent mark: notched tile, 128px live area, 14px strokes, one pink element -->
-  <path d="M0 0H224L256 32V256H0Z" fill="#15120F"/>
-  <path d="M1 1H223.6L255 32.4V255H1Z" fill="none" stroke="#F4EFE6" stroke-opacity="0.16" stroke-width="2"/>
-  <path d="M64 108H104V148H64Z" fill="#FF4D8A"/>
-  <path d="M104 128H136" fill="none" stroke="#F4EFE6" stroke-width="14" stroke-linecap="square" stroke-linejoin="miter"/>
-  <path d="M136 76V180" fill="none" stroke="#F4EFE6" stroke-width="14" stroke-linecap="square" stroke-linejoin="miter"/>
-  <path d="M136 76H168" fill="none" stroke="#F4EFE6" stroke-width="14" stroke-linecap="square" stroke-linejoin="miter"/>
-  <path d="M136 128H168" fill="none" stroke="#F4EFE6" stroke-width="14" stroke-linecap="square" stroke-linejoin="miter"/>
-  <path d="M136 180H168" fill="none" stroke="#F4EFE6" stroke-width="14" stroke-linecap="square" stroke-linejoin="miter"/>
-  <path d="M168 64H192V88H168Z" fill="#F4EFE6"/>
-  <path d="M168 116H192V140H168Z" fill="#F4EFE6"/>
-  <path d="M168 168H192V192H168Z" fill="#F4EFE6"/>
+<path d="M0 0H224L256 32V256H0Z" fill="#15120F"/><path d="M1 1H223.6L255 32.4V255H1Z" fill="none" stroke="#F4EFE6" stroke-opacity="0.16" stroke-width="2"/>
+<polygon points="56,92 86,120 100,176 68,176" fill="#CFC3B3"/>
+<polygon points="200,92 170,120 156,176 188,176" fill="#CFC3B3"/>
+<polygon points="128,64 86,120 100,176 128,176" fill="#F4EFE6"/>
+<polygon points="128,64 170,120 156,176 128,176" fill="#E3D9CB"/>
+<polygon points="64,180 192,180 188,200 68,200" fill="#B8AC9C"/>
+<polygon points="128,128 142,146 128,164 114,146" fill="#FF4D8A"/>
+<polygon points="52,84 60,84 60,92 52,92" fill="#F4EFE6"/>
+<polygon points="196,84 204,84 204,92 196,92" fill="#F4EFE6"/>
+<polygon points="124,52 132,52 132,60 124,60" fill="#F4EFE6"/>
 </svg>

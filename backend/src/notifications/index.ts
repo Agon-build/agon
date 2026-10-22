@@ -19,7 +19,8 @@ export type NotificationKind =
   | "mystery_win"
   | "custom_request"
   | "arena_review_escalation"
-  | "agon_service_lifecycle";
+  | "agon_service_lifecycle"
+  | "agon_resolution_watch";
 
 export interface NotifyInput {
   kind: NotificationKind;

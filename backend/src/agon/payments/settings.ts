@@ -4,7 +4,7 @@ import type { Address } from "viem";
 import { agonNetwork, type AgonNetwork } from "../network.ts";
 
 /// The specialist agents that can have a seller wallet (agents/routes.ts SPECIALISTS).
-const SPECIALIST_KEYS = ["pitch", "scout", "rules"] as const;
+const SPECIALIST_KEYS = ["pitch", "scout", "rules", "watch"] as const;
 type SpecialistKey = (typeof SPECIALIST_KEYS)[number];
 
 export const HIREABLE_HOUSE_KEYS = ["atlas", "vesper", "kestrel", "drift"] as const;
@@ -103,7 +103,7 @@ export function resolvePaymentSettings(env: Record<string, string | undefined>):
       specialistSellers[key as SpecialistKey] = { walletId: value.walletId, address: value.address.toLowerCase() as Address };
     }
   } catch {
-    problems.push("AGON_SPECIALIST_WALLETS must map pitch, scout or rules to wallet handles");
+    problems.push("AGON_SPECIALIST_WALLETS must map pitch, scout, rules or watch to wallet handles");
   }
 
   let routingFeeBps = 150;

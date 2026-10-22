@@ -10,26 +10,36 @@ import type { PaymentsStore } from "../payments/types.ts";
 import { FORECAST_MAX_TOKENS, parseProbability, type ModelCaller } from "../playground/seasons/house-agents.ts";
 import type { MarketLookup, MarketSnapshot } from "./market-lookup.ts";
 import { isFootballMarket, pitchPrompt } from "./pitch.ts";
+import { randomBytes } from "node:crypto";
+
+import { MAX_WATCH_MARKETS, parseMarketRefs, type WatchState } from "./resolution-watch.ts";
 import { rulesCheck, rulesCheckPrompt } from "./rules-check.ts";
+import type { WatchStore } from "./watch-store.ts";
 import { scoutReport, scoutRulesPrompt } from "./scout.ts";
 
-export type SpecialistKey = "pitch" | "scout" | "rules";
+export type SpecialistKey = "pitch" | "scout" | "rules" | "watch";
 export const SPECIALISTS: Record<SpecialistKey, { name: string; price: bigint; model: string; description: string }> = {
   pitch: { name: "Pitch", price: 150_000n, model: "global.anthropic.claude-haiku-5-5", description: "Pitch football forecast" },
   scout: { name: "Scout", price: 100_000n, model: "global.anthropic.claude-haiku-5-5", description: "Scout Polymarket market check" },
   rules: { name: "Rules Check", price: 250_000n, model: "global.anthropic.claude-sonnet-5-5", description: "Rules Check: Polymarket resolution rules" },
+  // The model only answers the listing certification task; watching is code.
+  watch: { name: "Resolution Watch", price: 250_000n, model: "global.anthropic.claude-haiku-5-5", description: "Resolution Watch: settlement alerts for up to 10 Polymarket markets" },
 };
-const CAPABILITY: Record<SpecialistKey, string> = { pitch: "analysis", scout: "analysis", rules: "verification" };
+const CAPABILITY: Record<SpecialistKey, string> = { pitch: "analysis", scout: "analysis", rules: "verification", watch: "verification" };
+const WATCH_DAYS = 60;
 const RULES_MAX_TOKENS = 1_500;
 export type SpecialistSeller = { payTo: Address; settle: ExactSettler };
 
 const body = z.object({ market: z.string().trim().min(3).max(400) });
+const watchBody = z.object({ markets: z.string().trim().min(3).max(4_000) });
+const watchRefs = (raw: unknown): string[] | null => { const b = watchBody.safeParse(raw); return b.success ? parseMarketRefs(b.data.markets) : null; };
 
 const marketView = (m: MarketSnapshot) => ({ question: m.question, url: m.url, slug: m.slug, closesAt: m.endAt.toISOString(), crowdBps: m.yesBps });
 
 /// Specialist agents Agon runs and sells per call over x402: Pitch forecasts
 /// football markets, Scout checks whether a Polymarket market is worth trading,
-/// Rules Check reads a market's resolution rules for traps and dispute risk.
+/// Rules Check reads a market's resolution rules for traps and dispute risk,
+/// Resolution Watch alerts on settlement of up to 10 markets until they settle.
 /// The market is looked up before any money moves; a market the agent cannot
 /// serve is refused with nothing charged.
 export function createSpecialistRoutes(deps: {
@@ -38,14 +48,29 @@ export function createSpecialistRoutes(deps: {
   store: PaymentsStore;
   lookup: MarketLookup;
   callModel: ModelCaller;
+  /** Resolution Watch: where watches are kept and how a payer maps to an Agon account. */
+  watch?: { store: Pick<WatchStore, "createWatch" | "getWatch">; ownerOf: (payer: Address) => Promise<string | null>; statusBase: string; newId?: () => string };
   now?: () => Date;
 }): Hono {
   const app = new Hono<{ Variables: { x402: X402Paid } }>();
   const now = deps.now ?? (() => new Date());
   const markets = new WeakMap<Request, MarketSnapshot>();
-  const sellerFor = (key: string) => (Object.hasOwn(SPECIALISTS, key) && deps.sellers[key as SpecialistKey] ? { key: key as SpecialistKey, seller: deps.sellers[key as SpecialistKey]! } : null);
+  const watched = new WeakMap<Request, MarketSnapshot[]>();
+  const sellerFor = (key: string) => (Object.hasOwn(SPECIALISTS, key) && deps.sellers[key as SpecialistKey] && (key !== "watch" || deps.watch) ? { key: key as SpecialistKey, seller: deps.sellers[key as SpecialistKey]! } : null);
   const gates = new Map<string, ReturnType<typeof createCertificationGate>>();
   const gateFor = (key: string) => gates.get(key) ?? gates.set(key, createCertificationGate()).get(key)!;
+
+  // A watch's status is public by its unguessable id; the owner is never shown.
+  app.get("/watch/:id", async (c) => {
+    const found = deps.watch ? await deps.watch.store.getWatch(c.req.param("id")) : null;
+    if (!found) return c.json({ error: "not_found" }, 404);
+    const { watch, markets: ms, alerts } = found;
+    return c.json({
+      watchId: watch.watchId, status: watch.status, endsAt: watch.endsAt.toISOString(),
+      markets: ms.map((m) => ({ question: m.question, url: m.url, status: m.state.status, outcome: m.state.outcome, yesBps: m.state.yesBps, updatedAt: m.updatedAt.toISOString() })),
+      alerts: alerts.map((a) => ({ kind: a.kind, title: a.title, body: a.body, at: a.createdAt.toISOString() })),
+    });
+  });
 
   app.use("/:key", bodyLimit({ maxSize: LISTING_BODY_LIMIT_BYTES, onError: (c) => c.json({ error: "body_too_large" }, 413) }));
   app.use("/:key", async (c, next) => {
@@ -67,7 +92,9 @@ export function createSpecialistRoutes(deps: {
     });
     if (check === "preflight") return next();
     if (check) return check;
-    if (!body.safeParse(raw).success) return c.json({ error: "invalid_request", message: "Send {\"market\": \"<polymarket link, slug or condition id>\"}." }, 400);
+    if (found.key === "watch") {
+      if (!watchRefs(raw)) return c.json({ error: "invalid_request", message: `Send {"markets": "<up to ${MAX_WATCH_MARKETS} Polymarket links, slugs or condition ids, one per line>"}.` }, 400);
+    } else if (!body.safeParse(raw).success) return c.json({ error: "invalid_request", message: "Send {\"market\": \"<polymarket link, slug or condition id>\"}." }, 400);
     return next();
   });
 
@@ -84,6 +111,19 @@ export function createSpecialistRoutes(deps: {
         description: SPECIALISTS[key].description,
         // Nothing settles until the market is found and fits this agent.
         beforeSettle: async (_payment, ctx) => {
+          if (key === "watch") {
+            const refs = watchRefs(await ctx.req.raw.clone().json().catch(() => null));
+            if (!refs) return "invalid_request";
+            const found: MarketSnapshot[] = [];
+            for (const ref of refs) {
+              const r = await deps.lookup(ref);
+              if (!r.ok) return r.code;
+              if (r.market.closed) return "market_closed";
+              found.push(r.market);
+            }
+            watched.set(ctx.req.raw, found);
+            return null;
+          }
           const parsed = body.safeParse(await ctx.req.raw.clone().json().catch(() => null));
           if (!parsed.success) return "invalid_request";
           const found = await deps.lookup(parsed.data.market);
@@ -99,6 +139,21 @@ export function createSpecialistRoutes(deps: {
     async (c) => {
       const key = c.req.param("key") as SpecialistKey;
       const spec = SPECIALISTS[key];
+      if (key === "watch") {
+        const w = deps.watch!;
+        const list = watched.get(c.req.raw)!;
+        const payer = c.get("x402").payer;
+        const watchId = w.newId?.() ?? randomBytes(16).toString("hex");
+        const endsAt = new Date(now().getTime() + WATCH_DAYS * 86_400_000);
+        // The first reading is the baseline: an already proposed market raises "settlement started" on the next tick.
+        const baseline = (m: MarketSnapshot): WatchState => ({ status: "open", outcome: null, yesBps: m.yesBps, rules: m.description });
+        await w.store.createWatch({ watchId, ownerAddress: await w.ownerOf(payer).catch(() => null), payer, network: deps.network.id, endsAt },
+          list.map((m) => ({ conditionId: m.conditionId, question: m.question, url: m.url, state: baseline(m) })), now());
+        return c.json({
+          agent: spec.name, watchId, statusUrl: `${w.statusBase}/${watchId}`, endsAt: endsAt.toISOString(),
+          markets: list.map((m) => ({ question: m.question, url: m.url, status: "open" })),
+        });
+      }
       const m = markets.get(c.req.raw)!;
       if (key === "pitch") {
         const reply = await deps.callModel({ model: spec.model, ...pitchPrompt(m, now()), maxTokens: FORECAST_MAX_TOKENS, temperature: 0.2 });

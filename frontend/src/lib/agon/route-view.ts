@@ -38,7 +38,15 @@ export type RulesAnswerView = {
   kind: "rules"; risk: "low" | "medium" | "high"; riskText: string; marketQuestion: string | null; marketUrl: string | null;
   decides: { label: string; text: string; quote: string }[]; traps: { label: string; explain: string; quote: string }[];
 };
-export type AnswerView = { kind: "text"; text: string } | { kind: "rows"; rows: { label: string; value: string }[] } | RulesAnswerView;
+export type WatchAnswerView = { kind: "watch"; markets: { question: string; url: string }[]; until: string; statusUrl: string };
+export type AnswerView = { kind: "text"; text: string } | { kind: "rows"; rows: { label: string; value: string }[] } | RulesAnswerView | WatchAnswerView;
+
+/// A Resolution Watch purchase: the markets watched, until when, and its status link.
+function watchView(r: Record<string, unknown>): WatchAnswerView | null {
+  if (typeof r.watchId !== "string" || typeof r.statusUrl !== "string" || typeof r.endsAt !== "string" || !Array.isArray(r.markets)) return null;
+  const until = new Date(r.endsAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", timeZone: "UTC" });
+  return { kind: "watch", until, statusUrl: r.statusUrl, markets: (r.markets as Record<string, unknown>[]).map((m) => ({ question: String(m.question ?? ""), url: String(m.url ?? "") })) };
+}
 
 const RISK_TEXT = { low: "Low dispute risk", medium: "Some dispute risk", high: "High dispute risk" } as const;
 const DECIDES_LABEL = { source: "Decided by", cutoff: "Cutoff", threshold: "The line" } as const;
@@ -70,6 +78,8 @@ export function answerView(result: unknown): AnswerView | null {
   if (Array.isArray(result)) return { kind: "text", text: JSON.stringify(result, null, 1) };
   const rules = rulesView(result as Record<string, unknown>);
   if (rules) return rules;
+  const watch = watchView(result as Record<string, unknown>);
+  if (watch) return watch;
   return { kind: "rows", rows: inputRows(result as Record<string, unknown>) };
 }
 

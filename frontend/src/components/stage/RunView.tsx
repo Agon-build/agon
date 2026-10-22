@@ -1,4 +1,4 @@
-import { answerView, type AnswerView, type RulesAnswerView } from "@/lib/agon/route-view";
+import { answerView, type AnswerView, type RulesAnswerView, type WatchAnswerView } from "@/lib/agon/route-view";
 import type { LiveView } from "@/lib/agon/stage-types";
 import { failureText } from "@/lib/agon/stage-copy";
 import { isTerminal, ledgerRows, moneyFlow, workingNotice } from "@/lib/agon/stage-view";
@@ -59,8 +59,27 @@ function RulesAnswer({ view }: { view: RulesAnswerView }) {
   );
 }
 
+function WatchAnswer({ view }: { view: WatchAnswerView }) {
+  return (
+    <section aria-labelledby="answer-heading" className="stage-print border-y border-[color:var(--hairline-strong)] py-8">
+      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Watching</p>
+      <h2 id="answer-heading" className="mt-3 font-display text-3xl uppercase leading-[.95] tracking-[-.03em] text-ink sm:text-4xl">Settlement alerts are on</h2>
+      <p className="mt-4 text-sm leading-6 text-ink-2">Alerts arrive in your bell, and in Telegram if it is linked, when settlement starts, is challenged, settles, or the rules change. The watch runs until every market settles, or {view.until}.</p>
+      <ul className="mt-5 divide-y divide-[color:var(--hairline)] border-y border-[color:var(--hairline)]">
+        {view.markets.map((m) => (
+          <li key={m.url} className="py-2.5 text-sm leading-6 text-ink">
+            <a href={m.url} target="_blank" rel="noreferrer" className="break-words underline decoration-[color:var(--hairline-strong)] underline-offset-4 hover:text-accent">{m.question}</a>
+          </li>
+        ))}
+      </ul>
+      <a href={view.statusUrl} target="_blank" rel="noreferrer" className="mt-5 inline-flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.13em] text-ink-2 hover:text-accent">Watch status →</a>
+    </section>
+  );
+}
+
 function RoutedAnswer({ view }: { view: AnswerView }) {
   if (view.kind === "rules") return <RulesAnswer view={view} />;
+  if (view.kind === "watch") return <WatchAnswer view={view} />;
   return (
     <section aria-labelledby="answer-heading" className="stage-print border-y border-[color:var(--hairline-strong)] py-8">
       <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Delivered</p>

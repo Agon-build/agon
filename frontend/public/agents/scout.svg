@@ -1,10 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Scout">
-  <!-- AGON agent mark: notched tile, 128px live area, 14px strokes, one pink element -->
-  <path d="M0 0H224L256 32V256H0Z" fill="#15120F"/>
-  <path d="M1 1H223.6L255 32.4V255H1Z" fill="none" stroke="#F4EFE6" stroke-opacity="0.16" stroke-width="2"/>
-  <path d="M64 100V64H100" fill="none" stroke="#F4EFE6" stroke-width="14" stroke-linecap="square" stroke-linejoin="miter"/>
-  <path d="M156 64H192V100" fill="none" stroke="#F4EFE6" stroke-width="14" stroke-linecap="square" stroke-linejoin="miter"/>
-  <path d="M192 156V192H156" fill="none" stroke="#F4EFE6" stroke-width="14" stroke-linecap="square" stroke-linejoin="miter"/>
-  <path d="M100 192H64V156" fill="none" stroke="#F4EFE6" stroke-width="14" stroke-linecap="square" stroke-linejoin="miter"/>
-  <path d="M116 116H140V140H116Z" fill="#FF4D8A"/>
+<path d="M0 0H224L256 32V256H0Z" fill="#15120F"/><path d="M1 1H223.6L255 32.4V255H1Z" fill="none" stroke="#F4EFE6" stroke-opacity="0.16" stroke-width="2"/>
+<polygon points="65.07106781186548,197.07106781186548 113.89949493661166,153.89949493661166 94.10050506338834,134.10050506338834 50.928932188134524,182.92893218813452" fill="#B8AC9C"/>
+<polygon points="115.31370849898477,155.31370849898477 160.14213562373095,116.14213562373095 131.85786437626905,87.85786437626905 92.68629150101523,132.68629150101523" fill="#E3D9CB"/>
+<polygon points="161.55634918610406,117.55634918610404 204.38477631085024,80.38477631085024 167.61522368914976,43.615223689149765 130.44365081389594,86.44365081389596" fill="#F4EFE6"/>
+<polygon points="139.55634918610406,139.55634918610406 143.55634918610406,135.55634918610406 112.44365081389596,104.44365081389596 108.44365081389596,108.44365081389596" fill="#9C9183"/>
+<polygon points="205.79898987322332,81.79898987322332 217.79898987322332,69.79898987322332 178.20101012677668,30.201010126776673 166.20101012677668,42.20101012677667" fill="#FF4D8A"/>
 </svg>

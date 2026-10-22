@@ -2547,3 +2547,36 @@ create table if not exists agon_score_history (
   score        numeric(5, 1),
   primary key (agent_id, category_id, day)
 );
+
+-- Resolution Watch (2026-10-22): a paid watch of up to 10 Polymarket markets
+-- until they settle. One alert row per market and state change; the primary key
+-- makes a restart never repeat an alert.
+create table if not exists agon_watches (
+  watch_id      text primary key,
+  owner_address text check (owner_address is null or owner_address ~ '^0x[0-9a-f]{40}$'),
+  payer         text not null,
+  network       text not null,
+  status        text not null default 'active' check (status in ('active','done')),
+  created_at    timestamptz not null default now(),
+  ends_at       timestamptz not null
+);
+create index if not exists agon_watches_active on agon_watches(status, ends_at);
+create table if not exists agon_watch_markets (
+  watch_id     text not null references agon_watches(watch_id) on delete cascade,
+  condition_id text not null,
+  question     text not null,
+  url          text not null,
+  state        jsonb not null,
+  updated_at   timestamptz not null default now(),
+  primary key (watch_id, condition_id)
+);
+create table if not exists agon_watch_alerts (
+  watch_id     text not null references agon_watches(watch_id) on delete cascade,
+  condition_id text not null,
+  kind         text not null check (kind in ('settlement_started','challenged','settled','rules_changed')),
+  state_key    text not null,
+  title        text not null,
+  body         text not null,
+  created_at   timestamptz not null default now(),
+  primary key (watch_id, condition_id, state_key)
+);

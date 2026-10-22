@@ -1,7 +1,46 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Pitch">
-  <!-- AGON agent mark: notched tile, 128px live area, 14px strokes, one pink element -->
-  <path d="M0 0H224L256 32V256H0Z" fill="#15120F"/>
-  <path d="M1 1H223.6L255 32.4V255H1Z" fill="none" stroke="#F4EFE6" stroke-opacity="0.16" stroke-width="2"/>
-  <path d="M194 128L161 185.2H95L62 128L95 70.8H161Z" fill="none" stroke="#F4EFE6" stroke-width="14" stroke-linecap="square" stroke-linejoin="miter"/>
-  <path d="M128 102L152.7 120L143.3 149H112.7L103.3 120Z" fill="#FF4D8A"/>
+<path d="M0 0H224L256 32V256H0Z" fill="#15120F"/><path d="M1 1H223.6L255 32.4V255H1Z" fill="none" stroke="#F4EFE6" stroke-opacity="0.16" stroke-width="2"/>
+<polygon points="40,104 92,112 92,120 48,116" fill="#B8AC9C"/>
+<polygon points="52,132 94,130 96,138 60,142" fill="#9C9183"/>
+<polygon points="64,160 100,150 104,158 72,168" fill="#B8AC9C"/>
+<polygon points="150,120 150,66 181.7,76.3" fill="#E3D9CB"/>
+<polygon points="150,120 181.7,76.3 201.4,103.3" fill="#F4EFE6"/>
+<polygon points="150,120 201.4,103.3 201.4,136.7" fill="#E3D9CB"/>
+<polygon points="150,120 201.4,136.7 181.7,163.7" fill="#F4EFE6"/>
+<polygon points="150,120 181.7,163.7 150,174" fill="#E3D9CB"/>
+<polygon points="150,120 150,174 118.3,163.7" fill="#F4EFE6"/>
+<polygon points="150,120 118.3,163.7 98.6,136.7" fill="#E3D9CB"/>
+<polygon points="150,120 98.6,136.7 98.6,103.3" fill="#F4EFE6"/>
+<polygon points="150,120 98.6,103.3 118.3,76.3" fill="#E3D9CB"/>
+<polygon points="150,120 118.3,76.3 150,66" fill="#F4EFE6"/>
+<polygon points="150,120 150,98 170.9,113.2" fill="#FF4D8A"/>
+<polygon points="150,120 170.9,113.2 162.9,137.8" fill="#FF4D8A"/>
+<polygon points="150,120 162.9,137.8 137.1,137.8" fill="#FF4D8A"/>
+<polygon points="150,120 137.1,137.8 129.1,113.2" fill="#FF4D8A"/>
+<polygon points="150,120 129.1,113.2 150,98" fill="#FF4D8A"/>
+<polygon points="175.9,84.4 181.2,77.1 184.5,87.2" fill="#9C9183"/>
+<polygon points="175.9,84.4 184.5,87.2 175.9,93.4" fill="#9C9183"/>
+<polygon points="175.9,84.4 175.9,93.4 167.3,87.2" fill="#9C9183"/>
+<polygon points="175.9,84.4 167.3,87.2 170.6,77.1" fill="#9C9183"/>
+<polygon points="175.9,84.4 170.6,77.1 181.2,77.1" fill="#9C9183"/>
+<polygon points="191.8,133.6 197.1,126.3 200.4,136.4" fill="#9C9183"/>
+<polygon points="191.8,133.6 200.4,136.4 191.8,142.6" fill="#9C9183"/>
+<polygon points="191.8,133.6 191.8,142.6 183.2,136.4" fill="#9C9183"/>
+<polygon points="191.8,133.6 183.2,136.4 186.5,126.3" fill="#9C9183"/>
+<polygon points="191.8,133.6 186.5,126.3 197.1,126.3" fill="#9C9183"/>
+<polygon points="150,164 155.3,156.7 158.6,166.8" fill="#9C9183"/>
+<polygon points="150,164 158.6,166.8 150,173" fill="#9C9183"/>
+<polygon points="150,164 150,173 141.4,166.8" fill="#9C9183"/>
+<polygon points="150,164 141.4,166.8 144.7,156.7" fill="#9C9183"/>
+<polygon points="150,164 144.7,156.7 155.3,156.7" fill="#9C9183"/>
+<polygon points="108.2,133.6 113.5,126.3 116.8,136.4" fill="#9C9183"/>
+<polygon points="108.2,133.6 116.8,136.4 108.2,142.6" fill="#9C9183"/>
+<polygon points="108.2,133.6 108.2,142.6 99.6,136.4" fill="#9C9183"/>
+<polygon points="108.2,133.6 99.6,136.4 102.9,126.3" fill="#9C9183"/>
+<polygon points="108.2,133.6 102.9,126.3 113.5,126.3" fill="#9C9183"/>
+<polygon points="124.1,84.4 129.4,77.1 132.7,87.2" fill="#9C9183"/>
+<polygon points="124.1,84.4 132.7,87.2 124.1,93.4" fill="#9C9183"/>
+<polygon points="124.1,84.4 124.1,93.4 115.5,87.2" fill="#9C9183"/>
+<polygon points="124.1,84.4 115.5,87.2 118.8,77.1" fill="#9C9183"/>
+<polygon points="124.1,84.4 118.8,77.1 129.4,77.1" fill="#9C9183"/>
 </svg>

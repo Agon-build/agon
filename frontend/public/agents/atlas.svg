@@ -1,8 +1,25 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Atlas">
-  <!-- AGON agent mark: notched tile, 128px live area, 14px strokes, one pink element -->
-  <path d="M0 0H224L256 32V256H0Z" fill="#15120F"/>
-  <path d="M1 1H223.6L255 32.4V255H1Z" fill="none" stroke="#F4EFE6" stroke-opacity="0.16" stroke-width="2"/>
-  <circle cx="128" cy="128" r="64" fill="none" stroke="#F4EFE6" stroke-width="14"/>
-  <ellipse cx="128" cy="128" rx="26" ry="64" fill="none" stroke="#F4EFE6" stroke-width="14"/>
-  <path d="M64 128H192" fill="none" stroke="#FF4D8A" stroke-width="14" stroke-linecap="square" stroke-linejoin="miter"/>
+<path d="M0 0H224L256 32V256H0Z" fill="#15120F"/><path d="M1 1H223.6L255 32.4V255H1Z" fill="none" stroke="#F4EFE6" stroke-opacity="0.16" stroke-width="2"/>
+<polygon points="128,58 128,58 109.4,78 79,78" fill="#CFC3B3"/>
+<polygon points="128,58 128,58 146.6,78 109.4,78" fill="#F4EFE6"/>
+<polygon points="128,58 128,58 177,78 146.6,78" fill="#E3D9CB"/>
+<polygon points="79,78 109.4,78 104,98 64.8,98" fill="#B8AC9C"/>
+<polygon points="109.4,78 146.6,78 152,98 104,98" fill="#E3D9CB"/>
+<polygon points="146.6,78 177,78 191.2,98 152,98" fill="#CFC3B3"/>
+<polygon points="64.8,98 104,98 101.7,118 58.7,118" fill="#CFC3B3"/>
+<polygon points="104,98 152,98 154.3,118 101.7,118" fill="#F4EFE6"/>
+<polygon points="152,98 191.2,98 197.3,118 154.3,118" fill="#E3D9CB"/>
+<polygon points="58.7,118 101.7,118 101.7,138 58.7,138" fill="#B8AC9C"/>
+<polygon points="101.7,118 154.3,118 154.3,138 101.7,138" fill="#E3D9CB"/>
+<polygon points="154.3,118 197.3,118 197.3,138 154.3,138" fill="#FF4D8A"/>
+<polygon points="58.7,138 101.7,138 104,158 64.8,158" fill="#CFC3B3"/>
+<polygon points="101.7,138 154.3,138 152,158 104,158" fill="#F4EFE6"/>
+<polygon points="154.3,138 197.3,138 191.2,158 152,158" fill="#E3D9CB"/>
+<polygon points="64.8,158 104,158 109.4,178 79,178" fill="#B8AC9C"/>
+<polygon points="104,158 152,158 146.6,178 109.4,178" fill="#E3D9CB"/>
+<polygon points="152,158 191.2,158 177,178 146.6,178" fill="#CFC3B3"/>
+<polygon points="79,178 109.4,178 128,198 128,198" fill="#CFC3B3"/>
+<polygon points="109.4,178 146.6,178 128,198 128,198" fill="#F4EFE6"/>
+<polygon points="146.6,178 177,178 128,198 128,198" fill="#E3D9CB"/>
+<polygon points="48,198 208,198 200,208 56,208" fill="#9C9183"/>
 </svg>

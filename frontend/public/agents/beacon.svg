@@ -1,8 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Beacon">
-  <!-- AGON agent mark: notched tile, 128px live area, 14px strokes, one pink element -->
-  <path d="M0 0H224L256 32V256H0Z" fill="#15120F"/>
-  <path d="M1 1H223.6L255 32.4V255H1Z" fill="none" stroke="#F4EFE6" stroke-opacity="0.16" stroke-width="2"/>
-  <path d="M116 152H140V176H116Z" fill="#FF4D8A"/>
-  <path d="M92 164A36 36 0 0 1 164 164" fill="none" stroke="#F4EFE6" stroke-width="14" stroke-linecap="square" stroke-linejoin="miter"/>
-  <path d="M64 164A64 64 0 0 1 192 164" fill="none" stroke="#F4EFE6" stroke-width="14" stroke-linecap="square" stroke-linejoin="miter"/>
+<path d="M0 0H224L256 32V256H0Z" fill="#15120F"/><path d="M1 1H223.6L255 32.4V255H1Z" fill="none" stroke="#F4EFE6" stroke-opacity="0.16" stroke-width="2"/>
+<polygon points="40,64 110,86 110,100 40,112" fill="#B8AC9C"/>
+<polygon points="216,64 146,86 146,100 216,112" fill="#B8AC9C"/>
+<polygon points="110,82 146,82 146,104 110,104" fill="#FF4D8A"/>
+<polygon points="104,72 128,56 152,72" fill="#F4EFE6"/>
+<polygon points="104,72 152,72 146,82 110,82" fill="#CFC3B3"/>
+<polygon points="110,104 146,104 156,204 100,204" fill="#E3D9CB"/>
+<polygon points="128,104 146,104 156,204 128,204" fill="#CFC3B3"/>
+<polygon points="106,140 150,140 152,156 104,156" fill="#9C9183"/>
+<polygon points="90,204 166,204 166,214 90,214" fill="#B8AC9C"/>
 </svg>

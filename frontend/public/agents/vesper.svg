@@ -1,7 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Vesper">
-  <!-- AGON agent mark: notched tile, 128px live area, 14px strokes, one pink element -->
-  <path d="M0 0H224L256 32V256H0Z" fill="#15120F"/>
-  <path d="M1 1H223.6L255 32.4V255H1Z" fill="none" stroke="#F4EFE6" stroke-opacity="0.16" stroke-width="2"/>
-  <path d="M76 72L132 128L76 184" fill="none" stroke="#F4EFE6" stroke-width="14" stroke-linecap="square" stroke-linejoin="miter"/>
-  <path d="M132 72L188 128L132 184" fill="none" stroke="#FF4D8A" stroke-width="14" stroke-linecap="square" stroke-linejoin="miter"/>
+<path d="M0 0H224L256 32V256H0Z" fill="#15120F"/><path d="M1 1H223.6L255 32.4V255H1Z" fill="none" stroke="#F4EFE6" stroke-opacity="0.16" stroke-width="2"/>
+<polygon points="128,102 128,52 138,92" fill="#F4EFE6"/>
+<polygon points="128,102 138,92 176,102" fill="#CFC3B3"/>
+<polygon points="128,102 176,102 138,112" fill="#F4EFE6"/>
+<polygon points="128,102 138,112 128,152" fill="#CFC3B3"/>
+<polygon points="128,102 128,152 118,112" fill="#F4EFE6"/>
+<polygon points="128,102 118,112 80,102" fill="#CFC3B3"/>
+<polygon points="128,102 80,102 118,92" fill="#F4EFE6"/>
+<polygon points="128,102 118,92 128,52" fill="#CFC3B3"/>
+<polygon points="48,204 96,168 128,186 164,160 208,204" fill="#B8AC9C"/>
+<polygon points="96,168 128,186 112,204 48,204" fill="#9C9183"/>
+<polygon points="164,160 208,204 160,204" fill="#CFC3B3"/>
+<polygon points="128,90 140,102 128,114 116,102" fill="#FF4D8A"/>
 </svg>

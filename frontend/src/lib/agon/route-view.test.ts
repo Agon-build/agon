@@ -79,3 +79,14 @@ test("a Rules Check answer reads as dispute risk, what decides it and each trap 
   assert.equal(view.marketQuestion, "Will the Democratic Party control the Senate?");
   assert.deepEqual(answerView({ risk: "maybe", traps: [] })!.kind, "rows");
 });
+
+test("a Resolution Watch answer reads as the markets watched, until when, and where alerts arrive", () => {
+  const view = answerView({
+    agent: "Resolution Watch", watchId: "w-1", statusUrl: "https://api.agon.surf/agon/agents/specialists/watch/w-1", endsAt: "2026-12-21T08:00:00.000Z",
+    markets: [{ question: "Will the Bank of Canada hold?", url: "https://polymarket.com/market/a", status: "open" }],
+  });
+  assert.ok(view && view.kind === "watch");
+  assert.equal(view.markets[0]!.question, "Will the Bank of Canada hold?");
+  assert.equal(view.until, "21 December");
+  assert.equal(view.statusUrl, "https://api.agon.surf/agon/agents/specialists/watch/w-1");
+});

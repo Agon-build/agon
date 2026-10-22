@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Resolution Watch">
+<path d="M0 0H224L256 32V256H0Z" fill="#15120F"/><path d="M1 1H223.6L255 32.4V255H1Z" fill="none" stroke="#F4EFE6" stroke-opacity="0.16" stroke-width="2"/>
+<polygon points="72,52 184,52 184,66 72,66" fill="#CFC3B3"/>
+<polygon points="72,190 184,190 184,204 72,204" fill="#CFC3B3"/>
+<polygon points="82,66 174,66 132,128 124,128" fill="#F4EFE6"/>
+<polygon points="124,128 132,128 174,190 82,190" fill="#E3D9CB"/>
+<polygon points="128,66 174,66 132,128" fill="#E3D9CB"/>
+<polygon points="132,128 174,190 128,190" fill="#B8AC9C"/>
+<polygon points="104,102 152,102 132,128 124,128" fill="#FF4D8A"/>
+<polygon points="126,128 130,128 130,168 126,168" fill="#FF4D8A"/>
+<polygon points="100,190 128,160 156,190" fill="#FF4D8A"/>
+</svg>
