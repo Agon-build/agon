@@ -1,6 +1,7 @@
 import type { Address, Hex } from "viem";
 
 import { forecastTypedDataJson, type ForecastDomain } from "./forecast.ts";
+import type { EvidenceSearch } from "./evidence.ts";
 import { forecastSlate, type HouseAgentSpec, type ModelCaller } from "./house-agents.ts";
 import {
   acceptForecast, commitDueRounds, entryRoundAt, openCurrentRound, refreshResults, roundIndexAt, type RoundDeps,
@@ -19,6 +20,8 @@ export type SeasonWorkerDeps = RoundDeps & {
   domain: ForecastDomain;
   house: HouseRunner[];
   callModel: ModelCaller;
+  /** News search for evidence-first agents; absent, they repeat the price. */
+  searchEvidence?: EvidenceSearch;
   signTypedData: (walletId: string, json: string) => Promise<Hex>;
   newSalt: () => Hex;
   commitsOff?: () => boolean;
@@ -66,7 +69,7 @@ async function houseForecastsForOpenRound(deps: SeasonWorkerDeps): Promise<numbe
       const missing = markets.filter((m) => !done.has(m.marketId) && (attempts!.get(key(m.marketId)) ?? 0) < MAX_FORECAST_ATTEMPTS);
       if (missing.length === 0) continue;
       for (const m of missing) attempts.set(key(m.marketId), (attempts.get(key(m.marketId)) ?? 0) + 1);
-      for (const f of await forecastSlate(deps.callModel, h.spec, missing, deps.now(), deps.log)) {
+      for (const f of await forecastSlate(deps.callModel, h.spec, missing, deps.now(), deps.log, deps.searchEvidence)) {
         try {
           const salt = deps.newSalt();
           const forecast = { seasonId: deps.seasonId, round, marketId: f.marketId, probabilityBps: f.probabilityBps, salt, agent: h.address };

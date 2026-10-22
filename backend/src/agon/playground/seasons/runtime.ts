@@ -5,6 +5,7 @@ import { callModel } from "../../../runners/llm/client.js";
 import { executeContractCall, findTransactionByRefId, getTxState, signTypedDataJson } from "../../../chain/circleDev.ts";
 import type { AgonNetwork } from "../../network.ts";
 import { createCircleRootCommitter } from "./committer.ts";
+import { createEvidenceSearch } from "./evidence.ts";
 import { createForecastVerifier, forecastDomain, newSalt } from "./forecast.ts";
 import { createGammaClient } from "./polymarket.ts";
 import type { RoundDeps } from "./rounds.ts";
@@ -63,6 +64,7 @@ export function startSeasonRuntime(env: Record<string, string | undefined> = pro
       house: s.house,
       houseAgentIds: s.houseAgentIds,
       callModel: async (p) => ({ text: (await callModel(p)).text }),
+      ...(env.EXA_API_KEY?.trim() ? { searchEvidence: createEvidenceSearch({ apiKey: env.EXA_API_KEY.trim(), log }) } : {}),
       signTypedData: signTypedDataJson,
       newSalt,
       commitsOff: () => env.AGON_SEASON_COMMITS_OFF === "true",

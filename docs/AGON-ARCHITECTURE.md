@@ -105,7 +105,7 @@ gate (section 11). BNB code in `bnb-market/` is parked and not advertised.
 | `payments/` | Jobs and payment records (`jobs.ts`, `store.ts`), the hire flow (`hire.ts`), x402 exact buying and selling (`exact-buyer.ts`, `exact-seller.ts`), the guarded Circle signer and spending limits (`guarded-signer.ts`, `limits.ts`, `signing-policy.ts`), budget wallets, refunds (`auto-refund.ts`, `manual-refund.ts`), the testnet data stand-in (`standin-seller.ts`), listing protocol answers (`listing-protocols.ts`), settings and runtime wiring |
 | `lead-agent/` | The Agon Lead Agent: market search and match (`market-parse.ts`), data purchases, bargaining with forecasters, hiring, answering, refunding |
 | `agents/` | Specialist agents sold per call: Scout (`scout.ts`), Rules Check (`rules-check.ts`), Pitch (`pitch.ts`), their paid routes (`routes.ts`) and the shared Polymarket lookup (`market-lookup.ts`) |
-| `playground/seasons/` | The Arena: season settings, rounds and slates (`rounds.ts`, `polymarket.ts`), house forecasters (`house-agents.ts`, `house-seller.ts`), signed forecasts (`forecast.ts`), on-chain commits (`committer.ts`), scoring (`scoring.ts`), the worker loop (`worker.ts`), public routes |
+| `playground/seasons/` | The Arena: season settings, rounds and slates (`rounds.ts`, `polymarket.ts`), house forecasters (`house-agents.ts`, `house-seller.ts`), evidence search and the blind forecast (`evidence.ts`), signed forecasts (`forecast.ts`), on-chain commits (`committer.ts`), scoring (`scoring.ts`), the worker loop (`worker.ts`), public routes |
 | `tests/` | The Playground: test tasks and code scorers (`tasks.ts`, `market-rules-set.ts`), the runner and service, results, scores, and AGON's own scheduled checks |
 | `mcp/`, `mcp-oauth/` | The AGON MCP server for buyers and providers, its OAuth, listing tools, named input format (`listing-inputs.ts`), the managed publisher (wallet, ERC-8004 identity, listing versions) |
 | `listing/`, `certification*`, `verification*`, `manifest-*` | Listing drafts, endpoint checks, certification, service file (manifest v2) build and hash checks |
@@ -225,6 +225,7 @@ flowchart LR
 | Rules Check | Verification | 0.25 | What decides a market, traps with quotes checked word for word, dispute risk decided by code; never sees the price | Claude Sonnet 5.5; Polymarket rules and dispute history |
 | Atlas, Vesper, Kestrel, Drift | Analysis | 0.22 ask | House forecasters for one market, behind the Lead, hireable directly | One model each (`AGON_SEASON_HOUSE_MODELS`) |
 | Mirror | Arena only | none | Copies the market price as the benchmark | none |
+| Beacon | Arena only until it beats Mirror | none yet | Evidence first: searches the last 30 days of news (prediction-market sources and quotes left out), forecasts without seeing the price, then code moves half way from the price toward that forecast; no evidence, no move | Claude Sonnet 5.5; Exa news search (`seasons/evidence.ts`), about 0.007 USD a search |
 | Pitch | Analysis | 0.15 | Football forecasts | Haiku 5.5 |
 
 Season 1 dry run result (9001, 12 to 15 October, scored 2026-10-22): every agent
@@ -423,3 +424,4 @@ onboarding, business agents connected to a person's tools.
 | 2026-10-20 | Arena results ask Polymarket for closed markets | Gamma leaves closed markets out; no market had ever resolved |
 | 2026-10-22 | Season 2 dry run (9002) from 22 October to 19 November | A live Arena through the pitch; upgraded agents join as new entries |
 | 2026-10-22 | Agents must bring evidence, reading, watching or checks; no price echo | Season 1: every house forecaster at or below the market copy |
+| 2026-10-22 | Evidence-first forecaster (Beacon) built before Resolution Watch; Arena only until it beats Mirror; weight 0.5 toward its blind forecast | It answers the Season 1 finding and needs Season 2 time to prove itself before 3 November |

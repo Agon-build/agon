@@ -197,3 +197,17 @@ test("bootstrap gives house entries their listing ids; unset keeps them, a set v
   await bootstrapSeason({ ...deps, houseAgentIds: {} }, season);
   assert.equal(await id(), null, "env set without this house clears it");
 });
+
+test("an evidence-first house agent uses the worker's evidence search and forecasts part way from the price", async () => {
+  const { store, deps } = setup();
+  const beacon = DEFAULT_HOUSE_AGENTS.find((a) => a.key === "beacon")!;
+  const searched: string[] = [];
+  deps.house = [{ spec: beacon, walletId: "w-atlas", address: accounts[0]!.address }];
+  deps.callModel = async () => ({ text: '{"probability":0.2,"reasons":["[1] fact"]}' });
+  deps.searchEvidence = async (q) => (searched.push(q), [{ n: 1, title: "t", url: "https://n.example/1", published: "2026-10-19", text: "fact" }]);
+  await bootstrapSeason(deps, season);
+  await runSeasonTick(deps);
+  assert.deepEqual(searched, ["q1", "q2"]);
+  const forecasts = await store.listRoundForecasts(1n, 0n);
+  assert.deepEqual(forecasts.map((f) => f.probabilityBps), [3000, 3000], "half way from 40% toward 20%");
+});

@@ -18,8 +18,9 @@ const market = (n: number, baselineBps = 4100): RoundMarket => ({
   baselineBps,
 });
 
-test("five house agents, all labelled house, one market-copy benchmark, models on Bedrock", () => {
-  assert.deepEqual(DEFAULT_HOUSE_AGENTS.map((a) => a.key), ["atlas", "vesper", "kestrel", "drift", "mirror"]);
+test("six house agents, all labelled house, one market-copy benchmark, one evidence-first agent, models on Bedrock", () => {
+  assert.deepEqual(DEFAULT_HOUSE_AGENTS.map((a) => a.key), ["atlas", "vesper", "kestrel", "drift", "mirror", "beacon"]);
+  assert.deepEqual(DEFAULT_HOUSE_AGENTS.filter((a) => a.kind === "evidence").map((a) => [a.key, a.model]), [["beacon", "global.anthropic.claude-sonnet-5-5"]]);
   assert.ok(DEFAULT_HOUSE_AGENTS.every((a) => a.displayName.includes("(house")));
   assert.deepEqual(DEFAULT_HOUSE_AGENTS.filter((a) => a.kind === "market-copy").map((a) => a.key), ["mirror"]);
   const models = DEFAULT_HOUSE_AGENTS.filter((a) => a.kind === "model").map((a) => a.model!);
