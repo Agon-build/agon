@@ -107,3 +107,38 @@ test("Market rules: the known trap, quotes found in the rules and a fair risk ea
   const titled = { risk: "high", traps: [{ category: "timing", kind: "ambiguous", quote: "Will Zelensky wear suit next Trump meeting?", explain: "Title says next." }] };
   assert.equal(scoreAnswer(suit, titled, ctx).checks.find((c) => c.label.includes("word for word"))!.points, 30);
 });
+
+const SETTLEMENT = { family: "settlement-alerts" as const };
+
+test("Settlement alerts: a Verification agent that takes markets gets four settlement sequences", () => {
+  const cases = [0, 1, 2, 3].map((v) => buildTestCase("8", v, SETTLEMENT)!);
+  assert.deepEqual(cases.map((c) => c.taskId), ["settlement-alerts", "settlement-alerts", "settlement-alerts", "settlement-alerts"]);
+  assert.ok(cases.every((c) => Array.isArray((c.input as { readings: unknown[] }).readings)));
+  assert.equal(buildTestCase("8", 0)!.taskId, "manifest-anchor");
+});
+
+test("Settlement alerts: the right alerts at the right steps score 100, extra or missing alerts lose points", () => {
+  const ctx = { arcChainId: 5042002, arcBlock: 1n };
+  const disputed = buildTestCase("8", 1, SETTLEMENT)!;
+  const right = { alerts: [{ step: 1, kind: "settlement_started" }, { step: 2, kind: "challenged" }, { step: 3, kind: "settlement_started" }, { step: 4, kind: "settled" }] };
+  assert.equal(scoreAnswer(disputed, right, ctx).score, 100);
+  const missing = scoreAnswer(disputed, { alerts: right.alerts.slice(0, 2) }, ctx);
+  assert.equal(missing.passed, false);
+  const extra = scoreAnswer(disputed, { alerts: [...right.alerts, { step: 0, kind: "settled" }] }, ctx);
+  assert.equal(extra.score, 70);
+  const calm = buildTestCase("8", 3, SETTLEMENT)!;
+  assert.equal(scoreAnswer(calm, { alerts: [] }, ctx).score, 100, "no change, no alert");
+  assert.equal(scoreAnswer(calm, { alerts: [{ step: 2, kind: "settled" }] }, ctx).passed, false);
+  assert.equal(scoreAnswer(calm, "nope", ctx).score, 0);
+});
+
+test("Resolution Watch's own alert logic scores 100 on every settlement variant", async () => {
+  const { alertsBetween, stateFromGamma } = await import("../../src/agon/agents/resolution-watch.ts");
+  for (const v of [0, 1, 2, 3]) {
+    const t = buildTestCase("8", v, SETTLEMENT)!;
+    const { question, readings } = t.input as { question: string; readings: Record<string, unknown>[] };
+    const states = readings.map(stateFromGamma);
+    const alerts = states.flatMap((s, i) => (i === 0 ? [] : alertsBetween(question, states[i - 1]!, s).map((a) => ({ step: i, kind: a.kind }))));
+    assert.equal(scoreAnswer(t, { alerts }, { arcChainId: 5042002, arcBlock: 1n }).score, 100, `variant ${v}`);
+  }
+});

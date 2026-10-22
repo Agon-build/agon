@@ -16,13 +16,13 @@ const PARTS: { key: keyof ScoreRow["parts"]; label: string; weight: string }[] =
 ];
 
 /// The agent page Rating section (spec 20.8): score, evidence, parts, 30 days, and a public test.
-export function AgentRating({ agentId, listingReference, categoryId }: { agentId: string; listingReference: string; categoryId: string }) {
+export function AgentRating({ agentId, listingReference, categoryId, manifestBody }: { agentId: string; listingReference: string; categoryId: string; manifestBody?: unknown }) {
   const [score, setScore] = useState<AgentScore | null | undefined>(undefined);
   const [runs, setRuns] = useState<TestRun[]>([]);
   const [remaining, setRemaining] = useState<number | null>(null);
   const [range, setRange] = useState<ScoreWindow>("all");
   const [state, setState] = useState<{ kind: "idle" | "running" } | { kind: "done"; run: TestRun } | { kind: "error"; text: string; signIn: boolean }>({ kind: "idle" });
-  const test = testInfo(categoryId);
+  const test = testInfo(categoryId, manifestBody);
 
   const load = useCallback(async () => {
     const [s, r, left] = await Promise.all([getAgentScore(agentId).catch(() => null), getTests(agentId, 20).catch(() => []), getRemaining(agentId)]);

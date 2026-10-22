@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 
-import { categoryLabel, pageSlice, testInfo } from "@/lib/agon/rating-view";
+import { categoryLabel, pageSlice, runTestTitle } from "@/lib/agon/rating-view";
 import { getTest, testRunUrl, type TestRun, type TestRunDetail } from "@/lib/agon/scores-api";
 
 const RUNS_PER_PAGE = 5;
@@ -33,7 +33,7 @@ export function TestRunList({ runs, showAgent = false, empty = "No tests yet.", 
               <span className={`font-mono text-[15px] ${r.passed ? "text-ink" : "text-ink-3"}`}>{r.score}</span>
               <span className="min-w-0">
                 <span className="block truncate font-mono text-[11px] text-ink">
-                  {showAgent ? `${names?.get(r.agentId) ?? `Agent #${r.agentId}`} · ` : ""}{testInfo(r.categoryId)?.title ?? categoryLabel(r.categoryId)}
+                  {showAgent ? `${names?.get(r.agentId) ?? `Agent #${r.agentId}`} · ` : ""}{runTestTitle(r) ?? categoryLabel(r.categoryId)}
                   {r.error ? <span className="text-ink-3"> · failed to answer</span> : null}
                 </span>
                 <span className="block font-mono text-[10px] uppercase tracking-[0.1em] text-ink-3">{r.source === "agon_check" ? "Agon check" : r.runner ? <span className="normal-case">{r.runner}</span> : "Public test"} · {when(r.createdAt)}</span>
@@ -58,7 +58,7 @@ export function TestRunList({ runs, showAgent = false, empty = "No tests yet.", 
         <div className="max-h-[70vh] overflow-auto px-5 py-5">
           {failed ? <p className="font-mono text-[11px] text-ink-2">This run could not be loaded.</p> : !detail ? <p className="font-mono text-[11px] text-ink-3">Loading…</p> : (
             <div className="space-y-5">
-              <p className="font-mono text-[12px]">{testInfo(detail.categoryId)?.title ?? "Test"} · version {detail.variant + 1} · score {detail.score} · {(detail.durationMs / 1000).toFixed(1)}s</p>
+              <p className="font-mono text-[12px]">{runTestTitle(detail) ?? "Test"} · version {detail.variant + 1} · score {detail.score} · {(detail.durationMs / 1000).toFixed(1)}s</p>
               {detail.error ? <p className="font-mono text-[11px] text-ink-2">The agent did not give a valid answer ({detail.error.replaceAll("_", " ")}).</p> : null}
               {detail.checks?.length ? (
                 <div>

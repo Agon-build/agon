@@ -3,13 +3,14 @@ import { createHash } from "node:crypto";
 import { quoteFound } from "../agents/rules-check.ts";
 import { canonicalHash } from "../playground.ts";
 import { MARKET_RULES_SET } from "./market-rules-set.ts";
+import { SETTLEMENT_SET } from "./settlement-alerts-set.ts";
 
 export const TESTABLE_CATEGORIES = ["1", "3", "5", "7", "8"] as const;
 export const VARIANT_COUNT = 4;
 export const PASS_SCORE = 80;
 
 /// A category's alternative test, chosen by what the agent declares it takes (see tests/service.ts).
-export type TestFamily = "market-rules";
+export type TestFamily = "market-rules" | "settlement-alerts";
 export type TestCase = { categoryId: string; taskId: string; title: string; prompt: string; capability: string; variant: number; input: unknown; expected: unknown };
 type Ctx = { arcChainId: number; arcBlock: bigint };
 
@@ -63,6 +64,10 @@ export function buildTestCase(categoryId: string, variant: number, ctx: { arcBlo
   if (categoryId === "8" && ctx.family === "market-rules") {
     const m = MARKET_RULES_SET[v % MARKET_RULES_SET.length]!;
     return { categoryId, taskId: "market-rules", title: "Market rules", prompt: "Read this prediction market's resolution rules. Return risk (low, medium or high) and traps: each with category (definition, timing, source, threshold, fallback, discretion), kind (ambiguous or fine_print), a quote copied word for word from the rules, and explain.", capability: "market rules review", variant: v, input: { question: m.question, rules: m.rules }, expected: { slug: m.slug, categories: m.expected } };
+  }
+  if (categoryId === "8" && ctx.family === "settlement-alerts") {
+    const s = SETTLEMENT_SET[v % SETTLEMENT_SET.length]!;
+    return { categoryId, taskId: "settlement-alerts", title: "Settlement alerts", prompt: "Each reading is one check of a Polymarket market, in order. Report each alert a watcher should raise as {step, kind}, where step is the reading it appears at and kind is settlement_started, challenged, settled or rules_changed. The first reading is the baseline and raises nothing.", capability: "settlement watching", variant: v, input: { question: s.question, readings: s.readings }, expected: s.expected };
   }
   switch (categoryId) {
     case "3": {
@@ -171,6 +176,20 @@ ${rules}`));
         check(ex.categories ? `An ambiguous trap of the kind that was argued (${ex.categories.join(", ")}), quoted from the rules` : "The tie rule is caught, quoted from the rules", caught, 35),
         check(ex.categories ? "Dispute risk is medium or high" : "Dispute risk is low or medium", ex.categories ? risk === "medium" || risk === "high" : risk === "low" || risk === "medium", 25),
       ], extra);
+    }
+    case "settlement-alerts": {
+      const ex = test.expected as { step: number; kind: string }[];
+      const shaped = Array.isArray(o.alerts);
+      const got = list(o.alerts).map((a) => rec(a)).filter(Boolean).map((a) => `${Number(a!.step)}:${String(a!.kind)}`);
+      const want = ex.map((e) => `${e.step}:${e.kind}`);
+      const extra = got.filter((g) => !want.includes(g)).length;
+      const found = want.filter((w) => got.includes(w)).length;
+      return finish([
+        want.length === 0
+          ? check("No alert for a market that did not settle", shaped && got.length === 0, 70)
+          : { label: `Each expected alert at its step (${want.join(", ")})`, points: shaped ? Math.round(70 * (found / want.length)) : 0, max: 70 },
+        check("No alert that should not be raised", shaped && extra === 0, 30),
+      ], extra === 0 ? [] : [`${extra} alert(s) that should not be raised.`]);
     }
     default:
       return { score: 0, passed: false, notes: ["Unknown task."], checks: [] };

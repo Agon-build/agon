@@ -60,8 +60,28 @@ export const TEST_TASKS: Readonly<Record<string, { title: string; summary: strin
   "8": { title: "Manifest anchor", summary: "Hash each safe service file exactly and flag the unsafe ones." },
 };
 
-export function testInfo(categoryId: string): { title: string; summary: string } | null {
-  return TEST_TASKS[categoryId] ?? null;
+/// Tests chosen by the input a Verification agent declares (backend tests/service.ts testFamilyFor).
+const FAMILY_TASKS: Readonly<Record<string, { title: string; summary: string }>> = {
+  "market-rules": { title: "Market rules", summary: "Read a real market's resolution rules: catch the trap that was argued, quote the rules word for word, and rate the dispute risk fairly." },
+  "settlement-alerts": { title: "Settlement alerts", summary: "Follow a market through settlement, check by check, and raise exactly the right alerts at the right step." },
+};
+const TASK_IDS: Readonly<Record<string, string>> = { "arc-live-fact": "1", "evidence-under-pressure": "3", "transaction-safety": "5", "selector-guard": "7", "manifest-anchor": "8" };
+
+function familyFor(categoryId: string, manifestBody: unknown): string | null {
+  if (categoryId !== "8") return null;
+  const props = (manifestBody as { invocation?: { requestSchema?: { properties?: unknown } } } | null | undefined)?.invocation?.requestSchema?.properties;
+  if (!props || typeof props !== "object") return null;
+  return Object.hasOwn(props, "markets") ? "settlement-alerts" : Object.hasOwn(props, "market") ? "market-rules" : null;
+}
+
+export function testInfo(categoryId: string, manifestBody?: unknown): { title: string; summary: string } | null {
+  const family = familyFor(categoryId, manifestBody);
+  return (family ? FAMILY_TASKS[family] : null) ?? TEST_TASKS[categoryId] ?? null;
+}
+
+/// A past run is named by the task it actually ran.
+export function runTestTitle(run: { taskId: string; categoryId: string }): string | null {
+  return FAMILY_TASKS[run.taskId]?.title ?? TEST_TASKS[TASK_IDS[run.taskId] ?? ""]?.title ?? null;
 }
 
 /// What to show when a public test cannot run.

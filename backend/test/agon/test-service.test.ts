@@ -125,3 +125,10 @@ test("a Verification agent that takes a market is tested on market rules; one th
   await service.runAgonCheck("5042002:0xreg:7");
   assert.deepEqual(calls.map((c) => c.family), ["market-rules", undefined]);
 });
+
+test("a Verification agent that takes markets is tested on settlement alerts", async () => {
+  const { service, calls } = setup();
+  listings["5042002:0xreg:8"] = { agentId: "48", categoryId: "8", listed: true, listingReference: "5042002:0xreg:8", manifestBody: { ...manifest, invocation: { requestSchema: { type: "object", properties: { markets: { type: "string" } } } } } };
+  await service.runAgonCheck("5042002:0xreg:8");
+  assert.equal(calls.at(-1)!.family, "settlement-alerts");
+});

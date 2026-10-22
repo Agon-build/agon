@@ -54,7 +54,7 @@ export function PublicTestPanel() {
     }
   }
 
-  const test = listing ? testInfo(listing.category) : null;
+  const test = listing ? testInfo(listing.category, listing.manifest.body) : null;
   return (
     <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
       <BracketedCell pad="lg">

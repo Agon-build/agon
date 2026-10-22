@@ -12,7 +12,7 @@ import type { MarketLookup, MarketSnapshot } from "./market-lookup.ts";
 import { isFootballMarket, pitchPrompt } from "./pitch.ts";
 import { randomBytes } from "node:crypto";
 
-import { MAX_WATCH_MARKETS, parseMarketRefs, type WatchState } from "./resolution-watch.ts";
+import { MAX_WATCH_MARKETS, alertsBetween, parseMarketRefs, stateFromGamma, type WatchState } from "./resolution-watch.ts";
 import { rulesCheck, rulesCheckPrompt } from "./rules-check.ts";
 import type { WatchStore } from "./watch-store.ts";
 import { scoutReport, scoutRulesPrompt } from "./scout.ts";
@@ -88,6 +88,11 @@ export function createSpecialistRoutes(deps: {
         const reply = await deps.callModel({ model: spec.model, ...rulesCheckPrompt(t.question, t.rules), maxTokens: RULES_MAX_TOKENS, temperature: 0 });
         const { decides, traps, risk } = rulesCheck({ question: t.question, rules: t.rules, umaStatuses: [] }, reply.text);
         return { decides, traps, risk };
+      } } : {}),
+      // Resolution Watch answers the settlement-alerts test with the same code its worker runs.
+      ...(found.key === "watch" ? { settlementAlerts: async (t: { question: string; readings: Record<string, unknown>[] }) => {
+        const states = t.readings.map(stateFromGamma);
+        return states.flatMap((s, i) => (i === 0 ? [] : alertsBetween(t.question, states[i - 1]!, s).map((a) => ({ step: i, kind: a.kind }))));
       } } : {}),
     });
     if (check === "preflight") return next();

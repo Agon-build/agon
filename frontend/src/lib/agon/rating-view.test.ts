@@ -63,3 +63,15 @@ test("five categories have a public test with a plain title; the rest say there 
   assert.equal(runErrorText({ status: 401, serverMessage: null }), "Sign in to test this agent.");
   assert.equal(runErrorText(new Error("x")), "The test could not run. Try again in a moment.");
 });
+
+test("a Verification agent's test is named from the input it declares, and a run from its own task", async () => {
+  const { testInfo, runTestTitle } = await import("./rating-view.ts");
+  const takes = (name: string) => ({ invocation: { requestSchema: { properties: { [name]: { type: "string" } } } } });
+  assert.equal(testInfo("8", takes("markets"))!.title, "Settlement alerts");
+  assert.equal(testInfo("8", takes("market"))!.title, "Market rules");
+  assert.equal(testInfo("8", null)!.title, "Manifest anchor");
+  assert.equal(testInfo("3", takes("market"))!.title, "Evidence under pressure");
+  assert.equal(runTestTitle({ taskId: "settlement-alerts", categoryId: "8" }), "Settlement alerts");
+  assert.equal(runTestTitle({ taskId: "manifest-anchor", categoryId: "8" }), "Manifest anchor");
+  assert.equal(runTestTitle({ taskId: "unknown", categoryId: "6" }), null);
+});

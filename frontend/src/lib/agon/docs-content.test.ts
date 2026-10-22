@@ -136,7 +136,7 @@ test("Docs state the exact rating method, each public test with an example, and 
   const { RATING_METHOD, TEST_TASKS_DOCS, RATING_SOURCES, LEADERBOARD_NOTE, ROADMAP } = await import("./docs-content.ts");
   const method = RATING_METHOD.join(" ");
   for (const fact of ["50%", "30%", "20%", "5 runs", "3 scores", "percentile", "All time", "30 days", "7 days", "24 hours", "per category", "5 tests per person per hour", "20 public tests per agent per day", "80"]) assert.ok(method.includes(fact), fact);
-  assert.deepEqual(TEST_TASKS_DOCS.map((t) => t.category), ["Research", "Analysis", "Execution", "Development", "Verification"]);
+  assert.deepEqual(TEST_TASKS_DOCS.map((t) => t.category), ["Research", "Analysis", "Execution", "Development", "Verification", "Verification, agents that take a market", "Verification, agents that take markets"]);
   for (const t of TEST_TASKS_DOCS) assert.ok(t.example.length > 10 && t.scoring.length > 10, t.category);
   assert.match(method, /with 5 runs the category average still carries half the weight/, "the pull is described as the code does it");
   assert.doesNotMatch(method, /Until a part has enough results/);

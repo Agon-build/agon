@@ -175,7 +175,7 @@ function ArcListingDetailPage() {
 
                   <BracketedCell pad="lg">
                     <div id="rating" className="scroll-mt-24">
-                      <AgentRating agentId={listing.agentId} listingReference={listing.id} categoryId={listing.category} />
+                      <AgentRating agentId={listing.agentId} listingReference={listing.id} categoryId={listing.category} manifestBody={manifestBody} />
                     </div>
                   </BracketedCell>
 

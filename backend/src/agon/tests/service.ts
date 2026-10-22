@@ -9,11 +9,14 @@ export const DEFAULT_TEST_LIMITS: TestLimits = { perUserHour: 5, perAgentDay: 20
 export type TestableListing = { agentId: string; categoryId: string; listed: boolean; listingReference: string; manifestBody: unknown | null };
 
 /// A run as anyone may see it in lists: no input, no answer, runner shortened.
-/// A Verification agent whose service file takes a `market` reads market rules; the test follows the declared input.
+/// A Verification agent whose service file takes a `market` reads market rules, and one that takes `markets`
+/// watches settlement; the test follows the declared input.
 export function testFamilyFor(listing: Pick<TestableListing, "categoryId" | "manifestBody">): TestFamily | undefined {
   if (listing.categoryId !== "8") return undefined;
   const props = (listing.manifestBody as { invocation?: { requestSchema?: { properties?: unknown } } } | null)?.invocation?.requestSchema?.properties;
-  return props && typeof props === "object" && Object.hasOwn(props, "market") ? "market-rules" : undefined;
+  if (!props || typeof props !== "object") return undefined;
+  if (Object.hasOwn(props, "markets")) return "settlement-alerts";
+  return Object.hasOwn(props, "market") ? "market-rules" : undefined;
 }
 
 export type PublicTestView = {

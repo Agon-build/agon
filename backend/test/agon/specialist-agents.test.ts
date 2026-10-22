@@ -262,3 +262,18 @@ test("a watch's status page is public by its id and never shows the owner", asyn
   assert.ok(!JSON.stringify(body).includes(OWNER_ADDR));
   assert.equal((await app.request("http://api.test/watch/unknown")).status, 404);
 });
+
+test("the resolution watch endpoint answers the settlement-alerts test with its own alert logic", async () => {
+  const { app, settler } = watchSetup(null);
+  const reading = (over: Record<string, unknown>) => ({ closed: false, outcomePrices: '["0.4","0.6"]', description: "rules", ...over });
+  const res = await app.request("http://api.test/watch", json({
+    protocol: "agon-playground/1", category: "verification",
+    task: { id: "settlement-alerts", title: "Settlement alerts", adversarialPrompt: "Report alerts.", capability: "settlement watching" },
+    input: { question: "q", readings: [reading({}), reading({ umaResolutionStatus: "proposed" }), reading({ closed: true, umaResolutionStatus: "resolved", outcomePrices: '["1","0"]' })] },
+    scope: { listingReference: "public-test", listingVersion: "0" },
+  }));
+  assert.equal(res.status, 200);
+  const body = await res.json() as { output: { alerts: { step: number; kind: string }[] } };
+  assert.deepEqual(body.output.alerts, [{ step: 1, kind: "settlement_started" }, { step: 2, kind: "settled" }]);
+  assert.equal(settler.calls.length, 0);
+});

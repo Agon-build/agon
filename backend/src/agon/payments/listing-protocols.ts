@@ -31,6 +31,17 @@ const marketRulesBody = z.object({
   input: z.object({ question: z.string().min(1).max(500), rules: z.string().min(1).max(12_000) }),
   scope: z.object({ listingReference: z.string().max(200), listingVersion: z.string().max(20) }),
 });
+export const SETTLEMENT_TASK_ID = "settlement-alerts";
+const settlementBody = z.object({
+  protocol: z.literal(CERTIFICATION_PROTOCOL),
+  category: z.string().max(40),
+  task: z.object({ id: z.literal(SETTLEMENT_TASK_ID), title: z.string().max(200), adversarialPrompt: z.string().max(1000), capability: z.string().max(200) }),
+  input: z.object({ question: z.string().min(1).max(500), readings: z.array(z.record(z.unknown())).min(1).max(12) }),
+  scope: z.object({ listingReference: z.string().max(200), listingVersion: z.string().max(20) }),
+});
+/// How a settlement watcher answers the settlement-alerts test: the alerts it would raise, step by step.
+export type SettlementAlertsAnswerer = (task: { question: string; readings: Record<string, unknown>[] }) => Promise<{ step: number; kind: string }[]>;
+
 /// How a rules-reading agent answers the market-rules test: its own reading, or null when it could not read them.
 export type MarketRulesAnswerer = (task: { question: string; rules: string }) => Promise<Record<string, unknown> | null>;
 
@@ -93,7 +104,14 @@ function firstJsonObject(text: string): unknown {
 /// agents with their model, deterministic agents with their rules. The only
 /// fixed fields are the ones that are true by construction: these endpoints
 /// never write anywhere.
-export async function certificationReply(input: { agent: { name: string; capabilities: string[] }; body: unknown; marketRules?: MarketRulesAnswerer } & CertificationAnswerer): Promise<{ status: 200; json: CertificationReply } | { status: 400 | 502; json: { error: string } }> {
+export async function certificationReply(input: { agent: { name: string; capabilities: string[] }; body: unknown; marketRules?: MarketRulesAnswerer; settlementAlerts?: SettlementAlertsAnswerer } & CertificationAnswerer): Promise<{ status: 200; json: CertificationReply } | { status: 400 | 502; json: { error: string } }> {
+  const settlementTask = settlementBody.safeParse(input.body);
+  if (settlementTask.success) {
+    if (!input.settlementAlerts) return { status: 400, json: { error: "invalid_certification_request" } };
+    const alerts = await input.settlementAlerts(settlementTask.data.input).catch(() => null);
+    if (!alerts) return { status: 502, json: { error: "watch_unavailable" } };
+    return { status: 200, json: { protocol: CERTIFICATION_PROTOCOL, agent: { name: input.agent.name, version: "1", capabilities: input.agent.capabilities }, output: { alerts, writesPerformed: false }, externalWrites: false } };
+  }
   const rulesTask = marketRulesBody.safeParse(input.body);
   if (rulesTask.success) {
     if (!input.marketRules) return { status: 400, json: { error: "invalid_certification_request" } };
@@ -147,7 +165,7 @@ const carriesPayment = (c: Context) => Boolean(c.req.header("PAYMENT-SIGNATURE")
 export async function answerListingCheck(
   c: Context,
   raw: unknown,
-  certify: ({ agent: { name: string; capabilities: string[] }; gate?: (c: Context) => boolean; marketRules?: MarketRulesAnswerer } & CertificationAnswerer) | null,
+  certify: ({ agent: { name: string; capabilities: string[] }; gate?: (c: Context) => boolean; marketRules?: MarketRulesAnswerer; settlementAlerts?: SettlementAlertsAnswerer } & CertificationAnswerer) | null,
 ): Promise<Response | "preflight" | null> {
   const kind = listingProtocolKind(raw);
   if (kind === "service") return null;
