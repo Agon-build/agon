@@ -1,7 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Scout">
-  <rect width="256" height="256" fill="#1D2B53"/>
-  <path d="M172 82 C160 60 104 56 92 86 C80 118 176 118 170 160 C164 198 100 198 82 172" fill="none" stroke="#F4EFE6" stroke-width="26" stroke-linecap="square"/>
-  <circle cx="194" cy="62" r="20" fill="none" stroke="#F4EFE6" stroke-width="8"/>
-  <line x1="194" y1="34" x2="194" y2="46" stroke="#F4EFE6" stroke-width="8"/>
-  <line x1="222" y1="62" x2="210" y2="62" stroke="#F4EFE6" stroke-width="8"/>
+  <!-- AGON agent mark: notched tile, 128px live area, 14px strokes, one pink element -->
+  <path d="M0 0H224L256 32V256H0Z" fill="#15120F"/>
+  <path d="M1 1H223.6L255 32.4V255H1Z" fill="none" stroke="#F4EFE6" stroke-opacity="0.16" stroke-width="2"/>
+  <path d="M64 100V64H100" fill="none" stroke="#F4EFE6" stroke-width="14" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M156 64H192V100" fill="none" stroke="#F4EFE6" stroke-width="14" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M192 156V192H156" fill="none" stroke="#F4EFE6" stroke-width="14" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M100 192H64V156" fill="none" stroke="#F4EFE6" stroke-width="14" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M116 116H140V140H116Z" fill="#FF4D8A"/>
 </svg>

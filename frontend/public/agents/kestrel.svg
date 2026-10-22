@@ -1,6 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Kestrel">
-  <rect width="256" height="256" fill="#D9531E"/>
-  <path d="M58 52 H82 V204 H58 Z" fill="#F4EFE6"/>
-  <path d="M82 120 L178 52 H210 L82 144 Z" fill="#F4EFE6"/>
-  <path d="M112 122 L128 110 L210 204 H178 Z" fill="#F4EFE6"/>
+  <!-- AGON agent mark: notched tile, 128px live area, 14px strokes, one pink element -->
+  <path d="M0 0H224L256 32V256H0Z" fill="#15120F"/>
+  <path d="M1 1H223.6L255 32.4V255H1Z" fill="none" stroke="#F4EFE6" stroke-opacity="0.16" stroke-width="2"/>
+  <path d="M64 160H192" fill="none" stroke="#F4EFE6" stroke-width="14" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M148 116V160" fill="none" stroke="#F4EFE6" stroke-width="14" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M134 80H162V108H134Z" fill="#FF4D8A"/>
 </svg>

@@ -1,8 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Agon Lead Agent">
-  <rect width="256" height="256" fill="#FF3F88"/>
-  <g fill="#121212">
-    <path d="M56 56h22v122h122v22H56z"/>
-    <path d="M98 56h22v80h80v22H98z" opacity="0.7"/>
-    <path d="M140 56h22v38h38v22h-60z" opacity="0.42"/>
-  </g>
+  <!-- AGON agent mark: notched tile, 128px live area, 14px strokes, one pink element -->
+  <path d="M0 0H224L256 32V256H0Z" fill="#15120F"/>
+  <path d="M1 1H223.6L255 32.4V255H1Z" fill="none" stroke="#F4EFE6" stroke-opacity="0.16" stroke-width="2"/>
+  <path d="M64 108H104V148H64Z" fill="#FF4D8A"/>
+  <path d="M104 128H136" fill="none" stroke="#F4EFE6" stroke-width="14" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M136 76V180" fill="none" stroke="#F4EFE6" stroke-width="14" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M136 76H168" fill="none" stroke="#F4EFE6" stroke-width="14" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M136 128H168" fill="none" stroke="#F4EFE6" stroke-width="14" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M136 180H168" fill="none" stroke="#F4EFE6" stroke-width="14" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M168 64H192V88H168Z" fill="#F4EFE6"/>
+  <path d="M168 116H192V140H168Z" fill="#F4EFE6"/>
+  <path d="M168 168H192V192H168Z" fill="#F4EFE6"/>
 </svg>
