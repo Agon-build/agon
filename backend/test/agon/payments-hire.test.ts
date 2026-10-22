@@ -18,7 +18,7 @@ const LEAD = `0x${"c".repeat(40)}` as Address;
 function world(opts: { price?: bigint } = {}) {
   const store = new MemoryPaymentsStore();
   const settler = fakeSettler();
-  const state = { price: opts.price ?? 300_000n, payTo: LEAD, fail: false, refundBody: false, free: false, transferFails: 0 };
+  const state = { price: opts.price ?? 300_000n, payTo: LEAD, fail: false, refundBody: false, free: false, refuse: null as string | null, transferFails: 0 };
   const transfers: { destinationAddress: string; amountBaseUnits: bigint; idempotencyKey: string }[] = [];
   const seen: { method: string; url: string; body: string }[] = [];
   const app = new Hono<{ Variables: { x402: X402Paid } }>();
@@ -35,7 +35,7 @@ function world(opts: { price?: bigint } = {}) {
   );
   app.post(
     "/agon/agents/lead/forecast",
-    async (c, next) => (state.free ? c.json({ ok: true, probabilityBps: 5000 }) : next()),
+    async (c, next) => (state.refuse ? c.json({ error: state.refuse, message: "That market has already closed." }, 422) : state.free ? c.json({ ok: true, probabilityBps: 5000 }) : next()),
     exactPayment({ network, payTo: LEAD, price: async () => state.price, settle: settler.settle, claimNonce: (n, p, nonce) => store.claimSellerNonce(n, p, nonce), description: "Lead" }),
     async (c) => (state.fail
       ? c.json({ error: "boom" }, 500)
@@ -99,6 +99,27 @@ test("price change after quote is refused without charge", async () => {
   assert.equal((await store.getJob(q.quote.jobId))!.state, "failed");
   const spend = [...store.spends.values()][0]!;
   assert.equal(spend.state, "failed", "the reservation is released");
+});
+
+test("a provider that refuses the job before payment fails it at once with its reason, and nothing is signed or charged", async () => {
+  const { deps, req, settler, state, store } = world();
+  const q = await quoteHire(deps, req);
+  assert.ok(q.ok && q.quote.step === "confirm_code");
+  state.refuse = "market_closed";
+  const out = await confirmHire(deps, { ownerRef: "wa:abc", code: q.quote.code });
+  assert.ok(!out.ok && out.code === "market_closed", show(out));
+  assert.equal(settler.calls.length, 0);
+  const job = (await store.getJob(q.quote.jobId))!;
+  assert.equal(job.state, "failed");
+  assert.equal((job.result as { error?: string }).error, "market_closed", "the job page names the provider's reason");
+  assert.deepEqual(await store.listJobPayments(q.quote.jobId).then((p) => p.map((x) => x.status)), ["failed"]);
+  assert.equal([...store.spends.values()][0]!.state, "failed", "the reservation is released");
+});
+
+test("a provider that refuses at quote time gives its reason, not 'did not answer'", async () => {
+  const { deps, req, state } = world();
+  state.refuse = "market_closed";
+  assert.deepEqual(await quoteHire(deps, req), { ok: false, code: "market_closed", detail: "status 422" });
 });
 
 test("over the per-hire limit needs the approval link, which pays once", async () => {

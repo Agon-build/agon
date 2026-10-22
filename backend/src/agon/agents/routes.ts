@@ -34,6 +34,15 @@ const body = z.object({ market: z.string().trim().min(3).max(400) });
 const watchBody = z.object({ markets: z.string().trim().min(3).max(4_000) });
 const watchRefs = (raw: unknown): string[] | null => { const b = watchBody.safeParse(raw); return b.success ? parseMarketRefs(b.data.markets) : null; };
 
+/// Why a market was refused, in plain words, for the buyer before anything is signed.
+const REFUSALS: Readonly<Record<string, string>> = {
+  market_not_found: "That market was not found on Polymarket. Check the link, slug or condition id.",
+  market_closed: "That market has already closed, so there is nothing left to do on it.",
+  not_yes_no: "Only Yes or No markets are supported.",
+  not_a_football_market: "Pitch only forecasts football markets.",
+  market_unavailable: "Polymarket did not answer. Try again in a minute.",
+};
+
 const marketView = (m: MarketSnapshot) => ({ question: m.question, url: m.url, slug: m.slug, closesAt: m.endAt.toISOString(), crowdBps: m.yesBps });
 
 /// Specialist agents Agon runs and sells per call over x402: Pitch forecasts
@@ -59,6 +68,21 @@ export function createSpecialistRoutes(deps: {
   const sellerFor = (key: string) => (Object.hasOwn(SPECIALISTS, key) && deps.sellers[key as SpecialistKey] && (key !== "watch" || deps.watch) ? { key: key as SpecialistKey, seller: deps.sellers[key as SpecialistKey]! } : null);
   const gates = new Map<string, ReturnType<typeof createCertificationGate>>();
   const gateFor = (key: string) => gates.get(key) ?? gates.set(key, createCertificationGate()).get(key)!;
+  /// The markets a request names, each found, still open and fit for this agent, or the reason it is refused.
+  const marketsFor = async (key: SpecialistKey, raw: unknown): Promise<{ ok: true; list: MarketSnapshot[] } | { ok: false; code: string }> => {
+    const one = body.safeParse(raw);
+    const refs = key === "watch" ? watchRefs(raw) : one.success ? [one.data.market] : null;
+    if (!refs) return { ok: false, code: "invalid_request" };
+    const list: MarketSnapshot[] = [];
+    for (const ref of refs) {
+      const r = await deps.lookup(ref);
+      if (!r.ok) return { ok: false, code: r.code };
+      if (r.market.closed) return { ok: false, code: "market_closed" };
+      if (key === "pitch" && !isFootballMarket(r.market)) return { ok: false, code: "not_a_football_market" };
+      list.push(r.market);
+    }
+    return { ok: true, list };
+  };
 
   // A watch's status is public by its unguessable id; the owner is never shown.
   app.get("/watch/:id", async (c) => {
@@ -100,6 +124,12 @@ export function createSpecialistRoutes(deps: {
     if (found.key === "watch") {
       if (!watchRefs(raw)) return c.json({ error: "invalid_request", message: `Send {"markets": "<up to ${MAX_WATCH_MARKETS} Polymarket links, slugs or condition ids, one per line>"}.` }, 400);
     } else if (!body.safeParse(raw).success) return c.json({ error: "invalid_request", message: "Send {\"market\": \"<polymarket link, slug or condition id>\"}." }, 400);
+    // Check the markets before asking for payment, so a buyer never signs for a market this agent would refuse.
+    // A paid request is checked again just before it settles.
+    if (!c.req.header("payment-signature") && !c.req.header("x-payment")) {
+      const checked = await marketsFor(found.key, raw);
+      if (!checked.ok) return c.json({ error: checked.code, message: REFUSALS[checked.code] ?? "This market cannot be used." }, checked.code === "market_unavailable" ? 503 : 422);
+    }
     return next();
   });
 
@@ -116,26 +146,10 @@ export function createSpecialistRoutes(deps: {
         description: SPECIALISTS[key].description,
         // Nothing settles until the market is found and fits this agent.
         beforeSettle: async (_payment, ctx) => {
-          if (key === "watch") {
-            const refs = watchRefs(await ctx.req.raw.clone().json().catch(() => null));
-            if (!refs) return "invalid_request";
-            const found: MarketSnapshot[] = [];
-            for (const ref of refs) {
-              const r = await deps.lookup(ref);
-              if (!r.ok) return r.code;
-              if (r.market.closed) return "market_closed";
-              found.push(r.market);
-            }
-            watched.set(ctx.req.raw, found);
-            return null;
-          }
-          const parsed = body.safeParse(await ctx.req.raw.clone().json().catch(() => null));
-          if (!parsed.success) return "invalid_request";
-          const found = await deps.lookup(parsed.data.market);
-          if (!found.ok) return found.code;
-          if (found.market.closed) return "market_closed";
-          if (key === "pitch" && !isFootballMarket(found.market)) return "not_a_football_market";
-          markets.set(ctx.req.raw, found.market);
+          const checked = await marketsFor(key, await ctx.req.raw.clone().json().catch(() => null));
+          if (!checked.ok) return checked.code;
+          if (key === "watch") watched.set(ctx.req.raw, checked.list);
+          else markets.set(ctx.req.raw, checked.list[0]!);
           return null;
         },
         now,

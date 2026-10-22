@@ -5,7 +5,7 @@ import { LEAD_PROVIDER_REF, type LiveEvent } from "../lead-agent/lead-agent.ts";
 import { formatUsdc, type BargainStep } from "../payments/bargain.ts";
 import { budgetWalletRef } from "../payments/budget-wallets.ts";
 import { MAX_CODE_ATTEMPTS } from "../payments/limits.ts";
-import type { HireOutcome } from "../payments/hire.ts";
+import type { HireOutcome, ProviderRefusal } from "../payments/hire.ts";
 import { receiptTree, type ReceiptNode } from "../payments/jobs.ts";
 import type { HireService } from "../payments/runtime.ts";
 import type { BudgetWallet, Job, JobState, PaymentsStore } from "../payments/types.ts";
@@ -15,7 +15,7 @@ export type WalletView = {
   networkId: AgonNetworkId; network: string; testnet: boolean; explorer: string; address: Address; balance: bigint | null;
   perHireCap: bigint; dailyCap: bigint; spentToday: bigint; leftToday: bigint; frozen: boolean;
 };
-export type AskRefusal = "invalid_question" | "payments_off" | "frozen" | "over_your_max" | "insufficient_balance" | "provider_unreachable" | "no_matching_option" | "provider_free" | "busy" | "terms_changed";
+export type AskRefusal = "invalid_question" | "payments_off" | "frozen" | "over_your_max" | "insufficient_balance" | "provider_unreachable" | "no_matching_option" | "provider_free" | "busy" | "terms_changed" | ProviderRefusal;
 export type AskResult =
   | { ok: true; step: "confirm_code"; jobId: string; amount: bigint; fee: bigint; total: bigint; providerLabel: string; network: string; testnet: boolean; expiresAt: Date; code: string }
   | { ok: true; step: "approval_link"; jobId: string; amount: bigint; fee: bigint; total: bigint; providerLabel: string; network: string; testnet: boolean; expiresAt: Date; approvalUrl: string }

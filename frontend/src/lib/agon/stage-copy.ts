@@ -4,6 +4,15 @@ export const KIND_LABEL: Record<StageEventKind, string> = {
   note: "Step", data: "Data bought", haggle: "Haggle", hire: "Hired", refund: "Refund", fail: "Problem",
 };
 
+/// A market agent refused the request before asking for payment.
+const MARKET_REFUSALS: Record<string, string> = {
+  market_not_found: "That market was not found on Polymarket. Check the link, slug or condition id. Nothing was charged.",
+  market_closed: "That market has already closed, so there is nothing left to do on it. Nothing was charged.",
+  not_yes_no: "Only Yes or No markets are supported. Nothing was charged.",
+  not_a_football_market: "This agent only works on football markets. Nothing was charged.",
+  market_unavailable: "Polymarket did not answer. Try again in a minute. Nothing was charged.",
+};
+
 const ASK: Record<string, string> = {
   invalid_question: "Ask a full question, between 8 and 300 characters.",
   not_hireable: "This agent cannot be hired right now. Pick another on the Agents page.",
@@ -22,6 +31,7 @@ const ASK: Record<string, string> = {
   outside_off: "That service is on Circle and outside hires are switched off right now.",
   terms_changed: "That service changed its price or payee just now. Nothing was charged; ask again.",
   route_expired: "That choice expired. Ask again for a fresh pick.",
+  ...MARKET_REFUSALS,
 };
 
 export function askRefusalText(code: string, amount?: string): string {
@@ -47,6 +57,7 @@ const CONFIRM: Record<string, string> = {
   price_over_limit: "The price changed after the quote. Nothing was charged; ask again.",
   payee_mismatch: "The payee changed after the quote. Nothing was charged; ask again.",
   network_unavailable: "Agon could not be reached. Check your connection; the receipt shows whether you paid.",
+  ...MARKET_REFUSALS,
 };
 
 export const confirmFailureText = (code: string) => CONFIRM[code] ?? "The payment did not go through. Nothing more will be charged.";
@@ -60,6 +71,7 @@ const FAILURE: Record<string, string> = {
   delivery_unknown: "The payment landed but the answer did not arrive.",
   payment_expired_unused: "The payment authorization expired unused. Nothing was charged.",
   never_signed: "The payment was never signed. Nothing was charged.",
+  ...MARKET_REFUSALS,
 };
 
 export const failureText = (code: string | null) => (code ? FAILURE[code] : undefined) ?? "The agents could not finish this job.";
@@ -76,3 +88,12 @@ const APPROVAL: Record<string, string> = {
 };
 
 export const approvalFailureText = (code: string) => APPROVAL[code] ?? CONFIRM[code] ?? "The approval did not go through.";
+
+/// A question is the heading. A hire's raw input (links, slugs, one per line) is not a sentence:
+/// it shows as a plain list under "Hire <agent>".
+export function hireHeading(question: string | null, agentName: string | null): { title: string | null; lines: string[] | null } {
+  if (!question) return { title: null, lines: null };
+  const lines = question.split("\n").map((l) => l.trim()).filter(Boolean);
+  const isInput = lines.length > 1 || (lines.length === 1 && !/\s/.test(lines[0]!) && lines[0]!.length > 24);
+  return isInput ? { title: `Hire ${agentName ?? "this agent"}`, lines } : { title: question, lines: null };
+}

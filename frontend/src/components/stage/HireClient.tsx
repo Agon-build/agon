@@ -20,7 +20,7 @@ import { presentListing } from "@/lib/agon/catalog";
 import { getListing, inspectManifest } from "@/lib/agon/client";
 import { canAfford } from "@/lib/agon/hire-panel";
 import { mainnetInView, mergeAnswers, sourcesNote } from "@/lib/agon/route-view";
-import { askRefusalText, confirmFailureText } from "@/lib/agon/stage-copy";
+import { askRefusalText, confirmFailureText, hireHeading } from "@/lib/agon/stage-copy";
 import type { AskResponse, HistoryItem, LeaderboardRow, RoutePick, StageConfig, StageWallet } from "@/lib/agon/stage-types";
 import { beatsMarketText, phaseStep } from "@/lib/agon/stage-view";
 
@@ -191,6 +191,7 @@ export function HireClient() {
   // While the payment is in flight the job can still read "quoted"; show it as paying, not as unpaid.
   const shown = live && mode.kind === "run" && mode.paying && live.phase === "quoted" ? { ...live, phase: "paying" as const } : live;
   const question = mode.kind === "idle" ? null : mode.kind === "run" ? (mode.question ?? live?.question ?? null) : mode.question;
+  const heading = hireHeading(question, live?.receipt?.label ?? agentName ?? null);
   const step = mode.kind === "idle" ? 0 : mode.kind === "run" ? phaseStep(shown?.phase ?? "paying") : 1;
   // The mainnet wallet strip shows while a mainnet service is on screen.
   const onMainnet = mainnetInView({
@@ -212,9 +213,14 @@ export function HireClient() {
         <div className="mt-10 grid gap-12 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-16">
           <div className="min-w-0">
             <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Hire{onMainnet ? " · Arc mainnet" : config ? ` · ${config.network}` : ""}</p>
-            <h1 className={`mt-4 text-balance font-display uppercase tracking-[-.04em] text-ink ${question ? "text-[clamp(1.6rem,2.8vw,2.5rem)] leading-[1.05]" : "text-[clamp(2.4rem,5vw,4.5rem)] leading-[.9]"}`}>
-              {question ?? (agentRef ? `Hire ${agentName ?? "this agent"}` : "Ask about any Polymarket market")}
+            <h1 className={`mt-4 text-balance font-display uppercase tracking-[-.04em] text-ink ${heading.title ? "text-[clamp(1.6rem,2.8vw,2.5rem)] leading-[1.05]" : "text-[clamp(2.4rem,5vw,4.5rem)] leading-[.9]"}`}>
+              {heading.title ?? (agentRef ? `Hire ${agentName ?? "this agent"}` : "Ask about any Polymarket market")}
             </h1>
+            {heading.lines ? (
+              <ul className="mt-4 space-y-1 break-all font-mono text-[13px] leading-6 text-ink-2">
+                {heading.lines.map((line, i) => <li key={i}>{line}</li>)}
+              </ul>
+            ) : null}
             {mode.kind === "idle" || mode.kind === "quoting" ? (
               <div className="mt-10"><Composer disabled={mode.kind === "quoting"} signedIn={canAct} onSubmit={ask} agentName={agentRef ? (agentName ?? "this agent") : null} /></div>
             ) : null}

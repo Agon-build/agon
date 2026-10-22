@@ -31,7 +31,9 @@ function gammaFetch(markets: Record<string, unknown>[], tags: string[] = ["EPL",
     if (url.pathname === "/markets") {
       const slug = url.searchParams.get("slug");
       const cid = url.searchParams.get("condition_ids");
-      return Response.json(markets.filter((m) => (slug ? m.slug === slug : cid ? m.conditionId === cid : false)));
+      // Like Gamma: closed markets are left out unless closed=true, which returns only closed ones.
+      const closed = url.searchParams.get("closed") === "true";
+      return Response.json(markets.filter((m) => Boolean(m.closed) === closed && (slug ? m.slug === slug : cid ? m.conditionId === cid : false)));
     }
     if (url.pathname === "/events") return Response.json([{ slug: url.searchParams.get("slug"), tags: tags.map((slug) => ({ slug })), markets }]);
     return new Response("not found", { status: 404 });
@@ -252,6 +254,31 @@ test("resolution watch refuses a closed market, a bad list or too many markets b
   assert.equal((await app.request("http://api.test/watch", json({ markets: "https://evil.example/x" }))).status, 400);
   assert.equal((await app.request("http://api.test/watch", json({ markets: Array.from({ length: 11 }, (_, i) => `market-${i}-x`).join("\n") }))).status, 400);
   assert.equal((await app.request("http://api.test/watch", json({ market: EPL_SLUG }))).status, 400, "watch takes markets, not market");
+});
+
+test("the lookup finds a closed market, so it is refused as closed, not as missing", async () => {
+  const lookup = createMarketLookup({ fetchImpl: gammaFetch([gammaMarket({ slug: "closed-one", conditionId: `0x${"e0".repeat(32)}`, closed: true })]) });
+  const bySlug = await lookup("closed-one");
+  assert.ok(bySlug.ok && bySlug.market.closed);
+  const byId = await lookup(`0x${"e0".repeat(32)}`);
+  assert.ok(byId.ok && byId.market.closed);
+  assert.deepEqual(await lookup("no-such-market"), { ok: false, code: "market_not_found" });
+});
+
+test("a specialist refuses a closed or unknown market with the reason before anything is signed", async () => {
+  const { fetchImpl, settler } = watchSetup(null);
+  let signed = 0;
+  const signerFor = () => { signed += 1; return localSigner(buyer); };
+  const closed = await buyExact({ url: "http://api.test/watch", init: json({ markets: `${EPL_SLUG}
+closed-one` }), network, maxAmount: SPECIALISTS.watch.price, signerFor, fetchImpl });
+  assert.ok(!closed.ok);
+  assert.equal(closed.code, "unexpected_status");
+  assert.equal((closed as { status?: number }).status, 422);
+  assert.equal(((closed as { data?: { error?: string } }).data)?.error, "market_closed");
+  const missing = await buyExact({ url: "http://api.test/watch", init: json({ markets: "no-such-market" }), network, maxAmount: SPECIALISTS.watch.price, signerFor, fetchImpl });
+  assert.equal(((missing as { data?: { error?: string } }).data)?.error, "market_not_found");
+  assert.equal(signed, 0, "nothing was signed");
+  assert.equal(settler.calls.length, 0);
 });
 
 test("a watch's status page is public by its id and never shows the owner", async () => {

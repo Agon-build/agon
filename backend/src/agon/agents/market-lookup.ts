@@ -85,7 +85,9 @@ export function createMarketLookup(options: { fetchImpl?: typeof fetch; baseUrl?
     if (!ref) return { ok: false, code: "market_not_found" };
     try {
       const query = CONDITION.test(ref) ? `condition_ids=${ref}` : `slug=${encodeURIComponent(ref)}`;
-      const raw = z.array(z.unknown()).catch([]).parse(await get(`/markets?${query}`))[0];
+      // Gamma leaves closed markets out unless asked, so a settled market would read as missing.
+      const first = (path: string) => get(path).then((r) => z.array(z.unknown()).catch([]).parse(r)[0]);
+      const raw = (await first(`/markets?${query}`)) ?? (await first(`/markets?${query}&closed=true`));
       const m = market.safeParse(raw);
       if (!m.success) return { ok: false, code: "market_not_found" };
       const outcomes = JSON.parse(m.data.outcomes) as unknown;

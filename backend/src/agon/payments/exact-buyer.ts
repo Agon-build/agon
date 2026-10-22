@@ -73,7 +73,7 @@ export async function peekExactTerms(input: {
   init?: RequestInit;
   network: AgonNetwork;
   fetchImpl?: typeof fetch;
-}): Promise<{ ok: true; option: ExactOption } | { ok: true; free: true; status: number; data: unknown } | { ok: false; code: "no_matching_option" | "unexpected_status" | "network_error"; detail: string }> {
+}): Promise<{ ok: true; option: ExactOption } | { ok: true; free: true; status: number; data: unknown } | { ok: false; code: "no_matching_option" | "unexpected_status" | "network_error"; detail: string; reason?: string }> {
   let res: Response;
   try {
     res = await (input.fetchImpl ?? fetch)(input.url, { ...input.init, redirect: "manual", signal: AbortSignal.timeout(20_000) });
@@ -82,7 +82,10 @@ export async function peekExactTerms(input: {
   }
   const body = await readJson(res);
   if (res.status !== 402) {
-    return res.ok ? { ok: true, free: true, status: res.status, data: body } : { ok: false, code: "unexpected_status", detail: `status ${res.status}` };
+    if (res.ok) return { ok: true, free: true, status: res.status, data: body };
+    // A provider that refuses the request says why in an error code, such as market_closed.
+    const reason = (body as { error?: unknown } | null)?.error;
+    return { ok: false, code: "unexpected_status", detail: `status ${res.status}`, ...(typeof reason === "string" && /^[a-z][a-z0-9_]{2,40}$/.test(reason) ? { reason } : {}) };
   }
   const required = requiredFrom(res, body);
   const option = required ? selectExactOption(required.accepts, input.network) : null;

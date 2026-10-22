@@ -75,6 +75,11 @@ const jobFee = (job: Job): { fee: bigint; feeAddress: Address | null } => {
   return { fee: typeof r.fee === "string" ? BigInt(r.fee) : 0n, feeAddress: typeof r.feeAddress === "string" ? (r.feeAddress as Address) : null };
 };
 
+/// Reasons an Agon market agent refuses a request before asking for payment; the person sees each in plain words.
+const PROVIDER_REFUSALS = ["market_not_found", "market_closed", "not_yes_no", "not_a_football_market", "market_unavailable"] as const;
+export type ProviderRefusal = (typeof PROVIDER_REFUSALS)[number];
+const isProviderRefusal = (v: unknown): v is ProviderRefusal => (PROVIDER_REFUSALS as readonly unknown[]).includes(v);
+
 /// Reads the provider's live price, records a quoted job, and returns either a
 /// chat code (within the per-hire limit) or a one-time browser approval link.
 export async function quoteHire(
@@ -82,7 +87,7 @@ export async function quoteHire(
   req: HireRequest,
 ): Promise<
   | { ok: true; quote: HireQuote }
-  | { ok: false; code: "payments_off" | "frozen" | "provider_free" | "no_matching_option" | "provider_unreachable" | "terms_changed"; detail?: string }
+  | { ok: false; code: "payments_off" | "frozen" | "provider_free" | "no_matching_option" | "provider_unreachable" | "terms_changed" | ProviderRefusal; detail?: string }
   | { ok: false; code: "insufficient_balance"; amount: bigint; depositAddress: Address }
 > {
   if (deps.off.all || deps.off.budget) return { ok: false, code: "payments_off" };
@@ -91,6 +96,7 @@ export async function quoteHire(
   const method = req.method ?? "POST";
   const call = providerCall(req.providerUrl, method, req.body);
   const peek = await peekExactTerms({ url: call.url, init: call.init, network: deps.network, fetchImpl: deps.fetchImpl });
+  if (!peek.ok && "reason" in peek && isProviderRefusal(peek.reason)) return { ok: false, code: peek.reason, detail: peek.detail };
   if (!peek.ok) return { ok: false, code: peek.code === "no_matching_option" ? "no_matching_option" : "provider_unreachable", detail: peek.detail };
   if (!("option" in peek)) return { ok: false, code: "provider_free" };
   const now = deps.now();
@@ -242,9 +248,12 @@ async function payJob(deps: HireDeps, wallet: BudgetWallet, job: Job, perPayment
     return { ok: false, code: "payment_unknown", jobId: job.jobId, detail: purchase.detail };
   }
   await deps.store.finishSpend(walletRef, key, { state: "failed" });
-  await deps.store.upsertJobPayment({ ...payment, status: "failed", detail: `${job.providerLabel}: ${purchase.code}`, updatedAt: deps.now() });
-  await deps.store.updateJob(job.jobId, { state: "failed", result: { error: purchase.code, detail: purchase.detail } });
-  return { ok: false, code: purchase.code, jobId: job.jobId, detail: purchase.detail };
+  // A provider that refused before asking for payment (a closed market, say) names its reason; the job page shows it.
+  const refused = purchase.code === "unexpected_status" ? (purchase.data as { error?: unknown } | null | undefined)?.error : undefined;
+  const reason = typeof refused === "string" && /^[a-z][a-z0-9_]{2,40}$/.test(refused) ? refused : purchase.code;
+  await deps.store.upsertJobPayment({ ...payment, status: "failed", detail: `${job.providerLabel}: ${reason}`, updatedAt: deps.now() });
+  await deps.store.updateJob(job.jobId, { state: "failed", result: { error: reason, detail: purchase.detail } });
+  return { ok: false, code: isProviderRefusal(reason) ? reason : purchase.code, jobId: job.jobId, detail: purchase.detail };
 }
 
 /// Sends Agon's routing fee from the person's agent wallet. A failure leaves the
