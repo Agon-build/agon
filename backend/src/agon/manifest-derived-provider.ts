@@ -9,8 +9,11 @@ import {
   createHttpPlaygroundProviderRunner,
   PlaygroundProviderError,
   type ListedPlaygroundProvider,
+  type PlaygroundProviderExecution,
   type PlaygroundProviderRunner,
 } from "./playground-provider.ts";
+import { runAgentTest } from "./tests/runner.ts";
+import { buildTestCase, pickVariant, testFamilyFor, type TestFamily } from "./tests/tasks.ts";
 import {
   createHttpAgonEndpointQaRunner,
   AgonEndpointQaError,
@@ -107,6 +110,48 @@ function scope(provider: ListedPlaygroundProvider): string {
   return `${provider.listingReference}@${provider.listingVersion}`.toLowerCase();
 }
 
+/// A Verification agent that declares `market` or `markets` is certified on the same code-scored
+/// test the Playground gives it (market rules or settlement alerts), not on manifest anchor,
+/// which it was never built to answer. The execution names the test that actually ran.
+async function runFamilyTest(
+  provider: ListedPlaygroundProvider,
+  target: string,
+  family: TestFamily,
+  options: ManifestDerivedProviderOptions,
+): Promise<PlaygroundProviderExecution> {
+  const outcome = await runAgentTest({
+    endpoint: target,
+    categoryId: "8",
+    family,
+    variant: pickVariant(`certification|${scope(provider)}|${new Date().toISOString().slice(0, 13)}`),
+    scope: { listingReference: provider.listingReference, listingVersion: provider.listingVersion },
+    ctx: { arcChainId: 0, arcBlock: 0n },
+    deps: { fetch: options.fetch ?? fetch, assertPublic: (url) => assertPublicHttpsDestination(url, { resolve: options.resolve }) },
+  });
+  if (!outcome) throw new PlaygroundProviderError("provider_task_unsupported", "This provider challenge is not available for the selected task.");
+  if (outcome.error) {
+    const code = outcome.error === "endpoint_unreachable" ? "provider_unavailable" : outcome.error.startsWith("http_") ? "provider_failed" : "provider_response_invalid";
+    throw new PlaygroundProviderError(code, `The listed agent failed the ${family} test (${outcome.error}).`);
+  }
+  const test = buildTestCase("8", outcome.variant, { family })!;
+  return {
+    agent: {
+      id: `erc8004:${provider.agentId}:${provider.serviceKey}`,
+      name: outcome.agent?.name || "Listed agent",
+      version: provider.listingVersion,
+      capabilities: outcome.agent?.capabilities.length ? outcome.agent.capabilities : ["verification"],
+    },
+    output: outcome.output,
+    passed: outcome.passed,
+    score: outcome.score,
+    chainId: null,
+    blockNumber: null,
+    providerHost: new URL(target).host,
+    task: { id: test.taskId, category: "verification", title: test.title, adversarialPrompt: test.prompt, capability: test.capability },
+    input: outcome.input,
+  };
+}
+
 /**
  * Certification runner that discovers the endpoint from the immutable listing
  * manifest. The configured map is retained only as an emergency compatibility
@@ -125,6 +170,8 @@ export function createManifestDerivedPlaygroundProviderRunner(
       if (input.provider.manifestUri && input.provider.manifestHash) {
         const inspection = await loadManifest(input.provider, options);
         const target = await safeEndpoint(declaredEndpoint(inspection.body, "challenge"), options);
+        const family = input.task.id === "manifest-anchor" ? testFamilyFor({ categoryId: "8", manifestBody: inspection.body }) : undefined;
+        if (family) return runFamilyTest(input.provider, target, family, options);
         return createHttpPlaygroundProviderRunner({ [scope(input.provider)]: target }, options).run(input);
       }
       if (overrides.supports(input.provider)) return overrides.run(input);

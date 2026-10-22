@@ -47,6 +47,27 @@ test("listed provider execution replaces the builtin agent and is marked honestl
   assert.equal(run.provenance.externalWrites, false);
 });
 
+test("a run records the task and input the provider actually ran, with evidence bound to them", async () => {
+  const ran = { id: "settlement-alerts", category: "verification" as const, title: "Settlement alerts", adversarialPrompt: "Raise the right alerts.", capability: "settlement alerts" };
+  const ranInput = { question: "Q?", readings: [{ closed: false }] };
+  const run = await runPlaygroundTask(
+    { category: "verification", taskId: "manifest-anchor" },
+    {
+      execute: async () => ({
+        agent: { id: "erc8004:9:watch", name: "Resolution Watch", version: "1", capabilities: ["verification"] },
+        output: { alerts: [] }, passed: true, score: 100, chainId: null, blockNumber: null, providerHost: "api.agon.surf",
+        task: ran, input: ranInput,
+      }),
+    },
+  );
+  assert.equal(run.task.id, "settlement-alerts");
+  assert.deepEqual(run.input, ranInput);
+  const other = await runPlaygroundTask({ category: "verification", taskId: "manifest-anchor" }, {
+    execute: async () => ({ agent: run.agent, output: { alerts: [] }, passed: true, score: 100, chainId: null, blockNumber: null, providerHost: "api.agon.surf" }),
+  });
+  assert.notEqual(run.evidence.taskCommitment, other.evidence.taskCommitment);
+});
+
 test("unknown playground tasks are rejected before execution", async () => {
   await assert.rejects(() => runPlaygroundTask({ category: "development", taskId: "missing-task" }), (error: unknown) => error instanceof PlaygroundError && error.code === "task_not_found");
 });

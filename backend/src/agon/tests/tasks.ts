@@ -14,6 +14,16 @@ export type TestFamily = "market-rules" | "settlement-alerts";
 export type TestCase = { categoryId: string; taskId: string; title: string; prompt: string; capability: string; variant: number; input: unknown; expected: unknown };
 type Ctx = { arcChainId: number; arcBlock: bigint };
 
+/// A Verification agent whose service file takes a `market` reads market rules, and one that takes `markets`
+/// watches settlement; the test follows the declared input.
+export function testFamilyFor(listing: { categoryId: string; manifestBody: unknown }): TestFamily | undefined {
+  if (listing.categoryId !== "8") return undefined;
+  const props = (listing.manifestBody as { invocation?: { requestSchema?: { properties?: unknown } } } | null)?.invocation?.requestSchema?.properties;
+  if (!props || typeof props !== "object") return undefined;
+  if (Object.hasOwn(props, "markets")) return "settlement-alerts";
+  return Object.hasOwn(props, "market") ? "market-rules" : undefined;
+}
+
 export function pickVariant(seed: string): number {
   return createHash("sha256").update(seed).digest()[0]! % VARIANT_COUNT;
 }

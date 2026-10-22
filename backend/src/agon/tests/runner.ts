@@ -12,6 +12,8 @@ export type TestRunOutcome = {
   error: string | null;
   notes: string[];
   checks: { label: string; points: number; max: number }[];
+  /** The agent as it named itself in a valid reply. */
+  agent?: { name: string; capabilities: string[] };
 };
 
 export type TestRunDeps = { fetch: typeof fetch; assertPublic(url: string): Promise<URL>; now?: () => number };
@@ -26,6 +28,8 @@ export async function runAgentTest(input: {
   /** The category's alternative test, when the agent declares the input it needs. */
   family?: TestFamily;
   variant: number;
+  /** The listing this run is for; public tests send "public-test". */
+  scope?: { listingReference: string; listingVersion: string };
   ctx: { arcChainId: number; arcBlock: bigint };
   deps: TestRunDeps;
 }): Promise<TestRunOutcome | null> {
@@ -56,7 +60,7 @@ export async function runAgentTest(input: {
         category: CATEGORY_SLUGS[test.categoryId],
         task: { id: test.taskId, title: test.title, adversarialPrompt: test.prompt, capability: test.capability },
         input: test.input,
-        scope: { listingReference: "public-test", listingVersion: String(test.variant) },
+        scope: input.scope ?? { listingReference: "public-test", listingVersion: String(test.variant) },
       }),
     });
   } catch {
@@ -75,7 +79,12 @@ export async function runAgentTest(input: {
   if (reply.protocol !== "agon-playground/1" || reply.externalWrites !== false) return failed("reply_invalid");
 
   const scored = scoreAnswer(test, reply.output, input.ctx);
+  const named = reply.agent as { name?: unknown; capabilities?: unknown } | undefined;
+  const agent = typeof named?.name === "string" && Array.isArray(named.capabilities)
+    ? { name: named.name.slice(0, 120), capabilities: named.capabilities.filter((c): c is string => typeof c === "string").slice(0, 24) }
+    : undefined;
   return {
+    agent,
     taskId: test.taskId, variant: test.variant, score: scored.score, passed: scored.passed, durationMs: now() - started,
     input: test.input, output: reply.output ?? null, error: null, notes: scored.notes, checks: scored.checks,
   };

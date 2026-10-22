@@ -43,6 +43,9 @@ export type PlaygroundProviderExecution = {
   chainId: number | null;
   blockNumber: string | null;
   providerHost: string;
+  /** Set when the provider ran a different test than the one asked for (the one its manifest calls for). */
+  task?: PlaygroundTask;
+  input?: unknown;
 };
 
 export interface PlaygroundProviderRunner {

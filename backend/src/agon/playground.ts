@@ -38,6 +38,8 @@ export type PlaygroundRunOptions = {
     chainId: number | null;
     blockNumber: string | null;
     providerHost: string;
+    task?: PlaygroundTask;
+    input?: unknown;
   }>;
 };
 
@@ -298,12 +300,16 @@ export async function runPlaygroundTask(request: PlaygroundRunRequest, options: 
     const external = options.execute ? await options.execute(task, input) : null;
     const result = external ?? await executeAgent(task, input);
     const agent = external?.agent ?? AGENT;
-    const evidenceRoot = hash({ runId, agent, task, input, output: result.output, passed: result.passed, score: result.score, scope: options.scope ?? null });
+    // A provider may run the test its manifest calls for (a Verification agent that takes markets
+    // is tested on settlement alerts); the run and its evidence name what actually ran.
+    const ranTask = external?.task ?? task;
+    const ranInput = external?.input === undefined ? input : external.input;
+    const evidenceRoot = hash({ runId, agent, task: ranTask, input: ranInput, output: result.output, passed: result.passed, score: result.score, scope: options.scope ?? null });
     const run: PlaygroundRun = {
       runId,
       agent,
-      task,
-      input,
+      task: ranTask,
+      input: ranInput,
       output: result.output,
       passed: result.passed,
       score: result.score,
@@ -311,8 +317,8 @@ export async function runPlaygroundTask(request: PlaygroundRunRequest, options: 
       evidence: {
         evidenceRoot,
         responseHash: hash(result.output),
-        taskCommitment: hash({ category: task.category, taskId: task.id, adversarialPrompt: task.adversarialPrompt }),
-        validationRequestHash: hash({ runId, taskId: task.id, scope: options.scope ?? null }),
+        taskCommitment: hash({ category: ranTask.category, taskId: ranTask.id, adversarialPrompt: ranTask.adversarialPrompt }),
+        validationRequestHash: hash({ runId, taskId: ranTask.id, scope: options.scope ?? null }),
         evaluatorVersionHash: hash("agon-playground-evaluator-v1"),
       },
       provenance: {

@@ -6,6 +6,7 @@ import {
   createManifestDerivedAgonEndpointQaRunner,
   createManifestDerivedPlaygroundProviderRunner,
 } from "../../src/agon/manifest-derived-provider.ts";
+import { alertsBetween, stateFromGamma } from "../../src/agon/agents/resolution-watch.ts";
 
 const manifestUrl = "https://provider.example/agon-service.json";
 const endpointUrl = "https://provider.example/x402/analyze";
@@ -83,6 +84,59 @@ test("automatic provider runner fetches and hash-checks the listing manifest", a
   });
   assert.equal(result.passed, true);
   assert.equal(result.providerHost, "provider.example");
+});
+
+const watchManifest = {
+  ...manifest,
+  service: { ...manifest.service, category: "verification", tags: ["verification"], capabilities: ["verification"] },
+  invocation: { ...manifest.invocation, requestSchema: { type: "object", properties: { markets: { type: "string" } } } },
+};
+
+function watchProvider() {
+  return { ...baseProvider, manifestUri: manifestUrl, manifestHash: canonicalManifestHash(watchManifest) };
+}
+
+/// A settlement watcher that answers with Resolution Watch's own alert code, or with no alerts at all.
+function fetchForWatch(answer: "real" | "silent", seen: string[] = []) {
+  return async (input: RequestInfo | URL, init?: RequestInit) => {
+    const request = new Request(input, init);
+    if (request.method === "GET") {
+      return new Response(JSON.stringify(watchManifest), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    const body = await request.json() as { task: { id: string }; input: { question: string; readings: Record<string, unknown>[] } };
+    seen.push(body.task.id);
+    const states = body.input.readings.map(stateFromGamma);
+    const alerts = answer === "silent" ? [] : states.flatMap((s, i) => alertsBetween(body.input.question, states[i - 1] ?? null, s).map((a) => ({ step: i, kind: a.kind })));
+    return new Response(JSON.stringify({
+      protocol: "agon-playground/1",
+      agent: { name: "Resolution Watch", version: "1", capabilities: ["verification"] },
+      output: { alerts, writesPerformed: false },
+      externalWrites: false,
+    }), { status: 200, headers: { "content-type": "application/json" } });
+  };
+}
+
+const manifestAnchorTask = { id: "manifest-anchor", category: "verification" as const, title: "Manifest anchor", adversarialPrompt: "x", capability: "verification" };
+
+test("automatic certification tests a Verification agent that takes markets on settlement alerts, not manifest anchor", async () => {
+  const seen: string[] = [];
+  const runner = createManifestDerivedPlaygroundProviderRunner({ fetch: fetchForWatch("real", seen), resolve: async () => ["93.184.216.34"] });
+  const result = await runner.run({ provider: watchProvider(), task: manifestAnchorTask, taskInput: {} });
+  assert.deepEqual(seen, ["settlement-alerts"]);
+  assert.equal(result.task?.id, "settlement-alerts");
+  assert.equal(result.task?.category, "verification");
+  assert.equal(result.passed, true);
+  assert.equal(result.score, 100);
+  assert.equal(result.agent.name, "Resolution Watch");
+  assert.equal(result.providerHost, "provider.example");
+});
+
+test("automatic certification fails a settlement watcher that raises no alerts", async () => {
+  const runner = createManifestDerivedPlaygroundProviderRunner({ fetch: fetchForWatch("silent"), resolve: async () => ["93.184.216.34"] });
+  const result = await runner.run({ provider: watchProvider(), task: manifestAnchorTask, taskInput: {} });
+  assert.equal(result.task?.id, "settlement-alerts");
+  assert.equal(result.passed, false);
+  assert.ok(result.score < 80);
 });
 
 test("automatic certification refuses legacy manifests without the typed invocation contract", async () => {
