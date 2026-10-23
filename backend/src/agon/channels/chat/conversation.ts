@@ -165,7 +165,8 @@ async function confirmAndWatch(deps: ConversationDeps, ownerRef: string, code: s
   }
   const live = await deps.services.live(out.jobId).catch(() => null);
   // A routed hire to another agent has no Lead progress to show: send its answer.
-  if (!live?.answer && out.result !== undefined && out.result !== null && !(out.result as { probabilityBps?: unknown }).probabilityBps) {
+  // A Lead job that failed or refunded has its own plain reply below.
+  if (!live?.answer && !live?.failure && out.result !== undefined && out.result !== null && !(out.result as { probabilityBps?: unknown }).probabilityBps) {
     const shown = JSON.stringify(out.result, null, 1);
     await deps.reply.send({ text: `Done. The answer:\n${shown.length > 1500 ? `${shown.slice(0, 1500)}...` : shown}\nReceipt: ${deps.services.receiptUrl(out.jobId)}` });
     return;

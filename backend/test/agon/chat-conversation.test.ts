@@ -260,3 +260,14 @@ test("minor: the chat terms give both wallets' limits, and mainnet limits answer
   await s.say("/limits 5 per hire mainnet");
   assert.match(s.last().text, /up to 0\.25 per hire and 1\.00 per day/);
 });
+
+test("a refunded forecast reads as plain words, never as the raw result", async () => {
+  const s = await accepted();
+  s.state.refund = true;
+  await s.say(QUESTION);
+  const code = /Reply YES (\d{4})/.exec(s.last().text)![1]!;
+  await s.say(`YES ${code}`);
+  const text = s.last().text;
+  assert.match(text, /^No forecast this time: Polymarket has no open market that matches this question\. Your payment was refunded\./);
+  assert.doesNotMatch(text, /"ok"|Done\. The answer/);
+});

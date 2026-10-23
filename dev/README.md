@@ -15,6 +15,11 @@ on node-services (mode 600, not printed), writes the dev overrides
 (`dev.env`, from `make-env.sh`), pushes the code, copies the production
 database into the dev Postgres and starts it.
 
+Agents need Bedrock. Production uses the host-service server role, which
+node-services does not have, so put a Bedrock-only key in
+`~/agon-dev/aws.env` on node-services (`AWS_ACCESS_KEY_ID=...` and
+`AWS_SECRET_ACCESS_KEY=...`, mode 600), then run the start command again.
+
 ## Every session
 
 ```bash

@@ -6,7 +6,13 @@ name: agon-dev
 x-node: &node
   image: node:22-bookworm
   restart: unless-stopped
-  env_file: [./prod.env, ./dev.env] # dev.env wins: dev URLs, own database, on-chain jobs off
+  # dev.env wins over prod.env: dev URLs, own database, on-chain jobs off.
+  # aws.env (optional, made by the owner) holds a Bedrock key: production uses its server role instead.
+  env_file:
+    - path: ./prod.env
+    - path: ./dev.env
+    - path: ./aws.env
+      required: false
 
 services:
   postgres:
