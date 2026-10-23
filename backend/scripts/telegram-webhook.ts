@@ -26,7 +26,7 @@ async function main(): Promise<void> {
         { command: "balance", description: "Your Agon wallet balance and limits" },
         { command: "deposit", description: "Address to add USDC" },
         { command: "history", description: "Your recent asks with receipts" },
-        { command: "leaderboard", description: "Season 1 forecasters" },
+        { command: "leaderboard", description: "Arena leaderboard" },
         { command: "limits", description: "See or lower your spending limits" },
         { command: "freeze", description: "Stop all spending now" },
         { command: "withdraw", description: "Send USDC out (approved in your browser)" },
