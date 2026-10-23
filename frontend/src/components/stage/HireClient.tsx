@@ -22,7 +22,7 @@ import { canAfford } from "@/lib/agon/hire-panel";
 import { mainnetInView, mergeAnswers, sourcesNote } from "@/lib/agon/route-view";
 import { askRefusalText, confirmFailureText, hireHeading, showConfirmError } from "@/lib/agon/stage-copy";
 import type { AskResponse, HistoryItem, LeaderboardRow, RoutePick, StageConfig, StageWallet } from "@/lib/agon/stage-types";
-import { beatsMarketText, phaseStep } from "@/lib/agon/stage-view";
+import { beatsMarketText, hireLabel, hireStateText, phaseStep } from "@/lib/agon/stage-view";
 
 type Quote = Extract<AskResponse, { ok: true }>;
 /// Agon's pick for a request, before the exact price is asked for.
@@ -297,8 +297,8 @@ export function HireClient() {
               {history.slice(0, 3).map((h) => (
                 <li key={h.jobId}>
                   <a href={`/r/${h.jobId}`} className="grid min-h-11 gap-1 py-3 sm:grid-cols-[1fr_auto_auto] sm:items-center sm:gap-6 hover:text-accent">
-                    <span className="text-sm text-ink">{h.question ?? "Agent job"}</span>
-                    <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-ink-3">{h.state}</span>
+                    <span className="text-sm text-ink">{hireLabel(h)}</span>
+                    <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-ink-3">{hireStateText(h.state)}</span>
                     <span className="font-mono text-[12px] tabular-nums text-ink-2">{h.price} USDC</span>
                   </a>
                 </li>

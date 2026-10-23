@@ -53,8 +53,7 @@ export function AccountClient() {
       <AppHeader />
       <main className="mx-auto grid max-w-[1120px] gap-12 px-4 pb-24 pt-14 sm:px-6">
         <header>
-          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-accent">ACCOUNT</p>
-          <h1 className="mt-5 font-stencil text-[clamp(42px,7vw,80px)] uppercase leading-[0.9]">ACCOUNT</h1>
+          <h1 className="font-stencil text-[clamp(42px,7vw,80px)] uppercase leading-[0.9]">ACCOUNT</h1>
         </header>
 
         {me?.walletKind === "circle" && me.address ? (
@@ -64,7 +63,7 @@ export function AccountClient() {
           </Section>
         ) : null}
 
-        <Section id="wallet" title="Agent wallet">
+        <Section id="wallet" title="Paying for hires">
           {wallet.kind === "loading" ? <p className="text-sm text-ink-3">Loading your wallet.</p> : null}
           {wallet.kind === "error" ? <p role="alert" className="text-sm text-ink">Agon could not load your wallet right now.</p> : null}
           {wallet.kind === "none" ? (

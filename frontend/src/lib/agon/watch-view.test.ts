@@ -7,6 +7,8 @@ const base = { question: "Q?", url: "https://polymarket.com/event/x/y", outcome:
 
 test("each market's state reads in plain words", () => {
   assert.deepEqual([marketRow({ ...base, status: "open" }).state, marketRow({ ...base, status: "open" }).detail], ["Open", "98% chance of Yes"]);
+  assert.equal(marketRow({ ...base, status: "open", yesBps: 5 }).detail, "Under 1% chance of Yes");
+  assert.equal(marketRow({ ...base, status: "open", yesBps: 9950 }).detail, "Over 99% chance of Yes");
   assert.equal(marketRow({ ...base, status: "proposed" }).state, "Result proposed");
   assert.equal(marketRow({ ...base, status: "disputed" }).state, "Result challenged");
   assert.equal(marketRow({ ...base, status: "settled", outcome: "no" }).state, "Settled: No");

@@ -31,7 +31,7 @@ export type LiveView = {
   /** What a routed service returned, for hires of anything other than the Lead agent. */
   result: unknown;
 };
-export type HistoryItem = { jobId: string; question: string | null; state: JobState; price: string; createdAt: string; receiptUrl: string };
+export type HistoryItem = { jobId: string; question: string | null; agent: string | null; state: JobState; price: string; createdAt: string; receiptUrl: string };
 export type ApprovalLink = { approvalUrl: string; expiresAt: Date };
 
 export type StageServices = {
@@ -212,7 +212,7 @@ export function createStageServices(deps: StageServiceDeps): StageServices {
 
     async history(ownerRef, limit = 10, offset = 0) {
       const jobs = await deps.store.listJobsByBuyer(budgetWalletRef(ownerRef), limit, offset);
-      return jobs.map((j) => ({ jobId: j.jobId, question: questionOf(j), state: j.state, price: formatUsdc(j.priceAtomic), createdAt: j.createdAt.toISOString(), receiptUrl: receiptUrl(j.jobId) }));
+      return jobs.map((j) => ({ jobId: j.jobId, question: questionOf(j), agent: j.providerLabel || null, state: j.state, price: formatUsdc(j.priceAtomic), createdAt: j.createdAt.toISOString(), receiptUrl: receiptUrl(j.jobId) }));
     },
 
     async lowerLimits(ownerRef, limits) {

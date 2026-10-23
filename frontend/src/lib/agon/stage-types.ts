@@ -40,7 +40,7 @@ export type RouteResponse =
   | { kind: "none"; sources: RouteSourceStatus[] }
   | { kind?: undefined; ok: false; code: string };
 export type ConfirmResponse = { ok: true; jobId: string; amount: string; txHash: string | null } | { ok: false; code: string; jobId?: string; detail?: string };
-export type HistoryItem = { jobId: string; question: string | null; state: string; price: string; createdAt: string; receiptUrl: string };
+export type HistoryItem = { jobId: string; question: string | null; agent?: string | null; state: string; price: string; createdAt: string; receiptUrl: string };
 export type ApprovalView = {
   action: "over_limit_hire" | "withdraw" | "unfreeze"; title: string; network: string; testnet: boolean; expiresAt: string; jobId: string | null;
   rows: { label: string; value: string }[]; owner: "web" | "telegram";

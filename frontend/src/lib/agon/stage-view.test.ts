@@ -192,12 +192,22 @@ import { historyRows } from "./stage-view.ts";
 test("hires list newest first with a receipt link each", () => {
   const rows = historyRows([
     { jobId: "0b9e0b4c-3c2f-4b0e-9d1a-2f5a6b7c8d9e", question: "Will BTC close above 120k?", price: "0.30", state: "delivered", createdAt: "2026-10-12T10:00:00Z", receiptUrl: "https://agon.surf/r/0b9e0b4c-3c2f-4b0e-9d1a-2f5a6b7c8d9e" },
-    { jobId: "1b9e0b4c-3c2f-4b0e-9d1a-2f5a6b7c8d9e", question: null, price: "0.30", state: "refunded", createdAt: "2026-10-12T12:00:00Z", receiptUrl: "https://agon.surf/r/1b9e0b4c-3c2f-4b0e-9d1a-2f5a6b7c8d9e" },
+    { jobId: "1b9e0b4c-3c2f-4b0e-9d1a-2f5a6b7c8d9e", question: null, agent: "Resolution Watch", price: "0.25", state: "refunded", createdAt: "2026-10-12T12:00:00Z", receiptUrl: "https://agon.surf/r/1b9e0b4c-3c2f-4b0e-9d1a-2f5a6b7c8d9e" },
+    { jobId: "2b9e0b4c-3c2f-4b0e-9d1a-2f5a6b7c8d9e", question: null, price: "0.25", state: "quoted", createdAt: "2026-10-12T11:00:00Z", receiptUrl: "https://agon.surf/r/2b9e0b4c-3c2f-4b0e-9d1a-2f5a6b7c8d9e" },
+    { jobId: "3b9e0b4c-3c2f-4b0e-9d1a-2f5a6b7c8d9e", question: "Q?", price: "0.25", state: "failed", createdAt: "2026-10-12T09:00:00Z", receiptUrl: "https://agon.surf/r/3b9e0b4c-3c2f-4b0e-9d1a-2f5a6b7c8d9e" },
   ], Date.parse("2026-10-12T13:00:00Z"));
   assert.deepEqual(rows.map((r) => [r.label, r.state, r.amount, r.href]), [
-    ["Agent job", "Refunded", "0.30", "/r/1b9e0b4c-3c2f-4b0e-9d1a-2f5a6b7c8d9e"],
-    ["Will BTC close above 120k?", "Delivered", "0.30", "/r/0b9e0b4c-3c2f-4b0e-9d1a-2f5a6b7c8d9e"],
+    ["Resolution Watch", "Refunded", "0.25", "/r/1b9e0b4c-3c2f-4b0e-9d1a-2f5a6b7c8d9e"],
+    ["Agent hire", "Not paid", "0.25", "/r/2b9e0b4c-3c2f-4b0e-9d1a-2f5a6b7c8d9e"],
+    ["Will BTC close above 120k?", "Done", "0.30", "/r/0b9e0b4c-3c2f-4b0e-9d1a-2f5a6b7c8d9e"],
+    ["Q?", "Didn't finish", "0.25", "/r/3b9e0b4c-3c2f-4b0e-9d1a-2f5a6b7c8d9e"],
   ]);
+});
+
+import { cents } from "./stage-view.ts";
+
+test("wallet balances read to the cent", () => {
+  assert.deepEqual([cents("28.219088"), cents("0.3"), cents(null)], ["28.22", "0.30", "n/a"]);
 });
 
 import { seasonFromQuery, seasonStatus } from "./stage-view.ts";

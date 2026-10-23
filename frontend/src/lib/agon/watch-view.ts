@@ -10,7 +10,10 @@ export type WatchPageView = { title: string; summary: string; markets: WatchMark
 const OUTCOME: Record<string, string> = { yes: "Yes", no: "No", split: "50-50" };
 
 function chance(bps: number | null): string {
-  return bps === null ? "" : `${Math.round(bps / 100)}% chance of Yes`;
+  if (bps === null) return "";
+  if (bps < 100) return "Under 1% chance of Yes";
+  if (bps > 9900) return "Over 99% chance of Yes";
+  return `${Math.round(bps / 100)}% chance of Yes`;
 }
 
 export function marketRow(m: WatchApiMarket): WatchMarketRow {

@@ -113,6 +113,7 @@ test("history lists the user's asks newest first with receipt links", async () =
   const items = await services.history(OWNER);
   assert.deepEqual(items.map((i) => i.jobId), [second.jobId, first.jobId]);
   assert.equal(items[1]!.question, QUESTION);
+  assert.equal(items[0]!.agent, store.jobs.get(second.jobId)!.providerLabel, "a hire without a question is named by its agent");
   assert.equal(items[0]!.receiptUrl, `${SITE}/r/${second.jobId}`);
   assert.equal(items[0]!.price, "0.30");
   assert.deepEqual(await services.history(`op:0x${"9".repeat(40)}`), []);

@@ -6,7 +6,7 @@ import { TagButton } from "@/components/redesign/TagButton";
 import { AddFunds } from "@/components/stage/AddFunds";
 import { freezeWallet, requestUnfreeze, requestWithdraw, StageApiError } from "@/lib/agon/stage";
 import type { StageWallet } from "@/lib/agon/stage-types";
-import { shortHash } from "@/lib/agon/stage-view";
+import { cents, shortHash } from "@/lib/agon/stage-view";
 
 const path = (url: string) => { try { const u = new URL(url); return `${u.pathname}${u.search}`; } catch { return url; } };
 type Tab = "add" | "withdraw" | "freeze";
@@ -24,7 +24,7 @@ export function WalletStrip({ wallet, onChanged }: { wallet: StageWallet; onChan
         <button type="button" className="min-h-11 text-ink underline decoration-[color:var(--hairline-strong)] underline-offset-4 hover:text-accent" onClick={() => { void navigator.clipboard?.writeText(wallet.address); setCopied(true); window.setTimeout(() => setCopied(false), 1500); }}>
           {copied ? "Copied" : shortHash(wallet.address)}<span className="sr-only">, copy the full address</span>
         </button>
-        <span><span className="text-sm text-ink">{wallet.balance ?? "n/a"}</span> USDC</span>
+        <span title={wallet.balance ? `${wallet.balance} USDC` : undefined}><span className="text-sm text-ink">{cents(wallet.balance)}</span> USDC</span>
         <span>{wallet.leftToday} of {wallet.daily} left today</span>
         {wallet.frozen ? <span className="text-[10px] uppercase tracking-[0.14em] text-[color:var(--err)]">Frozen</span> : null}
         <span className="ml-auto">
@@ -63,7 +63,7 @@ function ManageSheet({ wallet, tab, onTab, onClose, onChanged }: { wallet: Stage
           <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Agent wallet</p>
           <button type="button" onClick={onClose} className="min-h-11 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 hover:text-accent">Close</button>
         </div>
-        <p className="mt-3 font-mono text-4xl tabular-nums text-ink">{wallet.balance ?? "n/a"}<span className="ml-2 text-base text-ink-2">USDC</span></p>
+        <p className="mt-3 font-mono text-4xl tabular-nums text-ink" title={wallet.balance ? `${wallet.balance} USDC` : undefined}>{cents(wallet.balance)}<span className="ml-2 text-base text-ink-2">USDC</span></p>
         <p className="mt-1 font-mono text-[11px] text-ink-3">{wallet.leftToday} of {wallet.daily} left today · {wallet.perHire} per hire</p>
         <div role="tablist" className="mt-6 grid grid-cols-3 border-y border-[color:var(--hairline-strong)]">
           {TABS.map(([key, label]) => (

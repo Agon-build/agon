@@ -204,13 +204,26 @@ export function boardNotice(board: LeaderboardResponse): string | null {
   return null;
 }
 
+/// A USDC amount to the cent for reading ("28.219088" reads "28.22"); the exact amount stays in a tooltip.
+export function cents(amount: string | null): string {
+  if (amount === null) return "n/a";
+  const n = Number(amount);
+  return Number.isFinite(n) ? n.toFixed(2) : amount;
+}
+
+const HIRE_STATE: Record<string, string> = { quoted: "Not paid", paying: "Paying", working: "Working", delivered: "Done", failed: "Didn't finish", refunded: "Refunded" };
+/// A hire's state in plain words.
+export const hireStateText = (state: string) => HIRE_STATE[state] ?? state.charAt(0).toUpperCase() + state.slice(1);
+/// A hire is named by its question, or by the agent hired when there was no question.
+export const hireLabel = (h: Pick<HistoryItem, "question" | "agent">) => h.question ?? h.agent ?? "Agent hire";
+
 /// Account hire history: newest first, each with its receipt.
 export function historyRows(items: HistoryItem[], nowMs: number): { jobId: string; when: string; label: string; amount: string; state: string; href: string }[] {
   return [...items]
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
     .map((h) => ({
-      jobId: h.jobId, when: timeAgo(h.createdAt, nowMs), label: h.question ?? "Agent job", amount: h.price,
-      state: h.state.charAt(0).toUpperCase() + h.state.slice(1), href: `/r/${h.jobId}`,
+      jobId: h.jobId, when: timeAgo(h.createdAt, nowMs), label: hireLabel(h), amount: h.price,
+      state: hireStateText(h.state), href: `/r/${h.jobId}`,
     }));
 }
 
