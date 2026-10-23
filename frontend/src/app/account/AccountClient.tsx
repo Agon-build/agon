@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 import { AgentAccess } from "@/components/agon/AgentAccess";
+import { DeliverySettings } from "@/components/agon/DeliverySettings";
 import { MyListings } from "@/components/agon/MyListings";
 import { AppHeader } from "@/components/pengu/AppHeader";
 import { TagButton } from "@/components/redesign/TagButton";
@@ -62,6 +63,10 @@ export function AccountClient() {
             <p className="mt-3 break-all font-mono text-[12px] text-ink">{me.address}</p>
           </Section>
         ) : null}
+
+        <Section id="deliveries" title="Where your results go">
+          <DeliverySettings />
+        </Section>
 
         <Section id="wallet" title="Paying for hires">
           {wallet.kind === "loading" ? <p className="text-sm text-ink-3">Loading your wallet.</p> : null}

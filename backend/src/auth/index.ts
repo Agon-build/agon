@@ -39,6 +39,9 @@ import { createStageServices, type StageServices } from "../agon/stage/services.
 import { resolveStageSettings } from "../agon/stage/settings.ts";
 import { classifyIntent } from "../agon/channels/chat/intents.ts";
 import { createTelegramChannel } from "../agon/channels/telegram/channel.ts";
+import { createDeliveryRoutes } from "../agon/deliveries/routes.ts";
+import { PostgresDeliveryStore } from "../agon/deliveries/store.ts";
+import { PostgresTelegramLinks } from "../agon/deliveries/telegram-link.ts";
 import { callModel } from "../runners/llm/client.js";
 import { formatUsdc } from "../agon/payments/bargain.ts";
 import { checkStage, startStageMonitor } from "../agon/stage/monitor.ts";
@@ -840,7 +843,8 @@ if (agonSeason) {
 // reason as the season routes. `agonPayments.hire` is what channels call.
 const stage = resolveStageSettings(process.env);
 for (const problem of stage.problems) console.error(`[stage] ${problem}`);
-const agonPayments = startPaymentsRuntime({ season: agonSeason, blockedProviders: () => stage.settings.providerBlocklist, siteUrl: stage.settings.siteUrl });
+const agonPayments = startPaymentsRuntime({ season: agonSeason, blockedProviders: () => stage.settings.providerBlocklist, siteUrl: stage.settings.siteUrl, telegramBotToken: stage.settings.telegram?.botToken ?? null });
+const telegramLinks = new PostgresTelegramLinks(pool);
 const channelStore = new PostgresChannelStore(pool);
 const monitorStore = new PostgresMonitorStore(pool);
 let stageServices: StageServices | null = null;
@@ -904,6 +908,10 @@ if (agonPayments) {
     newWalletAllowed,
     leadAsk: (ownerRef, question) => leadServices.ask(ownerRef, { question }),
   });
+  app.route("/agon/app/deliveries", createDeliveryRoutes({
+    requireAuth, links: telegramLinks, emailOf: (operator) => new PostgresDeliveryStore(pool).emailOf(operator),
+    emailOn: Boolean(process.env.AGON_DELIVERY_EMAIL_FROM?.trim()), botUsername: stage.settings.telegram?.botUsername ?? null,
+  }));
   app.route("/agon/app", createAppRoutes({ services: stageServices, requireAuth, off: () => stage.settings.channelsOff.web, terms: custodyTerms, router: agonRouter, outside: outsideServices }));
   app.route("/agon", createApprovalRoutes({
     gate: { payments: agonPayments.store, channels: channelStore, chatIdPepper: stage.settings.chatIdPepper, network: agonPayments.settings.network, now: () => new Date() },
@@ -922,6 +930,7 @@ if (agonPayments) {
       classify: (text) => classifyIntent(text, { callModel: async (p) => ({ text: (await callModel(p)).text }), model: stage.settings.classifierModel, log: (m) => console.warn(`[telegram] ${m}`) }),
       off: () => stage.settings.channelsOff.telegram,
       log: (m) => console.warn(`[telegram] ${m}`),
+      linkDelivery: async (code, chatId) => (await telegramLinks.claimCode(code, chatId, new Date())) !== null,
     });
     app.route("/agon/telegram", telegram.routes);
     console.log(`[stage] Telegram channel on @${stage.settings.telegram.botUsername}`);

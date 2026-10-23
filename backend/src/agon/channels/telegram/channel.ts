@@ -8,6 +8,7 @@ import type { ChatIntent } from "../chat/intents.ts";
 import type { ChannelStore } from "../types.ts";
 import { createTelegramApi, type TelegramApi } from "./api.ts";
 import { createTelegramWebhook } from "./webhook.ts";
+import { LINK_START } from "../../deliveries/telegram-link.ts";
 
 export function createTelegramChannel(deps: {
   telegram: TelegramSettings;
@@ -25,6 +26,8 @@ export function createTelegramChannel(deps: {
   now?: () => Date;
   pollMs?: number;
   sleep?: (ms: number) => Promise<void>;
+  /** Links this chat to the Agon account that made the code (Account, Connect Telegram); true when it did. */
+  linkDelivery?: (code: string, chatId: string) => Promise<boolean>;
 }): { routes: Hono; api: TelegramApi } {
   const now = deps.now ?? (() => new Date());
   const perUser = createRateLimiter({ limit: 20, windowMs: 60_000 });
@@ -36,6 +39,16 @@ export function createTelegramChannel(deps: {
     log: deps.log,
     onUpdate: async (u) => {
       if (u.callbackId) await api.answerTap(u.callbackId);
+      const link = u.kind === "start" && deps.linkDelivery ? LINK_START.exec(u.text) : null;
+      if (link) {
+        const linked = await deps.linkDelivery!(link[1]!, String(u.chatId));
+        await api.send(u.chatId, {
+          text: linked
+            ? "Connected. Agon will send your finished jobs and watch alerts here."
+            : "That link has expired or was already used. Open Account on agon.surf and tap Connect Telegram again.",
+        });
+        return;
+      }
       await handleChatMessage(
         {
           services: deps.services, channels: deps.channels, channel: "telegram", ownerRefOf: telegramOwnerRef, pepper: deps.pepper,

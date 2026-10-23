@@ -14,6 +14,11 @@ import { PostgresWatchStore } from "../agents/watch-store.ts";
 import { createGammaWatchReader, startWatchWorker } from "../agents/watch-worker.ts";
 import { parseOwnerRef } from "../stage/settings.ts";
 import { notify } from "../../notifications/index.js";
+import { sendEmail } from "../../email/client.js";
+import { deliveryEmail } from "../deliveries/email.ts";
+import { PostgresDeliveryStore } from "../deliveries/store.ts";
+import { startDeliveryWorker } from "../deliveries/worker.ts";
+import { createTelegramApi } from "../channels/telegram/api.ts";
 import { stableUuid } from "../playground/seasons/committer.ts";
 import { computeLeaderboard } from "../playground/seasons/scoring.ts";
 import type { SeasonRuntime } from "../playground/seasons/runtime.ts";
@@ -77,6 +82,8 @@ export function startPaymentsRuntime(input: {
   wrapSignJson?: (fn: (walletId: string, json: string) => Promise<Hex>) => (walletId: string, json: string) => Promise<Hex>;
   /** The web app, for links people open: a watch's page lives at <siteUrl>/watch/<id>. */
   siteUrl?: string;
+  /** The AGON bot, for deliveries to linked Telegram chats. */
+  telegramBotToken?: string | null;
 }): PaymentsRuntime | null {
   try {
     const resolved = resolvePaymentSettings(input.env ?? process.env);
@@ -202,6 +209,23 @@ export function startPaymentsRuntime(input: {
         notify: (owner, a) => notify(owner, { kind: "agon_resolution_watch", title: a.title.slice(0, 180), body: a.body, href: input.siteUrl ? `${input.siteUrl}/watch/${a.watchId}` : a.href, context: { watchId: a.watchId, alert: a.kind, market: a.href } }),
       });
       log("resolution watch worker on");
+    }
+    // Every finished hire reaches the person who paid: the bell always, and email once a delivery sender is set.
+    if (input.siteUrl && input.startLoops !== false) {
+      const deliveryFrom = (input.env ?? process.env).AGON_DELIVERY_EMAIL_FROM?.trim() || null;
+      const agonBot = input.telegramBotToken ? createTelegramApi({ token: input.telegramBotToken, log: (m) => console.warn(`[deliveries] ${m}`) }) : null;
+      startDeliveryWorker({
+        store: new PostgresDeliveryStore(pool), siteUrl: input.siteUrl, now: () => new Date(), log: (m) => console.log(`[deliveries] ${m}`),
+        bell: (operator, m) => notify(operator, { kind: "agon_delivery", title: m.title.slice(0, 180), body: m.body, href: m.href }),
+        email: deliveryFrom ? (to, m) => sendEmail({ to, ...deliveryEmail(m), from: deliveryFrom }) : undefined,
+        telegram: agonBot ? async (chatId, m) => {
+          const sent = await agonBot.send(Number(chatId), { text: `${m.title}
+
+${m.body}`, buttons: [[{ label: "Open on Agon", url: m.href }]] });
+          if (sent === null) throw new Error("telegram did not take the message");
+        } : undefined,
+      });
+      log(`deliveries on: bell${deliveryFrom ? ", email" : ""}${agonBot ? ", telegram" : ""}`);
     }
     const balanceOf = async (address: Address): Promise<bigint | null> => {
       try {

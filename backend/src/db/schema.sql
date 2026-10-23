@@ -2580,3 +2580,34 @@ create table if not exists agon_watch_alerts (
   created_at   timestamptz not null default now(),
   primary key (watch_id, condition_id, state_key)
 );
+
+-- Deliveries: every finished hire and watch alert, sent once per channel (bell, email, telegram) with retries.
+create table if not exists agon_deliveries (
+  event_key       text not null,
+  channel         text not null check (channel in ('bell','email','telegram')),
+  operator        text not null check (operator ~ '^0x[0-9a-f]{40}$'),
+  title           text not null,
+  body            text not null,
+  href            text not null,
+  status          text not null default 'pending' check (status in ('pending','sent','failed','skipped')),
+  attempts        integer not null default 0,
+  next_attempt_at timestamptz not null default now(),
+  last_error      text,
+  created_at      timestamptz not null default now(),
+  sent_at         timestamptz,
+  primary key (event_key, channel)
+);
+create index if not exists agon_deliveries_due on agon_deliveries(status, next_attempt_at);
+
+-- An Agon account's Telegram chat with the AGON bot, linked from Account through a one-time /start code.
+create table if not exists agon_telegram_links (
+  operator  text primary key check (operator ~ '^0x[0-9a-f]{40}$'),
+  chat_id   text not null check (chat_id ~ '^-?[0-9]{1,20}$'),
+  linked_at timestamptz not null default now()
+);
+create table if not exists agon_telegram_link_codes (
+  code       text primary key check (code ~ '^[0-9a-f]{24}$'),
+  operator   text not null check (operator ~ '^0x[0-9a-f]{40}$'),
+  expires_at timestamptz not null,
+  used_at    timestamptz
+);

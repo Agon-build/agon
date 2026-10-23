@@ -1,5 +1,6 @@
 import { config } from "../config/index.js";
 import { query } from "../db/pool.js";
+import { chatLink } from "./link.js";
 
 /// Operator-targeted notifications. Each call writes a row the frontend feed
 /// reads, and relays the same line to Telegram when the operator has linked
@@ -20,7 +21,10 @@ export type NotificationKind =
   | "custom_request"
   | "arena_review_escalation"
   | "agon_service_lifecycle"
-  | "agon_resolution_watch";
+  | "agon_resolution_watch"
+  | "agon_delivery";
+
+const AGON_BOT_KINDS: ReadonlySet<NotificationKind> = new Set(["agon_delivery", "agon_resolution_watch"]);
 
 export interface NotifyInput {
   kind: NotificationKind;
@@ -65,7 +69,8 @@ export async function notify(operator: string, input: NotifyInput): Promise<void
   } catch (err) {
     console.warn(`[notify] insert failed: ${err instanceof Error ? err.message : err}`);
   }
-  void relayTelegram(addr, input);
+  // Finished jobs and watch alerts reach Telegram through the AGON bot (agon/deliveries), not this ArcRun bot.
+  if (!AGON_BOT_KINDS.has(input.kind)) void relayTelegram(addr, input);
 }
 
 /// Send the notification to the operator's linked Telegram chat. No-op when
@@ -84,7 +89,7 @@ async function relayTelegram(operator: string, input: NotifyInput): Promise<void
     // Include a tappable deep link to the relevant page (claim, challenge,
     // training, etc.) so the user can act straight from Telegram. href is a
     // relative path; join it to the app origin.
-    const link = input.href ? `${config.auth.appUrl.replace(/\/$/, "")}${input.href}` : null;
+    const link = chatLink(input.href, config.auth.appUrl);
     const text = [input.title, input.body, link].filter(Boolean).join("\n");
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
@@ -112,7 +117,7 @@ export async function broadcastTelegram(input: { title: string; body?: string; h
       "select telegram_id from operators where telegram_id is not null",
     );
     if (rows.length === 0) return;
-    const link = input.href ? `${config.auth.appUrl.replace(/\/$/, "")}${input.href}` : null;
+    const link = chatLink(input.href, config.auth.appUrl);
     const text = [input.title, input.body, link].filter(Boolean).join("\n");
     let sent = 0;
     for (const r of rows) {

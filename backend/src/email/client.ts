@@ -13,6 +13,8 @@ export interface EmailMessage {
   subject: string;
   html: string;
   text: string;
+  /** Sender for this message; defaults to EMAIL_FROM (sign-in codes). */
+  from?: string;
 }
 
 /// Format the from header. EMAIL_FROM may be a bare address
@@ -34,7 +36,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function sendViaResend(msg: EmailMessage): Promise<void> {
   const apiKey = config.auth.emailOtp.resendApiKey;
-  const from = config.auth.emailOtp.from;
+  const from = msg.from ?? config.auth.emailOtp.from;
   if (!apiKey || !from) {
     throw new Error("RESEND_API_KEY and EMAIL_FROM are required when EMAIL_PROVIDER=resend");
   }

@@ -37,7 +37,7 @@ export function stageErrorCode(status: number, body: unknown): string {
   return "request_failed";
 }
 
-async function call<T>(path: string, init: { method?: "GET" | "POST"; body?: unknown; timeoutMs?: number } = {}): Promise<T> {
+async function call<T>(path: string, init: { method?: "GET" | "POST" | "DELETE"; body?: unknown; timeoutMs?: number } = {}): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${STAGE_API_URL}${path}`, {
@@ -111,6 +111,19 @@ export async function getLive(jobId: string): Promise<LiveView> {
   return call<LiveView>(`/agon/app/live/${encodeURIComponent(jobId)}`);
 }
 /// One page of the signed-in account's hires, newest first.
+/// Where finished work is sent: email (masked) and the AGON bot on Telegram.
+export type DeliverySettings = { email: { on: boolean; address: string | null }; telegram: { available: boolean; connected: boolean } };
+export async function getDeliveries(): Promise<DeliverySettings> {
+  if (AGON_PREVIEW_MODE) return { email: { on: true, address: "yo***@example.com" }, telegram: { available: true, connected: false } };
+  return call<DeliverySettings>("/agon/app/deliveries");
+}
+/// A one-time link that opens the AGON bot and connects this account's chat.
+export async function connectTelegram(): Promise<{ url: string }> {
+  return call<{ url: string }>("/agon/app/deliveries/telegram", { body: {} });
+}
+export async function disconnectTelegram(): Promise<void> {
+  await call("/agon/app/deliveries/telegram", { method: "DELETE" });
+}
 export async function getHistory(page = 1, limit = 10): Promise<{ items: HistoryItem[]; page: number; hasMore: boolean }> {
   if (AGON_PREVIEW_MODE) return { page, hasMore: false, items: page > 1 ? [] : [{ jobId: PREVIEW_JOB_ID, question: "What's the real chance BTC closes above $120k on Friday?", state: "delivered", price: "0.30", createdAt: new Date().toISOString(), receiptUrl: `/r/${PREVIEW_JOB_ID}` }] };
   return call(`/agon/app/history?page=${page}&limit=${limit}`);
