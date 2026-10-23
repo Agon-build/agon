@@ -149,3 +149,16 @@ test("hit reads as reach, and this year adds nothing", () => {
   assert.equal(searchQueryFor("Will Ethereum hit $5000 this year?"), "ethereum reach 5000");
   assert.equal(pickMarket([eth], "Will Ethereum hit $5000 this year?", now)!.conditionId, a);
 });
+
+test("a win question is not answered by a market about finishing places", () => {
+  const markets = [
+    { conditionId: b as `0x${string}`, question: "Will Arsenal finish in the top 4 of the 2026-27 English Premier League season?", eventTitle: "English Premier League Top 4 Finishers (2026-27)", slug: "", endDate: "2027-06-14T03:59:00Z", yesPriceBps: 9620 },
+  ];
+  assert.equal(pickMarket(markets, "Will Arsenal win the Premier League this season?", now), null);
+  markets.push({ conditionId: a as `0x${string}`, question: "Will Arsenal win the 2026-27 English Premier League (EPL) Championship?", eventTitle: "EPL: 2027 Champion", slug: "", endDate: "2027-05-30T23:59:00Z", yesPriceBps: 4200 });
+  assert.equal(pickMarket(markets, "Will Arsenal win the Premier League this season?", now)!.conditionId, a);
+});
+
+test("this season is not searched for: Polymarket names seasons by year", () => {
+  assert.equal(searchQueryFor("Will Arsenal win the Premier League this season?"), "arsenal premier league");
+});

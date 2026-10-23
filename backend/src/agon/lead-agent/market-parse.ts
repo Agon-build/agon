@@ -78,6 +78,8 @@ const STOP = new Set([
   // Question words; Polymarket search treats them as subject words and drifts to unrelated events.
   "who", "whom", "which", "when", "where", "why", "between", "vs", "versus", "against", "than", "there", "game", "match", "happen", "happens",
   "did", "was", "were", "has", "have", "had", "get", "gets", "from", "with", "its", "if", "not", "about", "any", "tonight", "think", "going", "year",
+  // "This season": Polymarket names seasons by year, and searching the word drifts to "Top 4 ... season" markets.
+  "season",
 ]);
 const SYNONYMS: Record<string, string> = {
   btc: "bitcoin", eth: "ethereum", ether: "ethereum", sol: "solana",
@@ -164,6 +166,8 @@ function scoreMarket(m: MarketCandidate, want: string[], rank: number, matchup: 
   if (numbers.length > 0 && !numbers.some((t) => inMarket.has(t))) score = 0;
   if (matchup && want.some((t) => t !== "win" && !isNumber(t) && !inMarket.has(t))) score = 0;
   if (!combined && COMBINED.test(m.question)) score = 0;
+  // "Will Arsenal win the league?" is not answered by "Will Arsenal finish in the top 4?".
+  if (want.includes("win") && !inMarket.has("win")) score = 0;
   if (specific.size > 0 && ![...specific].some((t) => inMarket.has(t))) score = 0;
   if (score >= 2 && m.yesPriceBps !== null) score += 0.5;
   return { m, score, positions, extra: [...inQuestion].filter((t) => !want.includes(t)).length, rank };

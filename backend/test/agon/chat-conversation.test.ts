@@ -114,6 +114,7 @@ test("paying shows progress in one message, then the forecast with the receipt l
   assert.match(finalProgress, /- Hired Atlas \(house\)/);
   const answer = s.last();
   assert.match(answer.text, /^Forecast: 34% chance\. Polymarket says 41%\./);
+  assert.match(answer.text, /\nMarket: Will Bitcoin close above \$120,000 on October 30\?\n/);
   assert.match(answer.text, /Why:\n1\. Spot is 6% below the line\n2\. Three days left\n3\. Funding is flat/);
   assert.match(answer.text, /Receipt for 1 payment: https:\/\/agon\.surf\/r\/[0-9a-f-]{36}/);
   assert.equal(answer.buttons![0]![0]!.label, "Open receipt");

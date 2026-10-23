@@ -120,6 +120,7 @@ function finalReply(live: LiveView | null): ChatReply {
     return {
       text: [
         `Forecast: ${agon}% chance.${market === null ? "" : ` Polymarket says ${market}%.`}`,
+        ...(a.marketQuestion ? [`Market: ${a.marketQuestion}`] : []),
         "Why:",
         ...a.reasons.map((r, i) => `${i + 1}. ${r}`),
         `Forecast by ${a.forecaster.name}, ${a.forecaster.reason}.`,
