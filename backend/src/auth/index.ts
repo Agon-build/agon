@@ -840,7 +840,7 @@ if (agonSeason) {
 // reason as the season routes. `agonPayments.hire` is what channels call.
 const stage = resolveStageSettings(process.env);
 for (const problem of stage.problems) console.error(`[stage] ${problem}`);
-const agonPayments = startPaymentsRuntime({ season: agonSeason, blockedProviders: () => stage.settings.providerBlocklist });
+const agonPayments = startPaymentsRuntime({ season: agonSeason, blockedProviders: () => stage.settings.providerBlocklist, siteUrl: stage.settings.siteUrl });
 const channelStore = new PostgresChannelStore(pool);
 const monitorStore = new PostgresMonitorStore(pool);
 let stageServices: StageServices | null = null;

@@ -88,5 +88,5 @@ test("a Resolution Watch answer reads as the markets watched, until when, and wh
   assert.ok(view && view.kind === "watch");
   assert.equal(view.markets[0]!.question, "Will the Bank of Canada hold?");
   assert.equal(view.until, "21 December");
-  assert.equal(view.statusUrl, "https://api.agon.surf/agon/agents/specialists/watch/w-1");
+  assert.equal(view.watchPath, "/watch/w-1", "the watch opens on agon.surf, not the raw API");
 });

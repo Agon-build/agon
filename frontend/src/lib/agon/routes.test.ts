@@ -21,3 +21,9 @@ test("Agon route family covers the new sections", () => {
   for (const p of ["/", "/agents", "/arena/season-1", "/list", "/account", "/docs", "/connect", "/operators/0xabc"]) assert.equal(isAgonRoute(p), true, p);
   assert.equal(isAgonRoute("/app"), false);
 });
+
+test("a watch page is an Agon page anyone with its id can read", () => {
+  assert.equal(isAgonRoute("/watch/a82c59416dfd1e1d9f7e433685d3b30d"), true);
+  assert.equal(isAgonPublicRoute("/watch/a82c59416dfd1e1d9f7e433685d3b30d"), true);
+  assert.equal(isAgonPublicRoute("/watch/not-an-id"), false);
+});

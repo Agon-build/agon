@@ -28,8 +28,8 @@ export function MoneyFlow({ flow }: { flow: FlowModel }) {
   return (
     <section aria-labelledby="flow-heading">
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[color:var(--hairline-strong)] pb-3">
-        <h3 id="flow-heading" className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Where the money went</h3>
-        {flow.lead ? <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">Agents paid out <span className="text-ink">{flow.agentSpend} USDC</span></span> : null}
+        <h3 id="flow-heading" className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">{flow.sellers.length > 0 ? "Where the money went" : "Payment"}</h3>
+        {flow.lead && flow.sellers.length > 0 ? <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">Agents paid out <span className="text-ink">{flow.agentSpend} USDC</span></span> : null}
       </div>
       {!flow.lead ? (
         <p className="py-6 text-sm text-ink-3">Payments appear here as they land on Arc.</p>

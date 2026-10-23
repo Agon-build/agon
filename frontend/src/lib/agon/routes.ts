@@ -24,15 +24,17 @@ export function isLegacyArcRunRoute(pathname: string): boolean {
 }
 
 const startsWithAny = (pathname: string, roots: readonly string[]) => roots.some((r) => pathname === r || pathname.startsWith(`${r}/`));
+const WATCH_ID = /^[0-9a-f]{32}$/i;
 const JOB_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function isAgonRoute(pathname: string): boolean {
-  return pathname === "/" || startsWithAny(pathname, ["/agents", "/arena", "/list", "/playground", "/account", "/docs", "/cli", "/connect", "/login", "/operators", "/approve", "/r"]);
+  return pathname === "/" || startsWithAny(pathname, ["/agents", "/arena", "/list", "/playground", "/account", "/docs", "/cli", "/connect", "/login", "/operators", "/approve", "/r", "/watch"]);
 }
 
-/// Receipts, approval links and the Arena are readable without an account.
+/// Receipts, watches, approval links and the Arena are readable without an account.
 export function isStagePublicRoute(pathname: string): boolean {
   if (pathname === "/" || pathname === "/approve" || startsWithAny(pathname, ["/arena"])) return true;
+  if (pathname.startsWith("/watch/")) return WATCH_ID.test(pathname.slice(7));
   return pathname.startsWith("/r/") && JOB_ID.test(pathname.slice(3));
 }
 

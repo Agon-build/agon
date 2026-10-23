@@ -120,7 +120,7 @@ const manifestAnchorTask = { id: "manifest-anchor", category: "verification" as 
 
 test("automatic certification tests a Verification agent that takes markets on settlement alerts, not manifest anchor", async () => {
   const seen: string[] = [];
-  const runner = createManifestDerivedPlaygroundProviderRunner({ fetch: fetchForWatch("real", seen), resolve: async () => ["93.184.216.34"] });
+  const runner = createManifestDerivedPlaygroundProviderRunner({ fetch: fetchForWatch("real", seen), resolve: async () => ["93.184.216.34"], now: () => new Date(Date.UTC(2026, 9, 22, 9)) });
   const result = await runner.run({ provider: watchProvider(), task: manifestAnchorTask, taskInput: {} });
   assert.deepEqual(seen, ["settlement-alerts"]);
   assert.equal(result.task?.id, "settlement-alerts");
@@ -131,12 +131,21 @@ test("automatic certification tests a Verification agent that takes markets on s
   assert.equal(result.providerHost, "provider.example");
 });
 
-test("automatic certification fails a settlement watcher that raises no alerts", async () => {
-  const runner = createManifestDerivedPlaygroundProviderRunner({ fetch: fetchForWatch("silent"), resolve: async () => ["93.184.216.34"] });
-  const result = await runner.run({ provider: watchProvider(), task: manifestAnchorTask, taskInput: {} });
-  assert.equal(result.task?.id, "settlement-alerts");
-  assert.equal(result.passed, false);
-  assert.ok(result.score < 80);
+test("automatic certification fails a silent settlement watcher on every sequence that should alert, at any hour", async () => {
+  // The sequence changes by the hour; only the calm control expects no alert, so silence passes only there.
+  let failed = 0;
+  for (let hour = 0; hour < 24; hour += 1) {
+    const at = new Date(Date.UTC(2026, 9, 22, hour, 30));
+    const runner = createManifestDerivedPlaygroundProviderRunner({ fetch: fetchForWatch("silent"), resolve: async () => ["93.184.216.34"], now: () => at });
+    const result = await runner.run({ provider: watchProvider(), task: manifestAnchorTask, taskInput: {} });
+    assert.equal(result.task?.id, "settlement-alerts");
+    const { question, readings } = result.input as { question: string; readings: Record<string, unknown>[] };
+    const states = readings.map(stateFromGamma);
+    const shouldAlert = states.some((s, i) => i > 0 && alertsBetween(question, states[i - 1]!, s).length > 0);
+    assert.equal(result.passed, !shouldAlert, `hour ${hour}`);
+    if (!result.passed) { failed += 1; assert.ok(result.score < 80); }
+  }
+  assert.ok(failed > 0, "some hours give a sequence that should alert");
 });
 
 test("automatic certification refuses legacy manifests without the typed invocation contract", async () => {

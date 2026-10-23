@@ -72,7 +72,7 @@ function WatchAnswer({ view }: { view: WatchAnswerView }) {
           </li>
         ))}
       </ul>
-      <a href={view.statusUrl} target="_blank" rel="noreferrer" className="mt-5 inline-flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.13em] text-ink-2 hover:text-accent">Watch status →</a>
+      <a href={view.watchPath} className="mt-5 inline-flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.13em] text-ink hover:text-accent">Follow your markets →</a>
     </section>
   );
 }
@@ -120,7 +120,8 @@ export function RunView({ live }: { live: LiveView }) {
       </div>
       <div className="min-w-0">
         <MoneyFlow flow={flow} />
-        <LedgerTape rows={ledgerRows(live.events, live.startedAt)} working={!isTerminal(live.phase)} />
+        {/* A job with no steps to show (a direct hire) does not need an empty steps panel once it is done. */}
+        {live.events.length > 0 || !isTerminal(live.phase) ? <LedgerTape rows={ledgerRows(live.events, live.startedAt)} working={!isTerminal(live.phase)} /> : null}
       </div>
     </div>
   );

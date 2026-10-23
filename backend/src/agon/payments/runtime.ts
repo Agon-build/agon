@@ -75,6 +75,8 @@ export function startPaymentsRuntime(input: {
   startLoops?: boolean;
   blockedProviders?: () => ReadonlySet<string>;
   wrapSignJson?: (fn: (walletId: string, json: string) => Promise<Hex>) => (walletId: string, json: string) => Promise<Hex>;
+  /** The web app, for links people open: a watch's page lives at <siteUrl>/watch/<id>. */
+  siteUrl?: string;
 }): PaymentsRuntime | null {
   try {
     const resolved = resolvePaymentSettings(input.env ?? process.env);
@@ -161,7 +163,7 @@ export function startPaymentsRuntime(input: {
         sellers: Object.fromEntries(Object.entries(s.specialistSellers).map(([key, w]) => [key, { payTo: w.address, settle: settler(w) }])),
         lookup: lookupMarket,
         callModel: async (p) => ({ text: (await callModel(p)).text }),
-        watch: { store: watchStore, ownerOf: ownerOfWallet, statusBase: `${s.publicApiUrl}/agon/agents/specialists/watch` },
+        watch: { store: watchStore, ownerOf: ownerOfWallet, statusBase: input.siteUrl ? `${input.siteUrl}/watch` : `${s.publicApiUrl}/agon/agents/specialists/watch` },
       }) as unknown as Hono,
       standin: s.standin ? (createStandinRoutes({ network, payTo: s.standin.address, settle: settler(s.standin), claimNonce }) as unknown as Hono) : null,
     };
@@ -197,7 +199,7 @@ export function startPaymentsRuntime(input: {
     if (s.specialistSellers.watch) {
       startWatchWorker({
         store: watchStore, readMarkets: createGammaWatchReader(), now: () => new Date(), log: (m) => console.log(`[watch] ${m}`),
-        notify: (owner, a) => notify(owner, { kind: "agon_resolution_watch", title: a.title.slice(0, 180), body: a.body, href: a.href, context: { watchId: a.watchId, alert: a.kind } }),
+        notify: (owner, a) => notify(owner, { kind: "agon_resolution_watch", title: a.title.slice(0, 180), body: a.body, href: input.siteUrl ? `${input.siteUrl}/watch/${a.watchId}` : a.href, context: { watchId: a.watchId, alert: a.kind, market: a.href } }),
       });
       log("resolution watch worker on");
     }

@@ -2,7 +2,7 @@ import type { FlowStatus } from "@/lib/agon/stage-view";
 import type { StageEventKind } from "@/lib/agon/stage-types";
 import { KIND_LABEL } from "@/lib/agon/stage-copy";
 
-const STATUS_LABEL: Record<FlowStatus, string> = { settled: "Settled on Arc", pending: "Confirming", failed: "Failed" };
+const STATUS_LABEL: Record<FlowStatus, string> = { settled: "Paid", pending: "Confirming", failed: "Not paid" };
 
 export function StatusMark({ status }: { status: FlowStatus }) {
   const cls = status === "settled" ? "bg-[color:var(--ok)]" : status === "failed" ? "bg-[color:var(--err)]" : "border border-[color:var(--ink-3)]";

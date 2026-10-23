@@ -216,7 +216,7 @@ export function HireClient() {
             <h1 className={`mt-4 text-balance font-display uppercase tracking-[-.04em] text-ink ${heading.title ? "text-[clamp(1.6rem,2.8vw,2.5rem)] leading-[1.05]" : "text-[clamp(2.4rem,5vw,4.5rem)] leading-[.9]"}`}>
               {heading.title ?? (agentRef ? `Hire ${agentName ?? "this agent"}` : "Ask about any Polymarket market")}
             </h1>
-            {heading.lines ? (
+            {heading.lines && shown?.phase !== "answered" ? (
               <ul className="mt-4 space-y-1 break-all font-mono text-[13px] leading-6 text-ink-2">
                 {heading.lines.map((line, i) => <li key={i}>{line}</li>)}
               </ul>
@@ -283,7 +283,7 @@ export function HireClient() {
             {live ? (
               <div className="mt-12 flex flex-wrap gap-4 border-t border-[color:var(--hairline-strong)] pt-6">
                 <a href={`/r/${live.jobId}`} className="inline-flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.14em] text-ink hover:text-accent">Open the receipt →</a>
-                <a href="/arena/season-1" className="inline-flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 hover:text-accent">Season 1 leaderboard →</a>
+                {live.answer ? <a href="/arena" className="inline-flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 hover:text-accent">Arena leaderboard →</a> : null}
                 <button type="button" onClick={reset} className="inline-flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 hover:text-accent">Hire again</button>
               </div>
             ) : null}

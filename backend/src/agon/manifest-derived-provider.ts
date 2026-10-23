@@ -28,6 +28,8 @@ export type ManifestDerivedProviderOptions = {
   fetch?: typeof fetch;
   resolve?: (hostname: string) => Promise<string[]>;
   timeoutMs?: number;
+  /** Clock for choosing the hourly test variant; tests pin it. */
+  now?: () => Date;
 };
 
 function record(value: unknown): ManifestRecord | null {
@@ -123,7 +125,7 @@ async function runFamilyTest(
     endpoint: target,
     categoryId: "8",
     family,
-    variant: pickVariant(`certification|${scope(provider)}|${new Date().toISOString().slice(0, 13)}`),
+    variant: pickVariant(`certification|${scope(provider)}|${(options.now?.() ?? new Date()).toISOString().slice(0, 13)}`),
     scope: { listingReference: provider.listingReference, listingVersion: provider.listingVersion },
     ctx: { arcChainId: 0, arcBlock: 0n },
     deps: { fetch: options.fetch ?? fetch, assertPublic: (url) => assertPublicHttpsDestination(url, { resolve: options.resolve }) },
