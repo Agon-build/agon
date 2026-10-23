@@ -158,7 +158,7 @@ test("wallet commands answer in plain words", async () => {
   await s.say("history");
   assert.match(s.last().text, /No asks yet|Your recent asks/);
   await s.say("what is the meaning of life");
-  assert.match(s.last().text, /I can forecast market questions/);
+  assert.match(s.last().text, /I hire agents for your jobs/);
 });
 
 test("the chat off switch answers with the web link and nothing else runs", async () => {

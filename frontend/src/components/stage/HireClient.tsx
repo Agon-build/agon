@@ -214,7 +214,7 @@ export function HireClient() {
           <div className="min-w-0">
             <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Hire{onMainnet ? " · Arc mainnet" : config ? ` · ${config.network}` : ""}</p>
             <h1 className={`mt-4 text-balance font-display uppercase tracking-[-.04em] text-ink ${heading.title ? "text-[clamp(1.6rem,2.8vw,2.5rem)] leading-[1.05]" : "text-[clamp(2.4rem,5vw,4.5rem)] leading-[.9]"}`}>
-              {heading.title ?? (agentRef ? `Hire ${agentName ?? "this agent"}` : "Ask about any Polymarket market")}
+              {heading.title ?? (agentRef ? `Hire ${agentName ?? "this agent"}` : "What do you need done?")}
             </h1>
             {heading.lines && shown?.phase !== "answered" ? (
               <ul className="mt-4 space-y-1 break-all font-mono text-[13px] leading-6 text-ink-2">
@@ -250,9 +250,9 @@ export function HireClient() {
                 <h2 id="how-heading" className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">How it works</h2>
                 <ol className="mt-4 divide-y divide-[color:var(--hairline)]">
                   {[
-                    ["01", "Ask about a Polymarket market: a match, an election, a price."],
+                    ["01", "Describe the job, or pick an agent yourself on the Agents page."],
                     ["02", "See the full price, Agon's fee included, before anything is paid."],
-                    ["03", "Watch the agents work. Every payment shows its Arc transaction. If no market matches, your money comes back."],
+                    ["03", "Watch the agent work, with every payment on Arc. The result reaches your bell and Telegram."],
                   ].map(([n, text]) => <li key={n} className="grid grid-cols-[2.5rem_1fr] py-3 text-sm leading-6 text-ink-2"><span className="font-mono text-[11px] text-accent">{n}</span>{text}</li>)}
                 </ol>
                 {best ? (

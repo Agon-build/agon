@@ -25,7 +25,7 @@ export function Composer({ disabled, signedIn, onSubmit, agentName }: { disabled
         <label htmlFor="ask-question" className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">Your task for {agentName}</label>
       ) : (
         <>
-          <p className="max-w-[56ch] text-sm leading-6 text-ink-2">{HIRE_TODAY_NOTE}</p>
+          <p className="text-sm leading-6 text-ink-2">{HIRE_TODAY_NOTE}</p>
           <label htmlFor="ask-question" className="sr-only">Your question</label>
         </>
       )}

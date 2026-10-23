@@ -164,9 +164,10 @@ test("the Hire page says once, in plain words, what works today", () => {
   const composer = readFileSync(new URL("../../components/stage/Composer.tsx", import.meta.url), "utf8");
   const hire = readFileSync(new URL("../../components/stage/HireClient.tsx", import.meta.url), "utf8");
   const docs = readFileSync(new URL("./docs-content.ts", import.meta.url), "utf8");
-  // 2026-10-18: the page said "Describe it", then "What do you need done?" twice more.
-  assert.match(hire, /Ask about any Polymarket market/);
-  assert.doesNotMatch(hire + composer, /What do you need done|"Describe it"/);
+  // 2026-10-18: the page said "Describe it", then "What do you need done?" twice more; it is said once now, as the heading.
+  // 2026-10-23: Agon is a market for any agent, so the heading does not lead with Polymarket.
+  assert.equal((hire + composer).split("What do you need done?").length - 1, 1);
+  assert.doesNotMatch(hire + composer, /"Describe it"|Ask about any Polymarket market/);
   assert.match(composer, /className="sr-only"/, "the question box keeps an accessible label without repeating the heading");
   assert.match(composer, /HIRE_TODAY_NOTE/);
   // Ratings and Circle are not working yet (capabilities.md), so the page must not promise them.

@@ -66,7 +66,7 @@ const networkLine = (s: StageServices) => `${s.network.label}, ${s.network.id ==
 function terms(): ChatReply {
   return {
     text: [
-      "Welcome to Agon. Agents here forecast market questions and pay each other in USDC on Arc.",
+      "Welcome to Agon, a market for AI agents. Tell it the job and it hires the agent that has proved it can do it, paid in USDC on Arc.",
       "",
       "Before you start:",
       "- Agon holds a small USDC balance for you in a wallet it runs on your behalf. It only pays what you confirm, within limits you can lower: 0.50 per hire and 2.00 per day on Arc Testnet, 0.25 per hire and 1.00 per day on Arc mainnet.",
@@ -85,7 +85,7 @@ function welcome(w: WalletView): ChatReply {
       w.testnet ? FAUCET_LINE : "Send USDC on Arc to that address to add funds.",
       "Commands: /balance /deposit /history /leaderboard /limits /freeze /withdraw /help",
       "",
-      `Ask me a question, for example: ${EXAMPLE}`,
+      `Tell me what you need, for example: ${EXAMPLE}`,
     ].join("\n"),
     buttons: faucetButtons(w.testnet),
   };
@@ -94,12 +94,12 @@ function welcome(w: WalletView): ChatReply {
 function help(siteUrl: string): ChatReply {
   return {
     text: [
-      "I can forecast market questions and manage your Agon wallet.",
-      `Ask a question, for example: ${EXAMPLE}`,
+      "I hire agents for your jobs and manage your Agon wallet.",
+      `Tell me what you need, for example: ${EXAMPLE}`,
       "",
       "Wallet: balance, deposit, limits, history, freeze, unfreeze, withdraw",
-      "Season 1: leaderboard",
-      `Web: ${siteUrl}/ask`,
+      "Arena: leaderboard",
+      `Web: ${siteUrl}`,
     ].join("\n"),
   };
 }
