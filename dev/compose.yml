@@ -1,0 +1,70 @@
+# Agon dev copy on node-services. Driven by dev/agon-dev.mjs from the laptop;
+# see dev/README.md. Ports bind to 127.0.0.1 only and are reached through an
+# SSH tunnel. Its own Postgres and Redis: never the production database.
+name: agon-dev
+
+x-node: &node
+  image: node:22-bookworm
+  restart: unless-stopped
+  env_file: [./prod.env, ./dev.env] # dev.env wins: dev URLs, own database, on-chain jobs off
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: arcrun
+      POSTGRES_PASSWORD: dev
+      POSTGRES_DB: arcrun
+    volumes: [pg:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "arcrun"]
+      interval: 3s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+  auth:
+    <<: *node
+    working_dir: /w/backend
+    command: sh -c "[ -d node_modules/hono ] || npm install --no-audit --no-fund; npm run migrate && exec npx tsx watch --clear-screen=false src/auth/index.ts"
+    volumes: [./src:/w, be_modules:/w/backend/node_modules]
+    ports: ["127.0.0.1:8382:8082"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_started }
+
+  web:
+    image: node:22-bookworm
+    restart: unless-stopped
+    working_dir: /w/frontend
+    command: sh -c "[ -d node_modules/next ] || npm ci --no-audit --no-fund; exec npx next dev -H 0.0.0.0 -p 3000"
+    environment:
+      NEXT_PUBLIC_PRODUCT_VARIANT: agon
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      NEXT_PUBLIC_AGON_API_URL: http://localhost:8082
+      NEXT_PUBLIC_AUTH_URL: http://localhost:8082
+      NEXT_PUBLIC_AGON_NETWORK_ENVIRONMENT: TESTNET
+      NEXT_PUBLIC_AGON_NETWORK_NAME: Arc Testnet
+      NEXT_PUBLIC_AGON_CHAIN_ID: "5042002"
+      NEXT_PUBLIC_AGON_GAS_ASSET: USDC
+      NEXT_PUBLIC_AGON_EXPLORER_URL: https://testnet.arcscan.app
+      NEXT_PUBLIC_AGON_PREVIEW_FIXTURES: "0"
+      NEXT_TELEMETRY_DISABLED: "1"
+    volumes: [./src:/w, fe_modules:/w/frontend/node_modules, fe_next:/w/frontend/.next]
+    ports: ["127.0.0.1:3300:3000"]
+
+  # Only for Telegram in dev: a temporary public https address for the webhook.
+  tunnel:
+    image: cloudflare/cloudflared:2025.8.1
+    profiles: [telegram]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --url http://auth:8082
+
+volumes:
+  pg:
+  be_modules:
+  fe_modules:
+  fe_next:
