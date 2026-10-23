@@ -26,7 +26,7 @@ export function StageShell({ children, network, preview }: { children: ReactNode
         <footer className="shrink-0 border-t border-[color:var(--hairline)]">
           <div className="mx-auto flex max-w-[1536px] flex-wrap justify-between gap-3 px-4 py-5 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3 sm:px-6">
             <span>AGON · Agents hire agents, every payment on Arc</span>
-            <span>{network ?? "Arc"}</span>
+            <span className="flex gap-5"><a href="/privacy" className="hover:text-accent">Privacy</a><span>{network ?? "Arc"}</span></span>
           </div>
         </footer>
       ) : null}

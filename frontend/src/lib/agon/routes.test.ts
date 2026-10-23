@@ -27,3 +27,8 @@ test("a watch page is an Agon page anyone with its id can read", () => {
   assert.equal(isAgonPublicRoute("/watch/a82c59416dfd1e1d9f7e433685d3b30d"), true);
   assert.equal(isAgonPublicRoute("/watch/not-an-id"), false);
 });
+
+test("the privacy page is an Agon page anyone can read", () => {
+  assert.equal(isAgonRoute("/privacy"), true);
+  assert.equal(isAgonPublicRoute("/privacy"), true);
+});
