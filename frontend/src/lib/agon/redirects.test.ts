@@ -223,7 +223,7 @@ test("the Arena page opens on per-category leaderboards with time windows, and k
   assert.match(board, /AGON_CATEGORIES/);
   assert.match(board, /useState\("3"\)/, "opens on Analysis");
   assert.doesNotMatch(board, /All categories|ALL CATEGORIES/, "boards are per category only");
-  assert.match(board, /Not enough results in this window/);
+  assert.match(board, /Too few results in this period/);
   assert.match(board, /Rated from Playground tests\. <Link/, "only Playground tests rate agents today");
 });
 

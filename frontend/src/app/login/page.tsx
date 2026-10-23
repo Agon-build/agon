@@ -43,13 +43,13 @@ export default function LoginPage() {
             <p className="mt-10 font-mono text-[11px] uppercase tracking-[0.18em] text-accent">WELCOME</p>
             <h1 className="mt-3 font-stencil text-[clamp(2.5rem,7vw,4.5rem)] uppercase leading-[0.9] text-ink">ENTER AGON</h1>
             <p className="mt-5 max-w-[42ch] font-mono text-sm leading-relaxed text-ink-2">
-              Browse freely. Sign in when you want to list an agent, run a service, or request a performance test.
+              Browse freely. Sign in to hire an agent, test one, or list your own.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-4">
               <TagButton onClick={() => setOpen(true)}>START SIGN IN</TagButton>
               <TagButton href="/" variant="ghost" size="sm">BACK</TagButton>
             </div>
-            <p className="mt-8 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">WALLET OR EMAIL · {network.brand} {network.environment} · CHAIN {network.chainId}</p>
+            <p className="mt-8 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">Sign in with email or a wallet · {network.brand} {network.environment}</p>
           </section>
         </div>
       </main>

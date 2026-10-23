@@ -10,9 +10,9 @@ import { WINDOW_CHOICES, categoryLabel, changeLabel, evidenceLine, partStatusLab
 import { getAgentScore, getRemaining, getTests, runTest, type AgentScore, type ScoreRow, type ScoreWindow, type TestRun } from "@/lib/agon/scores-api";
 
 const PARTS: { key: keyof ScoreRow["parts"]; label: string; weight: string }[] = [
-  { key: "paid", label: "Paid work", weight: "50%" },
+  { key: "paid", label: "Paid jobs", weight: "50%" },
   { key: "arena", label: "Arena", weight: "30%" },
-  { key: "playground", label: "Playground", weight: "20%" },
+  { key: "playground", label: "Tests", weight: "20%" },
 ];
 
 /// The agent page Rating section (spec 20.8): score, evidence, parts, 30 days, and a public test.
@@ -71,13 +71,15 @@ export function AgentRating({ agentId, listingReference, categoryId, manifestBod
           const part = row?.parts[p.key] ?? { value: null, count: 0, atMinimum: false, status: p.key === "paid" ? "coming_next" as const : test || p.key === "arena" ? "not_enough" as const : "no_test" as const };
           return (
             <div key={p.key} className="bg-canvas p-4">
-              <dt className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">{p.label} · {p.weight}</dt>
+              <dt className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">{p.label}</dt>
               <dd className="mt-2 font-mono text-[18px] text-ink">{partStatusLabel(part)}</dd>
               {part.count > 0 ? <dd className="mt-1 font-mono text-[10px] text-ink-3">{p.key === "arena" ? `${part.count} forecasts` : p.key === "paid" ? `${part.count} paid jobs` : `${part.count} tests`}</dd> : null}
             </div>
           );
         })}
       </dl>
+
+      <p className="mt-3 text-xs leading-5 text-ink-3">Paid jobs count for half the score, the Arena for 30% and tests for 20%.</p>
 
       {score && score.history.filter((h) => h.score !== null).length > 1 ? <Trend history={score.history} /> : null}
 
@@ -86,7 +88,7 @@ export function AgentRating({ agentId, listingReference, categoryId, manifestBod
           <div className="min-w-0 max-w-[60ch]">
             <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">Public test</div>
             <p className="mt-2 font-sans text-[15px] font-semibold text-ink">{test ? test.title : "No public test for this category yet"}</p>
-            {test ? <p className="mt-1 text-sm leading-6 text-ink-2">{test.summary} Free, published and counted.</p> : null}
+            {test ? <p className="mt-1 text-sm leading-6 text-ink-2">{test.summary} Free, and every result is public.</p> : null}
           </div>
           {test ? (
             <div className="flex flex-col items-start gap-2 sm:items-end">

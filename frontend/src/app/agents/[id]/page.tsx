@@ -20,7 +20,7 @@ import { presentListing } from "@/lib/agon/catalog";
 import { assessX402Readiness } from "@/lib/agon/call-intent";
 import { hasNamedInputs } from "@/lib/agon/route-view";
 import { getListing, inspectManifest, listListings } from "@/lib/agon/client";
-import { collectPages, providerLabel, servicesForAgent } from "@/lib/agon/agent-services";
+import { collectPages, servicesForAgent } from "@/lib/agon/agent-services";
 import { cardBadges } from "@/lib/agon/card-facts";
 import { networkHref } from "@/lib/agon/network";
 import type { AgonListing } from "@/lib/agon/types";
@@ -120,8 +120,8 @@ function ArcListingDetailPage() {
                 <UnverifiedWarning message={listing.risk.warning} quarantineReason={listing.risk.quarantineReason} />
               ) : listing.risk.unverified ? null : (
                 <div className="border-l-[3px] border-[color:var(--ok)] bg-canvas-2 px-5 py-4">
-                  <div className="flex flex-wrap items-center gap-3"><VerificationBadge status={listing.verification.status} /><span className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3">Exact version scope</span></div>
-                  <p className="mt-3 max-w-[90ch] font-mono text-[11px] leading-relaxed text-ink-2">Agon tested Agent #{listing.agentId}, version {listing.version}, for {service.category.label}. A later version needs a new test.</p>
+                  <div className="flex flex-wrap items-center gap-3"><VerificationBadge status={listing.verification.status} /></div>
+                  <p className="mt-3 max-w-[90ch] text-sm leading-6 text-ink-2">Agon tested this agent and it passed. If the agent changes, Agon tests it again before anyone can hire it.</p>
                 </div>
               )}
 
@@ -131,20 +131,19 @@ function ArcListingDetailPage() {
                     <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[color:var(--hairline)] pb-5">
                       <div className="flex items-center gap-4">
                         <AgentLogo logoUrl={service.logoUrl} name={service.name} cacheKey={listing.version} />
-                        <div className="flex flex-wrap items-center gap-3 font-mono text-[10px] uppercase tracking-[0.16em]">{cardBadges(listing).map((badge) => <span key={badge} className={badge === "Built by Agon" ? "bg-accent px-2 py-1 text-accent-ink" : badge === "Verified" ? "border border-[color:var(--ok)] px-2 py-1 text-ink" : "border border-[color:var(--hairline-strong)] px-2 py-1 text-ink-2"}>{badge === "Listed" ? "Being checked" : badge}</span>)}<span className="text-ink-3">Agent #{listing.agentId}</span></div>
+                        <div className="flex flex-wrap items-center gap-3 font-mono text-[10px] uppercase tracking-[0.16em]">{cardBadges(listing).map((badge) => <span key={badge} className={badge === "Built by Agon" ? "bg-accent px-2 py-1 text-accent-ink" : badge === "Verified" ? "border border-[color:var(--ok)] px-2 py-1 text-ink" : "border border-[color:var(--hairline-strong)] px-2 py-1 text-ink-2"}>{badge === "Listed" ? "Being checked" : badge}</span>)}</div>
                       </div>
                     </div>
 
-                    <dl className="mt-7 grid gap-px bg-[color:var(--hairline)] sm:grid-cols-2">
+                    <dl className="mt-7 grid gap-px bg-[color:var(--hairline)] sm:grid-cols-3">
                       <OverviewFact label="CATEGORY" value={service.category.label} note={service.category.description} />
-                      <OverviewFact label="PROVIDER" value={providerLabel(listing)} note={listing.firstParty ? "Agon builds and runs this agent." : "The provider owns and operates this agent."} />
-                      <OverviewFact label="DELIVERY" value={service.endpoint ? "Public service endpoint" : "Delivery details loading"} note={service.endpoint ? "The provider receives requests through its public endpoint." : "Open the service file to inspect delivery details."} />
-                      <OverviewFact label="DELIVERY TIME" value={service.timeoutMs ? `Up to ${Math.round(service.timeoutMs / 1000)} seconds` : "Provider terms"} note="The service declares its maximum response time." />
+                      <OverviewFact label="MADE BY" value={listing.firstParty ? "Agon" : "An independent provider"} note={listing.firstParty ? "Agon builds and runs this agent." : "Its provider builds and runs it."} />
+                      <OverviewFact label="ANSWERS IN" value={service.timeoutMs ? `Up to ${Math.round(service.timeoutMs / 1000)} seconds` : "Set by the provider"} note="The longest a job takes." />
                     </dl>
 
                     {visibleTags(service.tags, service.category.slug).length ? (
                       <div className="mt-6">
-                        <div className="font-mono text-[9px] uppercase tracking-[0.14em] text-ink-3">SKILLS AND SEARCH TERMS</div>
+                        <div className="font-mono text-[9px] uppercase tracking-[0.14em] text-ink-3">SKILLS</div>
                         <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 font-mono text-[11px] uppercase text-ink-2">
                           {visibleTags(service.tags, service.category.slug).map((tag) => <span key={tag}>#{tag}</span>)}
                         </div>
@@ -199,19 +198,16 @@ function ArcListingDetailPage() {
                   <BracketedCell tone="ink" pad="lg">
                     <div className="font-mono text-[10px] uppercase tracking-[0.16em] opacity-60">PRICE AND USE</div>
                     <div className="mt-4 font-stencil text-[36px] uppercase leading-none sm:text-[42px]">{service.amountUSDC ? `${service.amountUSDC} USDC` : "PRICE NOT INDEXED"}</div>
-                    <div className="mt-7 space-y-4 border-t border-current pt-5">
-                      <Readiness label="LISTING ACTIVE" state={listing.status === "Listed" ? "ready" : "blocked"} value={listing.status === "Listed" ? "YES" : listing.status.toUpperCase()} />
+                    <div className="mt-7 border-t border-current pt-5">
                       <Readiness
-                        label="PAY PER USE"
-                        state={quarantined || listing.endpointQa.status === "failed" ? "blocked" : listing.endpointQa.status === "passed" ? "ready" : "caution"}
-                        value={quarantined ? "BLOCKED" : listing.endpointQa.status === "passed" ? "AVAILABLE" : listing.endpointQa.status === "failed" ? "BLOCKED" : listing.payment.directX402 ? "CHECK REQUIRED" : "NO"}
+                        label="STATUS"
+                        state={listing.status !== "Listed" || quarantined || listing.endpointQa.status === "failed" ? "blocked" : listing.endpointQa.status === "passed" ? "ready" : "caution"}
+                        value={listing.status !== "Listed" || quarantined ? "PAUSED" : listing.endpointQa.status === "passed" ? "AVAILABLE NOW" : listing.endpointQa.status === "failed" ? "NOT ANSWERING" : "BEING CHECKED"}
                       />
-                    </div>
-
-                    <div className="mt-5 border-t border-current pt-4 font-mono text-[10px] leading-relaxed opacity-70">
-                      <div className="uppercase tracking-[0.12em]">SERVICE AVAILABILITY</div>
-                      <p className="mt-2">{availabilityMessage(listing.endpointQa.status)}</p>
-                      {listing.endpointQa.status === "passed" && listing.endpointQa.attempts > 0 ? <p className="mt-1 uppercase tracking-[0.08em]">{listing.endpointQa.successRate}% recent reliability</p> : null}
+                      <p className="mt-3 font-mono text-[10px] leading-relaxed opacity-70">
+                        {availabilityMessage(listing.endpointQa.status)}
+                        {listing.endpointQa.status === "passed" && listing.endpointQa.attempts > 0 ? ` It answered ${listing.endpointQa.successRate}% of recent checks.` : ""}
+                      </p>
                     </div>
 
                     {listing.payment.rail === "X402" ? (
@@ -219,7 +215,7 @@ function ArcListingDetailPage() {
                         <div className="font-mono text-[10px] uppercase tracking-[0.14em]">HIRE THIS AGENT</div>
                         {hasNamedInputs(manifestBody) && assessX402Readiness(listing).eligible ? (
                           <>
-                            <p className="mt-2 max-w-[42ch] font-mono text-[10px] leading-relaxed opacity-70">Describe your task. You see the price before anything is paid, with no Agon routing fee.</p>
+                            <p className="mt-2 max-w-[42ch] font-mono text-[10px] leading-relaxed opacity-70">Describe your task. You see the price before you pay.</p>
                             <TagButton className="mt-4" href={`/?agent=${encodeURIComponent(listing.id)}`}>HIRE {service.name.toUpperCase()}</TagButton>
                           </>
                         ) : (
@@ -261,9 +257,9 @@ function Readiness({ label, state, value }: { label: string; state: "ready" | "c
 }
 
 function availabilityMessage(status: AgonListing["endpointQa"]["status"]): string {
-  if (status === "passed") return "The service is responding to availability checks.";
-  if (status === "failed") return "The service did not respond reliably. Try again later.";
-  return "Agon is checking whether this service is ready.";
+  if (status === "passed") return "Ready to take a job.";
+  if (status === "failed") return "It is not answering right now. Try again later.";
+  return "Agon is checking that it is ready.";
 }
 
 function DetailLoading() {

@@ -36,7 +36,7 @@ export function TestRunList({ runs, showAgent = false, empty = "No tests yet.", 
                   {showAgent ? `${names?.get(r.agentId) ?? `Agent #${r.agentId}`} · ` : ""}{runTestTitle(r) ?? categoryLabel(r.categoryId)}
                   {r.error ? <span className="text-ink-3"> · failed to answer</span> : null}
                 </span>
-                <span className="block font-mono text-[10px] uppercase tracking-[0.1em] text-ink-3">{r.source === "agon_check" ? "Agon check" : r.runner ? <span className="normal-case">{r.runner}</span> : "Public test"} · {when(r.createdAt)}</span>
+                <span className="block font-mono text-[10px] uppercase tracking-[0.1em] text-ink-3">{r.source === "agon_check" ? "Agon test" : r.runner ? <span className="normal-case">{r.runner}</span> : "Public test"} · {when(r.createdAt)}</span>
               </span>
               <span className="font-mono text-[10px] uppercase tracking-[0.12em]" style={{ color: r.passed ? "var(--ok)" : "var(--err)" }}>{r.passed ? "Passed" : "Failed"}</span>
             </button>

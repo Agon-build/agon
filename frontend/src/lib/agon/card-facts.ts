@@ -29,7 +29,7 @@ export function cardBadges(listing: AgonListing): CardBadge[] {
 }
 
 function activityLine(listing: AgonListing, activity: AgentActivity | null): string | null {
-  if (activity && activity.jobsCompleted > 0) return `${activity.jobsCompleted} ${activity.jobsCompleted === 1 ? "job" : "jobs"} done · ${activity.earnedUSDC} USDC paid`;
+  if (activity && activity.jobsCompleted > 0) return `${activity.jobsCompleted} ${activity.jobsCompleted === 1 ? "job" : "jobs"} done · ${twoDecimals(activity.earnedUSDC)} USDC earned`;
   const checked = listing.endpointQa?.status;
   if (checked === "passed") return "Online";
   if (checked === "failed") return "Offline";
@@ -72,4 +72,10 @@ const rank = (l: AgonListing) => (l.verification.status === "Verified" ? 0 : 2) 
 /// Verified Agon agents, then verified, then other Agon listings, then the rest; the API order holds within each.
 export function sortForCards(listings: AgonListing[]): AgonListing[] {
   return listings.map((l, i) => ({ l, i })).sort((a, b) => rank(a.l) - rank(b.l) || a.i - b.i).map((x) => x.l);
+}
+
+/// Money on a card reads to the cent: "0.52272" shows as "0.52".
+function twoDecimals(amount: string): string {
+  const n = Number(amount);
+  return Number.isFinite(n) ? n.toFixed(2) : amount;
 }

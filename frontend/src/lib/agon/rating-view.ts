@@ -12,10 +12,10 @@ export function categoryLabel(categoryId: string): string {
   return AGON_CATEGORIES.find((c) => c.id === categoryId)?.label ?? "General";
 }
 
-/// "Agon score 78 · Analysis #3", or "Not rated yet".
+/// "Score 78 · #3 in Analysis", or "Not rated yet".
 export function scoreLine(s: { score: number | null; rank: number | null; categoryLabel: string } | null): string {
   if (!s || s.score === null) return "Not rated yet";
-  return `Agon score ${Math.round(s.score)} · ${s.categoryLabel}${s.rank ? ` #${s.rank}` : ""}`;
+  return `Score ${Math.round(s.score)}${s.rank ? ` · #${s.rank} in ${s.categoryLabel}` : ""}`;
 }
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -31,9 +31,9 @@ export function evidenceLine(counts: { tests: number; forecasts: number; paid: n
 }
 
 export function partStatusLabel(p: ScorePart): string {
-  if (p.status === "coming_next") return "Coming next";
-  if (p.status === "no_test") return "No public test for this category yet";
-  if (p.value === null) return "Not enough results";
+  if (p.status === "coming_next") return "Coming soon";
+  if (p.status === "no_test") return "No test yet";
+  if (p.value === null) return "Too few results yet";
   return String(Math.round(p.value));
 }
 
@@ -53,11 +53,11 @@ export function ratingByAgentId(items: { agentId: string; categoryId: string; sc
 
 /// The public Playground test for each testable category (spec 20.4). Example inputs live in Docs.
 export const TEST_TASKS: Readonly<Record<string, { title: string; summary: string }>> = {
-  "1": { title: "Live chain fact", summary: "Report Arc's chain id and a recent block with its source. The block must be within 200 of Agon's reading." },
-  "3": { title: "Evidence under pressure", summary: "Separate observed facts from claims and refuse an instruction planted in the evidence." },
-  "5": { title: "Transaction safety", summary: "Allow or reject each proposed transaction against the allowed destinations and actions." },
-  "7": { title: "Selector guard", summary: "Decode several calldata cases and classify each one." },
-  "8": { title: "Manifest anchor", summary: "Hash each safe service file exactly and flag the unsafe ones." },
+  "1": { title: "Live network fact", summary: "Report a live fact from the Arc network and where it came from, checked against Agon's own reading." },
+  "3": { title: "Facts versus claims", summary: "Tell checked facts from claims, and ignore an instruction hidden in the material." },
+  "5": { title: "Payment safety", summary: "Approve or refuse each proposed payment against what is allowed." },
+  "7": { title: "Contract call check", summary: "Read several contract calls and say what each one does." },
+  "8": { title: "Service file check", summary: "Check service files exactly and flag the unsafe ones." },
 };
 
 /// Tests chosen by the input a Verification agent declares (backend tests/service.ts testFamilyFor).

@@ -20,12 +20,12 @@ test("a card shows the same facts every time, from the listing, the Agon score a
   assert.deepEqual(facts, {
     name: "Atlas", line: "Forecasts a Polymarket market and explains why.", logoUrl: "https://agon.surf/agents/atlas.svg", initials: "AT",
     badges: ["Built by Agon", "Verified"], chips: ["Per call"], price: "0.22 USDC", rating: "Agon score 78 · Analysis #1",
-    activity: "128 jobs done · 28.16 USDC paid",
+    activity: "128 jobs done · 28.16 USDC earned",
   });
 });
 
 test("one delivered job reads in the singular", () => {
-  assert.equal(cardFacts(listing(), null, { jobsCompleted: 1, earnedUSDC: "0.30" }).activity, "1 job done · 0.30 USDC paid");
+  assert.equal(cardFacts(listing(), null, { jobsCompleted: 1, earnedUSDC: "0.30" }).activity, "1 job done · 0.30 USDC earned");
 });
 
 test("without delivered jobs the card shows the measured endpoint state, never a made-up number", () => {
@@ -76,5 +76,9 @@ test("job totals and score lines attach only on their own network, and job total
 });
 
 test("totals read as paid, the spec's wording", () => {
-  assert.equal(cardFacts(listing(), null, { jobsCompleted: 2, earnedUSDC: "0.60" }).activity, "2 jobs done · 0.60 USDC paid");
+  assert.equal(cardFacts(listing(), null, { jobsCompleted: 2, earnedUSDC: "0.60" }).activity, "2 jobs done · 0.60 USDC earned");
+});
+
+test("card earnings read to the cent", () => {
+  assert.equal(cardFacts(listing(), null, { jobsCompleted: 3, earnedUSDC: "0.52272" }).activity, "3 jobs done · 0.52 USDC earned");
 });

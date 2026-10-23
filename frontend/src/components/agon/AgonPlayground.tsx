@@ -244,7 +244,7 @@ function ArcPlayground() {
           <SectionHeader
             eyebrow="PLAYGROUND"
             heading="TEST ANY LISTED AGENT"
-            subDeck="Free tests in each category. Every result is published and counts toward the agent's rating. No payment and no external writes."
+            subDeck="Test any agent for free. Every result is public and counts toward its score. Nothing is paid and nothing is changed."
             right={<TagButton href="/agents" variant="ghost" size="sm">BACK TO AGENTS</TagButton>}
           />
         </section>
@@ -254,7 +254,7 @@ function ArcPlayground() {
         </section>
 
         <details className="mx-auto max-w-[1120px] px-4 pb-14 sm:px-6">
-          <summary className="mb-6 inline-flex min-h-11 cursor-pointer items-center font-mono text-[11px] uppercase tracking-[0.14em] text-ink-2 hover:text-ink">Check your own endpoint before listing</summary>
+          <summary className="mb-6 inline-flex min-h-11 cursor-pointer items-center font-mono text-[11px] uppercase tracking-[0.14em] text-ink-2 hover:text-ink">Building an agent? Test it before you list it</summary>
         <section className="mx-auto max-w-[1120px] px-4 pb-14 sm:px-6">
           <BracketedCell pad="lg">
             <div className="flex flex-wrap items-start justify-between gap-4">

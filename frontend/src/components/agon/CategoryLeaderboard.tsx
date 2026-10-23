@@ -13,10 +13,10 @@ import type { AgonListing } from "@/lib/agon/types";
 import { useAgonNetwork } from "@/hooks/useAgonNetwork";
 
 const SORTS: { id: ScoreSort; label: string }[] = [
-  { id: "score", label: "Agon score" },
-  { id: "playground", label: "Playground" },
+  { id: "score", label: "Score" },
+  { id: "playground", label: "Tests" },
   { id: "arena", label: "Arena" },
-  { id: "paid", label: "Paid work" },
+  { id: "paid", label: "Paid jobs" },
 ];
 const chip = (on: boolean) => `min-h-11 px-3 font-mono text-[10px] uppercase tracking-[0.12em] ${on ? "bg-ink text-[color:var(--canvas)]" : "text-ink-2 hover:text-ink"}`;
 
@@ -81,7 +81,7 @@ export function CategoryLeaderboard() {
               : (
                 <ol className="divide-y divide-[color:var(--hairline)] border-y border-[color:var(--hairline)]">
                   <li aria-hidden className="hidden grid-cols-[3rem_minmax(0,1.6fr)_6rem_repeat(3,minmax(0,1fr))] gap-4 py-3 font-mono text-[9px] uppercase tracking-[0.14em] text-ink-3 lg:grid">
-                    <span>Rank</span><span>Agent</span><span>Score</span><span>Paid work</span><span>Arena</span><span>Playground</span>
+                    <span>Rank</span><span>Agent</span><span>Score</span><span>Paid jobs</span><span>Arena</span><span>Tests</span>
                   </li>
                   {board.rows.map((r) => {
                     const listing = byAgent.get(r.agentId);
@@ -99,15 +99,16 @@ export function CategoryLeaderboard() {
                           </div>
                         </div>
                         {r.score === null ? (
-                          <span className="col-span-2 font-mono text-[11px] text-ink-3 lg:col-span-4">Not enough results in this window</span>
+                          <span className="col-span-2 font-mono text-[11px] text-ink-3 lg:col-span-4">Too few results in this period</span>
                         ) : (
                           <>
                             <span className="col-start-2 font-mono text-[18px] text-ink lg:col-start-auto">{Math.round(r.score)}{change ? <span className="ml-2 font-mono text-[10px] uppercase tracking-[0.1em] text-ink-3">{change}</span> : null}</span>
                             <dl className="col-start-2 grid grid-cols-3 gap-3 lg:col-span-3 lg:col-start-auto">
                               {(["paid", "arena", "playground"] as const).map((k) => (
-                                <div key={k} className="min-w-0">
-                                  <dt className="font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3 lg:sr-only">{k === "paid" ? "Paid work" : k === "arena" ? "Arena" : "Playground"}</dt>
-                                  <dd className="truncate font-mono text-[12px] text-ink-2">{partStatusLabel(r.parts[k])}</dd>
+                                // A part with no result yet is a dash on desktop and left out on a phone.
+                                <div key={k} className={`min-w-0 ${r.parts[k].value === null ? "hidden lg:block" : ""}`}>
+                                  <dt className="font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3 lg:sr-only">{k === "paid" ? "Paid jobs" : k === "arena" ? "Arena" : "Tests"}</dt>
+                                  <dd className="truncate font-mono text-[12px] text-ink-2" title={partStatusLabel(r.parts[k])}>{r.parts[k].value === null ? "–" : partStatusLabel(r.parts[k])}</dd>
                                 </div>
                               ))}
                             </dl>
