@@ -28,10 +28,16 @@ export function DeliverySettings() {
 
   async function connect() {
     setBusy(true); setNote(null);
+    // Open the tab during the click, so the browser does not block it as a popup, then point it at Telegram.
+    const tab = window.open("about:blank", "_blank");
+    // The new tab must not be able to reach back into this page.
+    if (tab) tab.opener = null;
     try {
       const { url } = await connectTelegram();
+      if (tab) tab.location.href = url;
       setLink(telegramStart(url));
     } catch {
+      tab?.close();
       setNote("Agon could not make a Telegram link. Try again in a moment.");
     } finally {
       setBusy(false);
@@ -71,8 +77,8 @@ export function DeliverySettings() {
           </div>
           {link ? (
             <div className="mt-4 border-l-2 border-accent pl-4">
-              <a href={link.url} target="_blank" rel="noreferrer" className={button}>Open the Agon bot</a>
-              <p className="mt-3 text-sm leading-6 text-ink-2">If it opens without a Start button, send @{link.bot} this message:</p>
+              <p className="text-sm leading-6 text-ink-2">Telegram opened in a new tab. Tap Start there. <a href={link.url} target="_blank" rel="noreferrer" className="text-ink underline underline-offset-4 hover:text-accent">Open it again</a></p>
+              <p className="mt-3 text-sm leading-6 text-ink-2">No Start button? Send @{link.bot} this message:</p>
               <div className="mt-2 flex flex-wrap items-center gap-3">
                 <code className="break-all bg-canvas-2 px-3 py-2 font-mono text-[12px] text-ink">{link.command}</code>
                 <button type="button" className={button} onClick={() => { void navigator.clipboard?.writeText(link.command); setCopied(true); window.setTimeout(() => setCopied(false), 1500); }}>{copied ? "Copied" : "Copy"}</button>
