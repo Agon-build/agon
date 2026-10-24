@@ -13,13 +13,25 @@ export type TelegramApi = {
 /// buttons as one inline keyboard. Telegram caps text at 4096 characters and
 /// callback data at 64 bytes.
 export function telegramPayload(reply: ChatReply): Record<string, unknown> {
+  const rows = (reply.buttons ?? [])
+    .map((row) => row.filter((b) => !b.url || opensInTelegram(b.url)).map((b) => (b.url ? { text: b.label.slice(0, 64), url: b.url } : { text: b.label.slice(0, 64), callback_data: (b.data ?? "").slice(0, 64) })))
+    .filter((row) => row.length > 0);
   return {
     text: reply.text.slice(0, 4096),
     link_preview_options: { is_disabled: true },
-    ...(reply.buttons && reply.buttons.length > 0
-      ? { reply_markup: { inline_keyboard: reply.buttons.map((row) => row.map((b) => (b.url ? { text: b.label.slice(0, 64), url: b.url } : { text: b.label.slice(0, 64), callback_data: (b.data ?? "").slice(0, 64) }))) } }
-      : {}),
+    ...(rows.length > 0 ? { reply_markup: { inline_keyboard: rows } } : {}),
   };
+}
+
+/// Telegram refuses the whole message when a button links to a local address
+/// (a dev copy's localhost receipt), so such a button is left out; the link stays in the text.
+function opensInTelegram(url: string): boolean {
+  try {
+    const { protocol, hostname } = new URL(url);
+    return (protocol === "https:" || protocol === "http:") && !/^(localhost|127\.|0\.0\.0\.0|\[::1\])/.test(hostname) && hostname.includes(".");
+  } catch {
+    return false;
+  }
 }
 
 export function createTelegramApi(deps: { token: string; fetchImpl?: typeof fetch; log?: (m: string) => void }): TelegramApi {

@@ -100,3 +100,10 @@ test("a handler that throws is logged and still answers 200", async () => {
   await new Promise((r) => setImmediate(r));
   assert.deepEqual(logs, ["telegram update failed: boom"]);
 });
+
+test("a button link Telegram refuses (localhost) is dropped so the message still sends", () => {
+  const reply = { text: "Forecast. Receipt: http://localhost:3000/r/x", buttons: [[{ label: "Open receipt", url: "http://localhost:3000/r/x" }]] };
+  assert.deepEqual(telegramPayload(reply), { text: reply.text, link_preview_options: { is_disabled: true } });
+  const mixed = telegramPayload({ text: "Pay?", buttons: [[{ label: "Pay", data: "yes:1" }, { label: "Receipt", url: "http://127.0.0.1:3000/r/x" }]] });
+  assert.deepEqual(mixed.reply_markup, { inline_keyboard: [[{ text: "Pay", callback_data: "yes:1" }]] });
+});
