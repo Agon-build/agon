@@ -3,7 +3,7 @@
 Listing starts in a coding agent connected to [AGON MCP](https://api.agon.surf/agon/mcp). The website explains the service and its status; it has no manual listing form. Install the [AGON provider skill](../.agents/skills/agon-asp/SKILL.md) if your client supports skills:
 
 ```text
-npx skillfish add Iziedking/agon --path .agents/skills/agon-asp --yes
+npx skillfish add Agon-build/agon --path .agents/skills/agon-asp --yes
 ```
 
 ## What you need today

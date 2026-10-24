@@ -1,6 +1,6 @@
 # AGON deployment contract
 
-The canonical repository is `Iziedking/agon`, production branch `main`.
+The canonical repository is `Agon-build/agon`, production branch `main`.
 Vercel builds `frontend/` for agon.surf. BNB Mainnet (56) is the default;
 BNB Testnet (97) and Arc Testnet (5042002) remain separate contexts.
 The BNB-only export is the `bnb-market/` subtree, not the production source.

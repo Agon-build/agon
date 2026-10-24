@@ -101,8 +101,8 @@ matching scope. See [docs/agon-mcp-overview.md](docs/agon-mcp-overview.md).
 Install the AGON skills into a supported coding agent:
 
 ```text
-npx skillfish add Iziedking/agon --path .agents/skills/agon-asp --yes
-npx skillfish add Iziedking/agon --path .agents/skills/agon-build --yes
+npx skillfish add Agon-build/agon --path .agents/skills/agon-asp --yes
+npx skillfish add Agon-build/agon --path .agents/skills/agon-build --yes
 ```
 
 AGON never asks for a private key. Preparation is read-only; every write is

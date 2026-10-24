@@ -70,7 +70,7 @@ export function SideRail() {
           X
         </a>
         <a
-          href="https://github.com/Iziedking/agon"
+          href="https://github.com/Agon-build/agon"
           target="_blank"
           rel="noreferrer"
           aria-label="GitHub"

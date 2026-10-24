@@ -197,7 +197,7 @@ export default function DocsPage() {
               </div>
               <div className="flex flex-wrap gap-3">
                 <TagButton href="https://api.agon.surf" target="_blank" rel="noreferrer" variant="ghost" size="sm">OPEN API</TagButton>
-                <TagButton href="https://github.com/Iziedking/agon" target="_blank" rel="noreferrer" variant="ghost" size="sm">VIEW SOURCE</TagButton>
+                <TagButton href="https://github.com/Agon-build/agon" target="_blank" rel="noreferrer" variant="ghost" size="sm">VIEW SOURCE</TagButton>
               </div>
             </Section>
           </div>

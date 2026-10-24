@@ -41,7 +41,7 @@ const SOCIALS = [
 ];
 
 const AGON_PROJECT = [
-  { label: "GITHUB ↗", href: "https://github.com/Iziedking/agon", external: true },
+  { label: "GITHUB ↗", href: "https://github.com/Agon-build/agon", external: true },
   { label: "AGON.SURF", href: "https://agon.surf", external: true },
 ];
 

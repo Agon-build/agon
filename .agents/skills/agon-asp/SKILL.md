@@ -14,7 +14,7 @@ The `agon-build` skill's five standing rules apply here too: listing serves the 
 Install the public package into detected coding agents with:
 
 ```text
-npx skillfish add Iziedking/agon --path .agents/skills/agon-asp --yes
+npx skillfish add Agon-build/agon --path .agents/skills/agon-asp --yes
 ```
 
 The same package is downloadable from the Agon BUILD guide at `/downloads/agon-asp.zip`. Review the package before use. Never put private keys, seed phrases, or session tokens in the skill, a repository, a CLI argument, or a chat message. A Web3 private key may be supplied to the local CLI only through a protected environment variable when the user explicitly chooses CLI signing; it is never sent to Agon or logged.

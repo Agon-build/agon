@@ -1,7 +1,7 @@
 {
   "version": 1,
   "skills": [
-    "Iziedking/agon/.agents/skills/agon-asp",
-    "Iziedking/agon/.agents/skills/agon-build"
+    "Agon-build/agon/.agents/skills/agon-asp",
+    "Agon-build/agon/.agents/skills/agon-build"
   ]
 }
