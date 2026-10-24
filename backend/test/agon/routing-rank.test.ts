@@ -62,3 +62,13 @@ test("final C3: filler words never make a fit, and a longer request needs two re
   assert.equal(rankCandidates([ratings], { kind: "analysis", query: "apple stock news today", values: {} }, opts).pick, null, "one shared word in a longer request is not a fit");
   assert.equal(rankCandidates([ratings], { kind: "analysis", query: "ratings", values: {} }, opts).pick?.reference, "circle:r", "a one-word request needs one");
 });
+
+test("a market check goes to the market checker, not a scored forecaster in the same category", () => {
+  const check: Intent = { kind: "analysis", query: "Is the Arsenal top 4 market on Polymarket worth trading?", values: {} };
+  const out = rankCandidates([
+    entry({ reference: "pitch", name: "Pitch", description: "A probability for a Polymarket football (soccer) market, with three football reasons and how far it sits from the crowd price.", rating: { tier: "scored", score: 78 }, price: 150_000n }),
+    entry({ reference: "scout", name: "Scout", description: "A trade, watch or avoid verdict for any Polymarket market, with the reasons: liquidity, spread, recent activity, time left, price and how clear the resolution rules are." }),
+  ], check, opts);
+  assert.equal(out.pick!.reference, "scout");
+  assert.equal(out.alternatives[0]!.reference, "pitch");
+});

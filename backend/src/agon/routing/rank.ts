@@ -1,7 +1,7 @@
 import { matchCount, wordsOf, type CatalogEntry } from "./catalog.ts";
 import { formatUsdc } from "../payments/bargain.ts";
 import { feeFor } from "./fee.ts";
-import { KIND_SOURCES, type Intent } from "./intent.ts";
+import { KIND_SOURCES, kindFromWords, type Intent } from "./intent.ts";
 
 export type Ranked = CatalogEntry & { fee: bigint; total: bigint; reason: string };
 
@@ -15,6 +15,10 @@ function reasonFor(e: CatalogEntry, cheapest: boolean): string {
   return `${trust}${cheapest ? ", lowest price for this task" : `, ${formatUsdc(e.price)} USDC`}`;
 }
 
+/// A market check ("is it worth trading?") wants a verdict on the market, so an
+/// agent that describes itself as giving a probability fits it less well.
+const offKind = (e: CatalogEntry, intent: Intent) => (intent.kind === "analysis" && kindFromWords(`${e.name} ${e.description}`) === "forecast" ? 1 : 0);
+
 /// The owner's rule: fit first; then rated Agon agents, unrated Agon agents,
 /// then Circle; within a tier the lower total, then the faster answer. A
 /// service that recently failed after payment goes last.
@@ -27,9 +31,10 @@ export function rankCandidates(entries: CatalogEntry[], intent: Intent, opts: { 
   if (fitting.length === 0) return { pick: null, alternatives: [] };
   const ranked = fitting
     // No fee address for a network means no fee is charged there, so none is shown.
-    .map((e) => ({ e, fee: feeFor(e.price, opts.feeBpsFor ? opts.feeBpsFor(e) : opts.feeBps), down: opts.downranked.has(e.reference) ? 1 : 0 }))
+    .map((e) => ({ e, fee: feeFor(e.price, opts.feeBpsFor ? opts.feeBpsFor(e) : opts.feeBps), down: opts.downranked.has(e.reference) ? 1 : 0, off: offKind(e, intent) }))
     .sort((a, b) =>
       a.down - b.down
+      || a.off - b.off
       || TIER_ORDER[a.e.rating.tier] - TIER_ORDER[b.e.rating.tier]
       || (a.e.price + a.fee < b.e.price + b.fee ? -1 : a.e.price + a.fee > b.e.price + b.fee ? 1 : 0)
       || (a.e.latencyMs ?? Number.MAX_SAFE_INTEGER) - (b.e.latencyMs ?? Number.MAX_SAFE_INTEGER));
