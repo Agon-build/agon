@@ -44,8 +44,26 @@ export function wordsOf(text: string): string[] {
   return [...new Set(text.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3 && !FILLER.has(w)))];
 }
 
-/// How many of the query words appear in the entry's text.
-export function matchCount(entry: Pick<CatalogEntry, "name" | "description" | "provider" | "tags">, words: string[]): number {
-  const hay = new Set(wordsOf(`${entry.name} ${entry.description} ${entry.provider} ${entry.tags.join(" ")}`));
-  return words.filter((w) => hay.has(w)).length;
+/// Short names and plain words people use for what a service calls something else.
+const ALIASES: Record<string, string> = {
+  eth: "ethereum", btc: "bitcoin", sol: "solana", picture: "image", pictures: "image", photo: "image", photos: "image",
+  headline: "news", headlines: "news", tweet: "twitter", tweets: "twitter", stocks: "stock", shares: "stock",
+};
+const SUFFIXES = ["ations", "ation", "ings", "ing", "ies", "es", "ed", "er", "s", "e"];
+
+/// One word reduced to a shared root, so "images" meets "image" and "generation" meets "generate".
+export function stem(word: string): string {
+  const w = ALIASES[word] ?? word;
+  for (const suffix of SUFFIXES) if (w.endsWith(suffix) && w.length - suffix.length >= 3) return w.slice(0, -suffix.length);
+  return w;
+}
+
+/// Two roots meet when they are equal, or when one starts the other and both are long enough to mean the same thing.
+const meets = (a: string, b: string) => a === b || (Math.min(a.length, b.length) >= 5 && (a.startsWith(b) || b.startsWith(a)));
+
+/// How many of the query words appear in the entry's text or its address, in any word form.
+export function matchCount(entry: Pick<CatalogEntry, "name" | "description" | "provider" | "tags"> & { url?: string }, words: string[]): number {
+  const path = entry.url ? entry.url.replace(/^https?:\/\/[^/]+/, "") : "";
+  const hay = wordsOf(`${entry.name} ${entry.description} ${entry.provider} ${entry.tags.join(" ")} ${path}`).map(stem);
+  return words.map(stem).filter((w) => hay.some((h) => meets(h, w))).length;
 }

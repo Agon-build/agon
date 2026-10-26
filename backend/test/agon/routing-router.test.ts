@@ -284,3 +284,28 @@ test("minor: the person's answers keep only the service's own fields, typed by i
   assert.ok(q.ok);
   assert.deepEqual(q.input, { symbol: "AAPL", limit: 5 });
 });
+
+test("the model's fit decides across categories, and its none means none", async () => {
+  const images = entry({ source: "circle", reference: "circle:images", name: "Images", provider: "BlockRun.AI", category: "CREATIVE", description: "Generate images from a text prompt", url: "https://arc.blockrun.ai/api/v1/images/generations", price: 22_000n, payTo: CIRCLE_PAY, network: "arc", rating: { tier: "unrated", score: null } });
+  const queries: string[][] = [];
+  const build = (fits: string[] | null) => createRouter({
+    sources: [{ id: "circle", status: () => "ok", search: async (q) => { queries.push(q.circleCategories); return [circle, images]; } }],
+    runtimes: { "arc-testnet": fakeRuntime("arc-testnet", []), arc: fakeRuntime("arc", []) },
+    readIntent: async (text) => ({ kind: "research", query: text, values: {} }),
+    judge: async () => fits,
+    fill: async () => ({ ok: true as const, input: {} }),
+    feeBps: 150,
+    feeAddress: { "arc-testnet": null, arc: null },
+    leadAsk: async () => ({ ok: false, code: "invalid_question" }),
+    store: new MemoryPaymentsStore(),
+    balanceOf: async () => 10_000_000n,
+    approvalUrl: (t) => t,
+  });
+  const picked = await build(["circle:ratings"]).route("op:x", "Give me analyst ratings for AAPL");
+  assert.ok(picked.kind === "pick");
+  assert.equal(picked.pick.reference, "circle:ratings", "a FINANCIAL_ANALYSIS service answers a request read as research");
+  assert.ok(queries[0]!.includes("CREATIVE") && queries[0]!.includes("FINANCIAL_ANALYSIS"), "sources are searched across every category");
+  assert.equal((await build([]).route("op:x", "Give me analyst ratings for AAPL")).kind, "none");
+  const fallback = await build(null).route("op:x", "Give me analyst ratings for AAPL");
+  assert.ok(fallback.kind === "pick" && fallback.pick.reference === "circle:ratings", "without the model the word scores still find it");
+});

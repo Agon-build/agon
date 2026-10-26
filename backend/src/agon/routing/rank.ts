@@ -1,7 +1,7 @@
 import { matchCount, wordsOf, type CatalogEntry } from "./catalog.ts";
 import { formatUsdc } from "../payments/bargain.ts";
 import { feeFor } from "./fee.ts";
-import { KIND_SOURCES, kindFromWords, type Intent } from "./intent.ts";
+import { kindFromWords, type Intent } from "./intent.ts";
 
 export type Ranked = CatalogEntry & { fee: bigint; total: bigint; reason: string };
 
@@ -22,12 +22,13 @@ const offKind = (e: CatalogEntry, intent: Intent) => (intent.kind === "analysis"
 /// The owner's rule: fit first; then rated Agon agents, unrated Agon agents,
 /// then Circle; within a tier the lower total, then the faster answer. A
 /// service that recently failed after payment goes last.
-export function rankCandidates(entries: CatalogEntry[], intent: Intent, opts: { feeBps: number; downranked: Set<string>; feeBpsFor?: (e: CatalogEntry) => number }): { pick: Ranked | null; alternatives: Ranked[] } {
-  const fits = KIND_SOURCES[intent.kind];
+/// `fitted` is the model's judgement of which services do the job; without it,
+/// the words decide: one shared word for a one or two word request, two for a longer one.
+export function rankCandidates(entries: CatalogEntry[], intent: Intent, opts: { feeBps: number; downranked: Set<string>; feeBpsFor?: (e: CatalogEntry) => number; fitted?: string[] | null }): { pick: Ranked | null; alternatives: Ranked[] } {
   const words = wordsOf(intent.query);
-  // One shared word is enough for a one or two word request; a longer one needs two.
   const needed = words.length <= 2 ? 1 : 2;
-  const fitting = words.length === 0 ? [] : entries.filter((e) => (e.source === "agon" ? fits.agonCategories : fits.circleCategories).includes(e.category) && matchCount(e, words) >= needed);
+  const fitted = opts.fitted ? new Set(opts.fitted) : null;
+  const fitting = fitted ? entries.filter((e) => fitted.has(e.reference)) : words.length === 0 ? [] : entries.filter((e) => matchCount(e, words) >= needed);
   if (fitting.length === 0) return { pick: null, alternatives: [] };
   const ranked = fitting
     // No fee address for a network means no fee is charged there, so none is shown.

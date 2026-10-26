@@ -8,7 +8,8 @@ import type { BudgetWallet, PaymentsStore } from "../payments/types.ts";
 import type { AskResult } from "../stage/services.ts";
 import { wordsOf, type CatalogEntry, type RouteSource } from "./catalog.ts";
 import { cleanGiven, type fillInput } from "./fill-input.ts";
-import { KIND_SOURCES, type Intent } from "./intent.ts";
+import { shortlist } from "./fit.ts";
+import { ALL_AGON, ALL_CIRCLE, type Intent } from "./intent.ts";
 import { rankCandidates, type Ranked } from "./rank.ts";
 
 type NetworkId = "arc-testnet" | "arc";
@@ -50,6 +51,8 @@ export function createRouter(deps: {
   sources: RouteSource[];
   runtimes: { "arc-testnet": RouteRuntime; arc?: RouteRuntime };
   readIntent: (text: string) => Promise<Intent>;
+  /** Which shortlisted services do the job, by reference; null leaves it to the word scores. */
+  judge?: (text: string, list: CatalogEntry[]) => Promise<string[] | null>;
   fill: (entry: CatalogEntry, text: string, intent: Intent) => ReturnType<typeof fillInput>;
   feeBps: number;
   feeAddress: Partial<Record<NetworkId, Address | null>>;
@@ -92,12 +95,13 @@ export function createRouter(deps: {
     async route(ownerRef: string, text: string, opts: { quoteLead?: boolean } = {}): Promise<RouteResult> {
       const intent = await deps.readIntent(text);
       if (intent.kind === "forecast") return opts.quoteLead === false ? { kind: "lead" } : { kind: "lead", ask: await deps.leadAsk(ownerRef, text) };
-      const fits = KIND_SOURCES[intent.kind];
-      const query = { words: wordsOf(`${intent.query} ${text}`), agonCategories: fits.agonCategories, circleCategories: fits.circleCategories };
+      // Every category is searched: a request read as research may be served by a finance service.
+      const query = { words: wordsOf(`${intent.query} ${text}`), agonCategories: ALL_AGON, circleCategories: ALL_CIRCLE };
       const found = await Promise.all(deps.sources.map((s) => s.search(query).catch(() => [] as CatalogEntry[])));
       const sources = deps.sources.map((s) => ({ id: s.id, status: s.status() }));
-      // Sources search wide; ranking keeps only what fits Agon's reading of the request.
-      const ranked = rankCandidates(found.flat(), intent, { feeBps: deps.feeBps, downranked: downranked(), feeBpsFor: (e) => (deps.feeAddress[e.network] ? deps.feeBps : 0) });
+      const list = shortlist(found.flat(), intent, text);
+      const fitted = deps.judge ? await deps.judge(text, list).catch(() => null) : null;
+      const ranked = rankCandidates(list, intent, { feeBps: deps.feeBps, downranked: downranked(), feeBpsFor: (e) => (deps.feeAddress[e.network] ? deps.feeBps : 0), fitted });
       if (!ranked.pick) return { kind: "none", sources };
       const routeId = (deps.newId ?? randomUUID)();
       keepRoom(ownerRef);

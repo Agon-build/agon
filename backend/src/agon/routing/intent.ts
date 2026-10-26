@@ -6,8 +6,8 @@ export const INTENT_KINDS = ["forecast", "research", "market_data", "analysis", 
 export type IntentKind = (typeof INTENT_KINDS)[number];
 export type Intent = { kind: IntentKind; query: string; values: Record<string, string> };
 
-const ALL_AGON = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
-const ALL_CIRCLE = ["WEB_SEARCH_RESEARCH", "DATA_ENRICHMENT", "FINANCIAL_ANALYSIS", "PREDICTION_MARKETS", "SOCIAL_INTELLIGENCE", "CREATIVE", "INFRASTRUCTURE"];
+export const ALL_AGON = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
+export const ALL_CIRCLE = ["WEB_SEARCH_RESEARCH", "DATA_ENRICHMENT", "FINANCIAL_ANALYSIS", "PREDICTION_MARKETS", "SOCIAL_INTELLIGENCE", "CREATIVE", "INFRASTRUCTURE"];
 
 /// Which categories serve each kind of task, in Agon's ids and Circle's names.
 export const KIND_SOURCES: Record<IntentKind, { agonCategories: string[]; circleCategories: string[] }> = {

@@ -10,6 +10,7 @@ import type { AskResult } from "../stage/services.ts";
 import { createAgonSource, type AgonListingLite } from "./agon-source.ts";
 import { createCircleSource } from "./circle-source.ts";
 import { fillInput } from "./fill-input.ts";
+import { judgeFit } from "./fit.ts";
 import { readIntent } from "./intent.ts";
 import { createRouter, type Router } from "./router.ts";
 
@@ -86,6 +87,7 @@ export function startRouting(deps: {
     sources: [agon, circle],
     runtimes: { "arc-testnet": deps.testnet, ...(deps.outside ? { arc: deps.outside.hire } : {}) },
     readIntent: (text) => readIntent(text, deps.callModel, deps.model),
+    judge: (text, list) => judgeFit(text, list, deps.callModel, deps.model),
     fill: (entry, text, intent) => fillInput(entry, text, intent, deps.callModel, deps.model),
     feeBps: deps.feeBps,
     feeAddress: { "arc-testnet": deps.testnetFeeAddress, arc: deps.outside?.feeAddress ?? null },
