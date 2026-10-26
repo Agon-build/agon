@@ -13,6 +13,9 @@ x-node: &node
     - path: ./dev.env
     - path: ./aws.env
       required: false
+    # local.env (optional, never rewritten): dev-only switches such as AGON_OUTSIDE_ENABLED=true.
+    - path: ./local.env
+      required: false
 
 services:
   postgres:

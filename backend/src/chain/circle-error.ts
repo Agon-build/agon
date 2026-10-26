@@ -10,3 +10,31 @@ export function circleErrorText(error: unknown): string {
   }
   return error instanceof Error ? error.message : String(error);
 }
+
+/// Wraps a Circle SDK client so every failed call rejects with circleErrorText
+/// only. The SDK's own errors carry the request, including the API key header.
+export function withCleanErrors<T extends object>(client: T): T {
+  return new Proxy(client, {
+    get(target, prop, receiver) {
+      const value = Reflect.get(target, prop, receiver) as unknown;
+      if (typeof value !== "function") return value;
+      return (...args: unknown[]) => {
+        try {
+          const out = (value as (...a: unknown[]) => unknown).apply(target, args);
+          return out instanceof Promise ? out.catch((error: unknown) => { throw new Error(circleErrorText(error)); }) : out;
+        } catch (error) {
+          throw new Error(circleErrorText(error));
+        }
+      };
+    },
+  });
+}
+
+export type CircleKeys = { apiKey?: string; entitySecret?: string; walletSetId?: string };
+
+/// Circle keeps test and live apart: a TEST_API key is refused on mainnets, so
+/// Arc mainnet (ARC) uses the live keys and Arc Testnet the test keys.
+export function circleKeysFor(chain: "ARC" | "ARC-TESTNET", circle: CircleKeys & { live: CircleKeys }): CircleKeys {
+  const keys = chain === "ARC" ? circle.live : circle;
+  return { apiKey: keys.apiKey, entitySecret: keys.entitySecret, walletSetId: keys.walletSetId };
+}

@@ -5,7 +5,7 @@ import {
 } from "@circle-fin/developer-controlled-wallets";
 import { config } from "../config/index.js";
 import { platformTransferInput } from "./circle-transfer-input.ts";
-import { circleErrorText } from "./circle-error.ts";
+import { circleErrorText, circleKeysFor, withCleanErrors } from "./circle-error.ts";
 import { publisherExecutionInput, publisherFeeFromEstimate } from "./circle-publisher-input.ts";
 
 /// Backend integration with Circle Developer-Controlled Wallets. ArcRun email
@@ -17,19 +17,26 @@ import { publisherExecutionInput, publisherFeeFromEstimate } from "./circle-publ
 /// This module is the seam for that custody trade-off: a future swap to
 /// user-controlled (MPC) wallets only has to replace this file.
 
-let cachedClient: ReturnType<typeof initiateDeveloperControlledWalletsClient> | null = null;
+type CircleChain = "ARC-TESTNET" | "ARC";
+const cachedClients = new Map<CircleChain, ReturnType<typeof initiateDeveloperControlledWalletsClient>>();
 
-function getClient() {
-  if (cachedClient) return cachedClient;
-  const { apiKey, entitySecret } = config.circle;
+/// One client per chain: Arc mainnet uses the live keys (Circle refuses a test
+/// key there). Failed calls reject with Circle's reason only, never the request.
+function getClient(chain: CircleChain = "ARC-TESTNET") {
+  const cached = cachedClients.get(chain);
+  if (cached) return cached;
+  const { apiKey, entitySecret } = circleKeysFor(chain, config.circle);
   if (!apiKey || !entitySecret) {
     throw new Error(
-      "Circle Dev-Controlled wallets are not configured. Set CIRCLE_API_KEY and CIRCLE_ENTITY_SECRET. " +
-        "Run scripts/circle-bootstrap.ts once to register the entity secret and create a wallet set.",
+      chain === "ARC"
+        ? "Circle live keys are not configured. Set CIRCLE_LIVE_API_KEY, CIRCLE_LIVE_ENTITY_SECRET and CIRCLE_LIVE_WALLET_SET_ID."
+        : "Circle Dev-Controlled wallets are not configured. Set CIRCLE_API_KEY and CIRCLE_ENTITY_SECRET. " +
+          "Run scripts/circle-bootstrap.ts once to register the entity secret and create a wallet set.",
     );
   }
-  cachedClient = initiateDeveloperControlledWalletsClient({ apiKey, entitySecret });
-  return cachedClient;
+  const client = withCleanErrors(initiateDeveloperControlledWalletsClient({ apiKey, entitySecret }));
+  cachedClients.set(chain, client);
+  return client;
 }
 
 export function circleDevConfigured(): boolean {
@@ -242,12 +249,12 @@ export async function executeContractCall(params: ExecuteParams): Promise<{
 /// Polls a single transaction by Circle's internal id. The on-chain tx hash
 /// arrives once the transaction is broadcast; we surface both so the frontend
 /// can link to arcscan as soon as it's available.
-export async function getTxState(id: string): Promise<{
+export async function getTxState(id: string, chain: CircleChain = "ARC-TESTNET"): Promise<{
   state: string;
   txHash?: string | null;
   errorReason?: string | null;
 }> {
-  const client = getClient();
+  const client = getClient(chain);
   const res = await client.getTransaction({ id });
   const tx = res.data?.transaction;
   if (!tx) throw new Error(`Circle transaction ${id} not found`);
@@ -274,7 +281,7 @@ export async function createPlatformUsdcTransfer(params: {
 }): Promise<{ id: string; state: string }> {
   // The installed SDK types list only ARC-TESTNET; Circle's API accepts ARC too (see createAgonWallet).
   const input = platformTransferInput(params) as unknown as CreateTransferTransactionInput;
-  const response = await getClient().createTransaction(input);
+  const response = await getClient(params.blockchain).createTransaction(input);
   const data = response.data;
   if (!data?.id) throw new Error("Circle createTransaction returned no id");
   return { id: data.id, state: data.state };
@@ -290,9 +297,9 @@ export async function createAgonWallet(input: {
   idempotencyKey: string;
   circleChain: "ARC-TESTNET" | "ARC";
 }): Promise<{ walletId: string; address: `0x${string}` }> {
-  const walletSetId = config.circle.walletSetId;
-  if (!walletSetId) throw new Error("CIRCLE_WALLET_SET_ID is not set");
-  const response = await getClient().createWallets({
+  const walletSetId = circleKeysFor(input.circleChain, config.circle).walletSetId;
+  if (!walletSetId) throw new Error(input.circleChain === "ARC" ? "CIRCLE_LIVE_WALLET_SET_ID is not set" : "CIRCLE_WALLET_SET_ID is not set");
+  const response = await getClient(input.circleChain).createWallets({
     blockchains: [input.circleChain] as unknown as ["ARC-TESTNET"],
     accountType: "EOA",
     count: 1,
@@ -311,8 +318,8 @@ export async function createAgonWallet(input: {
 /// must only pass documents built by an AGON module that checks what is being
 /// signed (season forecasts here; USDC authorizations behind the signing
 /// policy in plan 2). Never pass caller-supplied JSON straight through.
-export async function signTypedDataJson(walletId: string, typedDataJson: string): Promise<`0x${string}`> {
-  const response = await getClient().signTypedData({ walletId, data: typedDataJson });
+export async function signTypedDataJson(walletId: string, typedDataJson: string, chain: CircleChain = "ARC-TESTNET"): Promise<`0x${string}`> {
+  const response = await getClient(chain).signTypedData({ walletId, data: typedDataJson });
   const signature = response.data?.signature;
   if (!signature || !/^0x[0-9a-fA-F]+$/.test(signature)) throw new Error("Circle returned no signature");
   return signature as `0x${string}`;

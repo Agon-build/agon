@@ -141,10 +141,16 @@ test("a new mainnet wallet starts at 0.25 per hire and 1.00 per day; outside set
   const w = await ensureBudgetWallet({ store, ops, network: agonNetwork("arc"), now: () => new Date(), defaults: { perHireCap: 250_000n, dailyCap: 1_000_000n } }, "op:x");
   assert.deepEqual([w.perHireCap, w.dailyCap], [250_000n, 1_000_000n]);
   assert.deepEqual(resolveOutsideSettings({}), { enabled: false });
-  const on = resolveOutsideSettings({ AGON_OUTSIDE_ENABLED: "true", AGON_OUTSIDE_FEE_ADDRESS: `0x${"E".repeat(40)}` });
+  const live = { CIRCLE_LIVE_API_KEY: "LIVE_API_KEY:a:b", CIRCLE_LIVE_ENTITY_SECRET: "s", CIRCLE_LIVE_WALLET_SET_ID: "ws" };
+  const on = resolveOutsideSettings({ AGON_OUTSIDE_ENABLED: "true", AGON_OUTSIDE_FEE_ADDRESS: `0x${"E".repeat(40)}`, ...live });
   assert.ok(on.enabled && on.ok && on.settings.network.id === "arc" && on.settings.feeAddress === `0x${"e".repeat(40)}` && on.settings.routingFeeBps === 150);
-  const bad = resolveOutsideSettings({ AGON_OUTSIDE_ENABLED: "true", AGON_OUTSIDE_FEE_ADDRESS: "nope" });
+  const bad = resolveOutsideSettings({ AGON_OUTSIDE_ENABLED: "true", AGON_OUTSIDE_FEE_ADDRESS: "nope", ...live });
   assert.ok(bad.enabled && !bad.ok);
+  // Circle refuses a TEST_API key on mainnet (seen 2026-10-26, code 156006), so mainnet needs its own live keys.
+  const noLive = resolveOutsideSettings({ AGON_OUTSIDE_ENABLED: "true", AGON_OUTSIDE_FEE_ADDRESS: `0x${"E".repeat(40)}` });
+  assert.ok(noLive.enabled && !noLive.ok && noLive.problems.some((p) => /CIRCLE_LIVE_API_KEY/.test(p)));
+  const testKey = resolveOutsideSettings({ AGON_OUTSIDE_ENABLED: "true", AGON_OUTSIDE_FEE_ADDRESS: `0x${"E".repeat(40)}`, ...live, CIRCLE_LIVE_API_KEY: "TEST_API_KEY:a:b" });
+  assert.ok(testKey.enabled && !testKey.ok && testKey.problems.some((p) => /LIVE_API_KEY/.test(p)));
 });
 
 test("routing for discovery names the Lead without quoting it", async () => {

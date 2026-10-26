@@ -7,6 +7,8 @@ import {
   initiateDeveloperControlledWalletsClient,
 } from "@circle-fin/developer-controlled-wallets";
 
+import { circleErrorText } from "../src/chain/circle-error.ts";
+
 /// One-time setup for ArcRun's Circle Developer-Controlled wallets.
 ///
 /// Run with: npm run circle:bootstrap
@@ -32,13 +34,24 @@ import {
 /// .bootstrapped`) is written to refuse accidental re-runs; delete it
 /// deliberately if you really want to bootstrap again.
 
-const RECOVERY_DIR = resolve(process.cwd(), "circle-recovery");
+///
+/// --live sets up the separate live entity for Arc mainnet (Circle refuses a
+/// test key there): it reads CIRCLE_LIVE_API_KEY, keeps its own recovery folder
+/// and sentinel, and prints CIRCLE_LIVE_ENTITY_SECRET and CIRCLE_LIVE_WALLET_SET_ID.
+
+const LIVE = process.argv.includes("--live");
+const PREFIX = LIVE ? "CIRCLE_LIVE_" : "CIRCLE_";
+const RECOVERY_DIR = resolve(process.cwd(), LIVE ? "circle-recovery-live" : "circle-recovery");
 const SENTINEL = join(RECOVERY_DIR, ".bootstrapped");
 
 async function main() {
-  const apiKey = process.env.CIRCLE_API_KEY?.trim();
+  const apiKey = process.env[`${PREFIX}API_KEY`]?.trim();
   if (!apiKey) {
-    console.error("CIRCLE_API_KEY is required. Set it in backend/.env and re-run.");
+    console.error(`${PREFIX}API_KEY is required. Set it in the environment and re-run.`);
+    process.exit(1);
+  }
+  if (LIVE && !apiKey.startsWith("LIVE_API_KEY:")) {
+    console.error("CIRCLE_LIVE_API_KEY must be a Circle LIVE_API key (it starts with LIVE_API_KEY:).");
     process.exit(1);
   }
 
@@ -82,7 +95,7 @@ async function main() {
 
   console.log("step 3/3: creating wallet set");
   const client = initiateDeveloperControlledWalletsClient({ apiKey, entitySecret });
-  const setRes = await client.createWalletSet({ name: "arcrun-mainset" });
+  const setRes = await client.createWalletSet({ name: LIVE ? "agon-live" : "arcrun-mainset" });
   const walletSetId = setRes.data?.walletSet?.id;
   if (!walletSetId) {
     console.error("createWalletSet returned no id");
@@ -91,9 +104,9 @@ async function main() {
 
   const envSnippet =
     `\n# Circle Developer-Controlled Wallets (added by circle-bootstrap.ts)\n` +
-    `CIRCLE_ENTITY_SECRET=${entitySecret}\n` +
-    `CIRCLE_WALLET_SET_ID=${walletSetId}\n`;
-  const snippetPath = resolve(process.cwd(), "circle-bootstrap.env.snippet");
+    `${PREFIX}ENTITY_SECRET=${entitySecret}\n` +
+    `${PREFIX}WALLET_SET_ID=${walletSetId}\n`;
+  const snippetPath = resolve(process.cwd(), LIVE ? "circle-bootstrap-live.env.snippet" : "circle-bootstrap.env.snippet");
   writeFileSync(snippetPath, envSnippet);
   writeFileSync(SENTINEL, new Date().toISOString());
 
@@ -111,6 +124,7 @@ function listFiles(dir: string): string[] {
 }
 
 main().catch((err) => {
-  console.error("circle-bootstrap failed:", err);
+  // Never the raw error: the SDK's error carries the request, including the API key.
+  console.error("circle-bootstrap failed:", circleErrorText(err));
   process.exit(1);
 });

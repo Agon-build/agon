@@ -265,9 +265,10 @@ export function startOutsideRuntime(input: { env?: Record<string, string | undef
     };
     const hireDeps: HireDeps = {
       ...walletDeps,
-      signJson: signTypedDataJson,
+      // Mainnet wallets live under the live Circle keys.
+      signJson: (walletId: string, json: string) => signTypedDataJson(walletId, json, network.circleChain),
       off: { all: false, budget: false },
-      feeTxState: getTxState,
+      feeTxState: (id: string) => getTxState(id, network.circleChain),
       authorizationUsed: async (authorizer, nonce) =>
         (await client.readContract({ address: network.usdc, abi: AUTHORIZATION_STATE_ABI, functionName: "authorizationState", args: [authorizer, nonce] })) as boolean,
     };

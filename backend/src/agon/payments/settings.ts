@@ -167,6 +167,12 @@ export function resolveOutsideSettings(env: Record<string, string | undefined>):
     if (/^0x[0-9a-fA-F]{40}$/.test(rawFee)) feeAddress = rawFee.toLowerCase() as Address;
     else problems.push("AGON_OUTSIDE_FEE_ADDRESS must be a 0x address");
   }
+  // Circle refuses a TEST_API key on mainnets, so Arc mainnet wallets need the live keys.
+  const liveKey = env.CIRCLE_LIVE_API_KEY?.trim() ?? "";
+  if (!liveKey) problems.push("CIRCLE_LIVE_API_KEY is not set (a Circle LIVE_API key)");
+  else if (!liveKey.startsWith("LIVE_API_KEY:")) problems.push("CIRCLE_LIVE_API_KEY must be a Circle LIVE_API_KEY, not a test key");
+  if (!env.CIRCLE_LIVE_ENTITY_SECRET?.trim()) problems.push("CIRCLE_LIVE_ENTITY_SECRET is not set");
+  if (!env.CIRCLE_LIVE_WALLET_SET_ID?.trim()) problems.push("CIRCLE_LIVE_WALLET_SET_ID is not set");
   if (problems.length > 0) return { enabled: true, ok: false, problems };
   return { enabled: true, ok: true, settings: { network: agonNetwork("arc"), feeAddress, routingFeeBps } };
 }

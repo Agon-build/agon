@@ -162,6 +162,9 @@ const envSchema = z.object({
   CIRCLE_API_KEY: z.string().optional(),
   CIRCLE_ENTITY_SECRET: z.string().optional(),
   CIRCLE_WALLET_SET_ID: z.string().optional(),
+  CIRCLE_LIVE_API_KEY: z.string().optional(),
+  CIRCLE_LIVE_ENTITY_SECRET: z.string().optional(),
+  CIRCLE_LIVE_WALLET_SET_ID: z.string().optional(),
   CIRCLE_BLOCKCHAIN: z.string().default("ARC-TESTNET"),
   // When true, every newly minted Circle wallet is auto-seeded with USDC
   // from Circle's testnet faucet. Off for mainnet.
@@ -867,6 +870,8 @@ export const config = {
     apiKey: env.CIRCLE_API_KEY,
     entitySecret: env.CIRCLE_ENTITY_SECRET,
     walletSetId: env.CIRCLE_WALLET_SET_ID,
+    // Arc mainnet: Circle refuses the test key there.
+    live: { apiKey: env.CIRCLE_LIVE_API_KEY, entitySecret: env.CIRCLE_LIVE_ENTITY_SECRET, walletSetId: env.CIRCLE_LIVE_WALLET_SET_ID },
     blockchain: env.CIRCLE_BLOCKCHAIN,
     autoSeedUsdc: env.CIRCLE_AUTO_SEED_USDC,
     userControlled: {
