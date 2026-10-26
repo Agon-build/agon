@@ -133,6 +133,9 @@ export async function buyExact(input: {
   let headers: Record<string, string>;
   try {
     const payload = await http.createPaymentPayload({ ...required.full, accepts: [clamped] } as never);
+    // The signature is good for at most the clamp, but the seller matches the
+    // terms it offered field by field, so it gets them back unchanged.
+    if (payload.x402Version === 2) (payload as { accepted: unknown }).accepted = option.raw;
     headers = http.encodePaymentSignatureHeader(payload) as Record<string, string>;
   } catch (error) {
     const refused = error instanceof SigningRefusedError ? error.code : /signing refused: (\w+)/.exec(String((error as Error)?.message ?? error))?.[1];
@@ -155,6 +158,11 @@ export async function buyExact(input: {
     txHash = null;
   }
   const data = second.ok ? await readAnswer(second) : await readJson(second);
-  if (!second.ok) return { ok: false, code: "paid_request_failed", detail: `status ${second.status}`, status: second.status, data, txHash, sent: true };
+  if (!second.ok) {
+    // A seller that refuses the payment says why in the error of its new 402.
+    const reason = second.status === 402 ? (requiredFrom(second, data)?.full.error ?? (data as { error?: unknown } | null)?.error) : undefined;
+    const why = typeof reason === "string" && reason.length > 0 ? `: ${reason.slice(0, 120)}` : "";
+    return { ok: false, code: "paid_request_failed", detail: `status ${second.status}${why}`, status: second.status, data, txHash, sent: true };
+  }
   return { ok: true, amount: option.amount, payTo: option.payTo, txHash, status: second.status, data };
 }

@@ -3,7 +3,7 @@ import test from "node:test";
 import { Hono } from "hono";
 import { privateKeyToAccount } from "viem/accounts";
 import type { Address } from "viem";
-import { encodePaymentRequiredHeader, encodePaymentResponseHeader } from "@x402/core/http";
+import { decodePaymentSignatureHeader, encodePaymentRequiredHeader, encodePaymentResponseHeader } from "@x402/core/http";
 
 import { buyExact, peekExactTerms, selectExactOption } from "../../src/agon/payments/exact-buyer.ts";
 import { exactPayment, type X402Paid } from "../../src/agon/payments/exact-seller.ts";
@@ -101,6 +101,51 @@ test("a long seller timeout is clamped so the guarded signer still signs", async
   assert.ok(out.ok, show(out));
   const validFor = Number(settler.calls[0]!.authorization.validBefore) - Math.floor(Date.now() / 1000);
   assert.ok(validFor <= 600 && validFor > 500, String(validFor));
+});
+
+// Like the x402 SDK's resource server (and Exa on Arc mainnet, 2026-10-26): the
+// paid retry must echo the offered terms exactly, or it gets 402 again.
+function strictSeller() {
+  const offer = { scheme: "exact", network: network.caip2, asset: network.usdc, payTo: PAY_TO, amount: "1000", maxTimeoutSeconds: 3600, extra: { assetTransferMethod: "eip3009", name: "USDC", version: "2" } };
+  const required = (error?: string) => ({ x402Version: 2, ...(error ? { error } : {}), resource: { url: "http://seller.test/strict", description: "strict", mimeType: "application/json" }, accepts: [offer] });
+  const seen: Array<{ accepted: Record<string, unknown>; validBefore: string }> = [];
+  const app = new Hono();
+  app.get("/strict", (c) => {
+    const header = c.req.header("payment-signature");
+    if (header) {
+      const payload = decodePaymentSignatureHeader(header) as unknown as { accepted: Record<string, unknown>; payload: { authorization: { validBefore: string } } };
+      seen.push({ accepted: payload.accepted, validBefore: payload.payload.authorization.validBefore });
+      if (JSON.stringify(payload.accepted) === JSON.stringify(offer)) return c.json({ ok: true });
+      c.header("PAYMENT-REQUIRED", encodePaymentRequiredHeader(required("No matching payment requirements") as never));
+      return c.json({}, 402);
+    }
+    c.header("PAYMENT-REQUIRED", encodePaymentRequiredHeader(required() as never));
+    return c.json({}, 402);
+  });
+  return { seen, fetchImpl: ((url: string, init?: RequestInit) => app.request(url, init)) as typeof fetch };
+}
+
+test("the paid retry echoes the seller's terms unchanged while the signature stays inside 600 seconds", async () => {
+  const { seen, fetchImpl } = strictSeller();
+  const out = await buyExact({ url: "http://seller.test/strict", network, maxAmount: 1_000n, signerFor: () => localSigner(buyer), fetchImpl });
+  assert.ok(out.ok, show(out));
+  assert.equal(seen[0]!.accepted.maxTimeoutSeconds, 3600);
+  const validFor = Number(seen[0]!.validBefore) - Math.floor(Date.now() / 1000);
+  assert.ok(validFor <= 600 && validFor > 500, String(validFor));
+});
+
+test("a paid retry refused with 402 reports the seller's reason", async () => {
+  const app = new Hono();
+  const offer = { scheme: "exact", network: network.caip2, asset: network.usdc, payTo: PAY_TO, amount: "1000", maxTimeoutSeconds: 300, extra: { name: "USDC", version: "2" } };
+  app.get("/refuse", (c) => {
+    const error = c.req.header("payment-signature") ? "invalid_exact_evm_payload_signature" : undefined;
+    c.header("PAYMENT-REQUIRED", encodePaymentRequiredHeader({ x402Version: 2, ...(error ? { error } : {}), resource: { url: c.req.url, description: "r", mimeType: "application/json" }, accepts: [offer] } as never));
+    return c.json({}, 402);
+  });
+  const fetchImpl = ((url: string, init?: RequestInit) => app.request(url, init)) as typeof fetch;
+  const out = await buyExact({ url: "http://seller.test/refuse", network, maxAmount: 1_000n, signerFor: () => localSigner(buyer), fetchImpl });
+  assert.ok(!out.ok && out.code === "paid_request_failed" && out.sent === true, show(out));
+  assert.equal(out.detail, "status 402: invalid_exact_evm_payload_signature");
 });
 
 test("Gateway-only sellers are not bought from; free endpoints return data at no cost", async () => {
