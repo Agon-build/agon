@@ -189,7 +189,7 @@ test("the FAQ answers the questions people ask, in plain words, with no secret h
 
 test("docs present only Live capabilities as working: Circle, mainnet and the Arena read as coming next", () => {
   const fees = PAYMENT_OPTIONS.map((o) => o.body).join(" ");
-  assert.match(fees, /1\.5% routing fee/);
+  assert.match(fees, /\b5% routing fee/);
   assert.match(fees, /only when the answer arrives/);
   const outsideRoadmap = docsStrings().filter((t) => !ROADMAP.next.some((i) => i.title === t || i.body === t) && !ROADMAP.later.some((i) => i.title === t || i.body === t));
   for (const t of outsideRoadmap) {

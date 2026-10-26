@@ -55,6 +55,28 @@ async function main() {
     process.exit(1);
   }
 
+  // The live entity already had a secret on 2026-10-26 (409, code 156015), and
+  // it is not the testnet one (156013). With the live secret known (found, or
+  // rotated in Circle Console), this creates only the live wallet set; it
+  // registers nothing and never prints the secret.
+  if (LIVE && process.argv.includes("--reuse-entity-secret")) {
+    const entitySecret = (process.env.CIRCLE_LIVE_ENTITY_SECRET ?? process.env.CIRCLE_ENTITY_SECRET)?.trim();
+    if (!entitySecret) {
+      console.error("Set CIRCLE_LIVE_ENTITY_SECRET (the live entity's secret) and re-run.");
+      process.exit(1);
+    }
+    const client = initiateDeveloperControlledWalletsClient({ apiKey, entitySecret });
+    const setRes = await client.createWalletSet({ name: "agon-live" });
+    const walletSetId = setRes.data?.walletSet?.id;
+    if (!walletSetId) {
+      console.error("createWalletSet returned no id");
+      process.exit(1);
+    }
+    console.log("the live entity secret works. Add this to the environment:");
+    console.log(`CIRCLE_LIVE_WALLET_SET_ID=${walletSetId}`);
+    return;
+  }
+
   if (existsSync(SENTINEL)) {
     console.error(
       `Bootstrap already ran (sentinel ${SENTINEL} exists).\n` +

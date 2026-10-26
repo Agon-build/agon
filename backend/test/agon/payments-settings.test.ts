@@ -75,10 +75,10 @@ test("specialist agent wallets are optional; only pitch and scout are accepted",
   assert.ok(bad.enabled && !bad.ok && bad.problems.some((p) => p.includes("AGON_SPECIALIST_WALLETS")));
 });
 
-test("settings read the routing fee rate and address, default 150, refuse out of range", () => {
+test("settings read the routing fee rate and address, default 500 (5%), refuse out of range", () => {
   const out = resolvePaymentSettings(valid);
   if (!out.enabled || !out.ok) throw new Error(JSON.stringify(out));
-  assert.equal(out.settings.routingFeeBps, 150);
+  assert.equal(out.settings.routingFeeBps, 500);
   assert.equal(out.settings.feeAddress, null);
   const set = resolvePaymentSettings({ ...valid, AGON_ROUTING_FEE_BPS: "0", AGON_FEE_ADDRESS: `0x${"F".repeat(40)}` });
   if (!set.enabled || !set.ok) throw new Error(JSON.stringify(set));

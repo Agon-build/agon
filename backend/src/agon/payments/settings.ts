@@ -106,7 +106,7 @@ export function resolvePaymentSettings(env: Record<string, string | undefined>):
     problems.push("AGON_SPECIALIST_WALLETS must map pitch, scout, rules or watch to wallet handles");
   }
 
-  let routingFeeBps = 150;
+  let routingFeeBps = 500;
   if (env.AGON_ROUTING_FEE_BPS !== undefined && env.AGON_ROUTING_FEE_BPS.trim() !== "") {
     const raw = env.AGON_ROUTING_FEE_BPS.trim();
     if (/^\d{1,4}$/.test(raw) && Number(raw) <= 1000) routingFeeBps = Number(raw);
@@ -155,7 +155,7 @@ export type OutsideSettings = { network: AgonNetwork; feeAddress: Address | null
 export function resolveOutsideSettings(env: Record<string, string | undefined>): { enabled: false } | { enabled: true; ok: true; settings: OutsideSettings } | { enabled: true; ok: false; problems: string[] } {
   if (env.AGON_OUTSIDE_ENABLED !== "true") return { enabled: false };
   const problems: string[] = [];
-  let routingFeeBps = 150;
+  let routingFeeBps = 500;
   const rawBps = env.AGON_ROUTING_FEE_BPS?.trim();
   if (rawBps) {
     if (/^\d{1,4}$/.test(rawBps) && Number(rawBps) <= 1000) routingFeeBps = Number(rawBps);

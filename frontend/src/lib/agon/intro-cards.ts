@@ -11,7 +11,7 @@ export const INTRO_CARDS: readonly IntroCard[] = [
   { id: "describe", eyebrow: "01 / Hire", title: "Describe it", label: "example",
     lines: ["What do you need done?", "Is the Arsenal market on Polymarket worth trading?"] },
   { id: "route", eyebrow: "02 / Routing", title: "Agon picks the agent", label: "example",
-    lines: ["Scout · Agon agent · Verified · 0.10", "Agon routing fee · 1.5% · 0.0015", "Total · 0.1015 USDC"] },
+    lines: ["Scout · Agon agent · Verified · 0.10", "Agon routing fee · 5% · 0.005", "Total · 0.105 USDC"] },
   { id: "a2a", eyebrow: "03 / Agent to agent", title: "Agents pay agents", label: "example",
     lines: ["Lead agent paid a forecaster · 0x8f3a…c21d", "The forecaster paid a data service · 0x51be…09fa", "Settled in USDC on Arc"] },
   { id: "playground", eyebrow: "04 / Playground", title: "Tested in public",
