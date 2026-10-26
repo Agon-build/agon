@@ -4,8 +4,8 @@ import { Hono } from "hono";
 import { privateKeyToAccount } from "viem/accounts";
 import type { Address, Hex } from "viem";
 
-import { HIRE_PAID_TIMEOUT_MS, completeApprovedHire, confirmHire, quoteHire, reconcileStuckHires, type HireDeps } from "../../src/agon/payments/hire.ts";
-import { budgetWalletRef } from "../../src/agon/payments/budget-wallets.ts";
+import { HIRE_PAID_TIMEOUT_MS, completeApprovedHire, confirmHire, quoteHire, reconcileStuckHires, settleFeeTab, type HireDeps } from "../../src/agon/payments/hire.ts";
+import { budgetWalletRef, completeWithdraw, requestWithdraw } from "../../src/agon/payments/budget-wallets.ts";
 import { exactPayment, type X402Paid } from "../../src/agon/payments/exact-seller.ts";
 import { agonNetwork } from "../../src/agon/network.ts";
 import { MemoryPaymentsStore } from "./payments-memory-store.ts";
@@ -437,4 +437,86 @@ test("minor: changed terms or a short wallet are refused before any job or code 
   assert.ok(!short.ok && short.code === "insufficient_balance", show(short));
   assert.equal((short as { amount: bigint }).amount, 300_000n);
   assert.equal(store.jobs.size, 0, "no job was written");
+});
+
+const ticker = { ownerRef: "wa:abc", providerUrl: "http://api.test/agon/data/ticker", providerRef: "circle:ticker", providerLabel: "Ticker", method: "GET" as const, body: { ticker: "BTC" }, feeBps: 500, feeAddress: FEE_TO };
+
+async function hireTicker(deps: HireDeps) {
+  const q = await quoteHire(deps, ticker);
+  assert.ok(q.ok && q.quote.step === "confirm_code", show(q));
+  const out = await confirmHire(deps, { ownerRef: "wa:abc", code: q.quote.code });
+  assert.ok(out.ok, show(out));
+  return q.quote;
+}
+
+test("the fee is 5% or the minimum, whichever is larger", async () => {
+  const { deps, req } = world();
+  const floored = { ...deps, feeMin: 10_000n };
+  const lead = await quoteHire(floored, { ...req, feeBps: 500, feeAddress: FEE_TO });
+  assert.ok(lead.ok);
+  assert.deepEqual([lead.quote.fee, lead.quote.total], [15_000n, 315_000n], "5% of 0.30 is above the minimum");
+  const small = await quoteHire(floored, ticker);
+  assert.ok(small.ok);
+  assert.deepEqual([small.quote.amount, small.quote.fee, small.quote.total], [10_000n, 10_000n, 20_000n], "5% of 0.01 is below it");
+});
+
+test("fees collect on the wallet's tab and go out in one transfer once they reach the threshold", async () => {
+  const { deps, store, transfers } = world();
+  const tabbed = { ...deps, feeMin: 10_000n, feeTab: 30_000n };
+  const first = await hireTicker(tabbed);
+  const second = await hireTicker(tabbed);
+  assert.equal(transfers.length, 0, "below the threshold nothing is sent");
+  const feeOf = (jobId: string) => store.listJobPayments(jobId).then((ps) => ps.find((p) => p.kind === "fee")!);
+  assert.deepEqual([(await feeOf(first.jobId)).status, (await feeOf(first.jobId)).amount], ["pending", 10_000n]);
+  assert.match((await feeOf(first.jobId)).detail ?? "", /on tab/);
+  const third = await hireTicker(tabbed);
+  assert.equal(transfers.length, 1, "one transfer for the whole tab");
+  assert.deepEqual([transfers[0]!.destinationAddress.toLowerCase(), transfers[0]!.amountBaseUnits], [FEE_TO, 30_000n]);
+  for (const q of [first, second, third]) assert.equal((await feeOf(q.jobId)).status, "settled", q.jobId);
+  await hireTicker(tabbed);
+  assert.equal(transfers.length, 1, "a new tab starts after the old one is paid");
+});
+
+test("a tab transfer Circle does not accept is retried by reconcile with the same key and fees, and a fee on the tab is never given up", async () => {
+  const { deps, store, state, transfers } = world();
+  const tabbed = { ...deps, feeMin: 10_000n, feeTab: 20_000n };
+  const lonely = await hireTicker({ ...tabbed, feeTab: 1_000_000n });
+  const stamp = (jobId: string, at: Date) => { const p = store.payments.get(`fee:${jobId}`)!; p.updatedAt = at; p.createdAt = at; };
+  stamp(lonely.jobId, new Date(Date.now() - 3 * 24 * 60 * 60_000));
+  state.transferFails = 1;
+  await hireTicker(tabbed);
+  assert.equal(transfers.length, 1, "the tab reached 0.02 and one transfer was tried");
+  const key = transfers[0]!.idempotencyKey;
+  const fees = [...store.payments.values()].filter((p) => p.kind === "fee");
+  assert.ok(fees.every((p) => p.status === "pending"), "refused: every fee on it is still owed");
+  for (const p of fees) p.updatedAt = new Date(Date.now() - 20 * 60_000);
+  await reconcileStuckHires(tabbed);
+  assert.equal(transfers.length, 2);
+  assert.deepEqual([transfers[1]!.idempotencyKey, transfers[1]!.amountBaseUnits], [key, 20_000n], "same key, same fees: never charged twice");
+  assert.ok([...store.payments.values()].filter((p) => p.kind === "fee").every((p) => p.status === "settled"), "the old fee was paid with the tab, not given up");
+});
+
+test("an owed tab counts against the wallet balance, and withdrawing pays the tab first", async () => {
+  const { deps, store, transfers } = world();
+  const tabbed = { ...deps, feeMin: 10_000n, feeTab: 1_000_000n };
+  await hireTicker(tabbed);
+  const reserve = 5_000n;
+  const short = await quoteHire(tabbed, { ...ticker, balanceOf: async () => 20_000n + reserve, reserve });
+  assert.ok(!short.ok && short.code === "insufficient_balance" && short.amount === 35_000n, show(short));
+  const link = await requestWithdraw(tabbed, "wa:abc", `0x${"9".repeat(40)}`, 50_000n);
+  assert.ok(link.ok);
+  const out = await completeWithdraw({ ...tabbed, settleOwed: (w) => settleFeeTab(tabbed, w, { force: true }) }, link.token);
+  assert.ok(out.ok, show(out));
+  assert.deepEqual(transfers.map((t) => [t.destinationAddress.toLowerCase(), t.amountBaseUnits]), [[FEE_TO, 10_000n], [`0x${"9".repeat(40)}`, 50_000n]]);
+  assert.ok([...store.payments.values()].filter((p) => p.kind === "fee").every((p) => p.status === "settled"));
+});
+
+test("two hires that fill the tab at the same moment send it once", async () => {
+  const { deps, store, transfers } = world();
+  await hireTicker({ ...deps, feeMin: 10_000n, feeTab: 1_000_000n });
+  await hireTicker({ ...deps, feeMin: 10_000n, feeTab: 1_000_000n });
+  const tabbed = { ...deps, feeMin: 10_000n, feeTab: 20_000n };
+  const wallet = (await store.getBudgetWallet("wa:abc", "arc-testnet"))!;
+  await Promise.all([settleFeeTab(tabbed, wallet), settleFeeTab(tabbed, wallet)]);
+  assert.deepEqual(transfers.map((t) => t.amountBaseUnits), [20_000n], "one transfer for both fees");
 });

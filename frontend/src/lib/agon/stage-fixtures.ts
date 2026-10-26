@@ -121,7 +121,7 @@ const PREVIEW_PICK = {
 };
 const PREVIEW_ALT = {
   source: "agon" as const, reference: "5042002:0xf017:9", name: "Scout", provider: "Agon", category: "3", description: "A trade, watch or avoid verdict for any Polymarket market",
-  method: "POST" as const, network: "arc-testnet" as const, rating: { tier: "scored" as const, score: 82 }, reason: "Verified on Agon, score 82", price: "0.10", fee: "0.005", total: "0.105",
+  method: "POST" as const, network: "arc-testnet" as const, rating: { tier: "scored" as const, score: 82 }, reason: "Verified on Agon, score 82", price: "0.10", fee: "0.01", total: "0.11",
 };
 
 export function previewRoute(request: string): RouteResponse {

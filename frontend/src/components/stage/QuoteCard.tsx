@@ -33,7 +33,7 @@ export function QuoteCard({ quote, nowMs, paying, onPay, onCancel }: { quote: Qu
           ))}
         </dl>
       ) : null}
-      {hasFee(quote.fee) ? <p className="mt-2 text-xs leading-5 text-ink-3">Sending Agon's fee also uses a network fee of under 0.005 USDC from your wallet.</p> : null}
+      {hasFee(quote.fee) ? <p className="mt-2 text-xs leading-5 text-ink-3">Agon's fees go out together once they reach 0.10 USDC, with one small network fee.</p> : null}
       {routed ? (
         <div className="mt-5">
           <h3 className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">Sending</h3>

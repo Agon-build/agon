@@ -287,6 +287,14 @@ export class PostgresPaymentsStore implements PaymentsStore {
     return rows.map(toPayment);
   }
 
+  async listOwedFees(payer: Address, network: string): Promise<JobPayment[]> {
+    const { rows } = await this.pool.query<PaymentRow>(
+      "select * from agon_job_payments where kind = 'fee' and status = 'pending' and payer = $1 and network = $2 order by created_at limit 500",
+      [lower(payer), network],
+    );
+    return rows.map(toPayment);
+  }
+
   async listJobPayments(rootId: string): Promise<JobPayment[]> {
     const { rows } = await this.pool.query<PaymentRow>(
       "select p.* from agon_job_payments p join agon_jobs j on j.job_id = p.job_id where j.root_id = $1 order by p.created_at",

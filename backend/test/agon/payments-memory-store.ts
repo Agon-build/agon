@@ -148,6 +148,9 @@ export class MemoryPaymentsStore implements PaymentsStore {
   async listPendingPayments(kind: JobPayment["kind"], updatedBefore: Date, network?: string) {
     return [...this.payments.values()].filter((p) => p.kind === kind && p.status === "pending" && p.updatedAt < updatedBefore && (!network || p.network === network));
   }
+  async listOwedFees(payer: string, network: string) {
+    return [...this.payments.values()].filter((p) => p.kind === "fee" && p.status === "pending" && p.payer.toLowerCase() === payer.toLowerCase() && p.network === network).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  }
   async listJobPayments(rootId: string) {
     const ids = new Set([...this.jobs.values()].filter((j) => j.rootId === rootId).map((j) => j.jobId));
     return [...this.payments.values()].filter((p) => ids.has(p.jobId));

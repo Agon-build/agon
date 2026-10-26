@@ -24,7 +24,13 @@ export type HireDeps = {
   feeTxState?: (id: string) => Promise<{ state: string; txHash?: string | null; errorReason?: string | null }>;
   /** How long a delivered hire waits for its fee transfer before leaving it to reconcile. */
   feeWaitMs?: number;
+  /** The smallest routing fee in USDC base units; a percentage alone earns nothing on sub-cent services. */
+  feeMin?: bigint;
+  /** Fees collect on the wallet's tab and go out in one transfer once they reach this; unset or 0 sends each fee at once. */
+  feeTab?: bigint;
 };
+
+const ON_TAB = "Agon routing fee, on tab";
 
 const FEE_GIVE_UP_MS = 24 * 60 * 60_000;
 
@@ -100,13 +106,15 @@ export async function quoteHire(
   if (!peek.ok) return { ok: false, code: peek.code === "no_matching_option" ? "no_matching_option" : "provider_unreachable", detail: peek.detail };
   if (!("option" in peek)) return { ok: false, code: "provider_free" };
   const now = deps.now();
-  const fee = req.feeAddress ? feeFor(peek.option.amount, req.feeBps ?? 0) : 0n;
+  const fee = req.feeAddress ? feeFor(peek.option.amount, req.feeBps ?? 0, deps.feeMin ?? 0n) : 0n;
   const total = peek.option.amount + fee;
   if (req.expect && (peek.option.amount !== req.expect.amount || (req.expect.payTo && peek.option.payTo.toLowerCase() !== req.expect.payTo.toLowerCase()))) {
     return { ok: false, code: "terms_changed" };
   }
   if (req.balanceOf) {
-    const needed = total + (fee > 0n ? (req.reserve ?? 0n) : 0n);
+    // Fees still on the tab are owed from the same balance.
+    const owed = (deps.feeTab ?? 0n) > 0n ? (await deps.store.listOwedFees(wallet.address, deps.network.id)).reduce((sum, p) => sum + p.amount, 0n) : 0n;
+    const needed = total + owed + (fee > 0n ? (req.reserve ?? 0n) : 0n);
     const balance = await req.balanceOf(wallet.address).catch(() => null);
     if (balance !== null && balance < needed) return { ok: false, code: "insufficient_balance", amount: needed, depositAddress: wallet.address };
   }
@@ -265,8 +273,62 @@ async function payFee(deps: HireDeps, wallet: BudgetWallet, job: Job, fee: bigin
     idempotencyKey: key, jobId: job.jobId, kind: "fee" as const, payer: wallet.address, payee: feeAddress.toLowerCase() as Address, amount: fee,
     network: deps.network.id, txHash: null, authNonce: null, authValidBefore: null, createdAt: at,
   };
+  if ((deps.feeTab ?? 0n) > 0n) {
+    await deps.store.upsertJobPayment({ ...base, status: "pending", detail: ON_TAB, updatedAt: at });
+    await settleFeeTab(deps, wallet);
+    return;
+  }
   await deps.store.upsertJobPayment({ ...base, status: "pending", detail: "Agon routing fee", updatedAt: at });
   await sendFee(deps, wallet.walletId, base);
+}
+
+/// Sends a wallet's fee tab as one transfer per fee address once it reaches the
+/// threshold (or at once with force, before a withdrawal). The fees are first
+/// marked with the tab's key, so a retry sends the same fees under the same
+/// idempotency key and nothing is ever charged twice.
+export function settleFeeTab(deps: HireDeps, wallet: Pick<BudgetWallet, "walletId" | "address">, opts: { force?: boolean } = {}): Promise<void> {
+  // One tab send at a time per wallet: two hires finishing together must not send overlapping fees twice.
+  const lockKey = `${deps.network.id}:${wallet.address.toLowerCase()}`;
+  const run = (tabLocks.get(lockKey) ?? Promise.resolve()).then(() => settleFeeTabNow(deps, wallet, opts));
+  const tail = run.catch(() => undefined);
+  tabLocks.set(lockKey, tail);
+  void tail.then(() => { if (tabLocks.get(lockKey) === tail) tabLocks.delete(lockKey); });
+  return run;
+}
+
+const tabLocks = new Map<string, Promise<void>>();
+
+async function settleFeeTabNow(deps: HireDeps, wallet: Pick<BudgetWallet, "walletId" | "address">, opts: { force?: boolean }): Promise<void> {
+  const owed = (await deps.store.listOwedFees(wallet.address, deps.network.id)).filter((p) => p.detail === ON_TAB);
+  const byPayee = new Map<string, FeePayment[]>();
+  for (const p of owed) byPayee.set(p.payee.toLowerCase(), [...(byPayee.get(p.payee.toLowerCase()) ?? []), p]);
+  for (const fees of byPayee.values()) {
+    const sum = fees.reduce((total, p) => total + p.amount, 0n);
+    if (sum === 0n || (!opts.force && sum < (deps.feeTab ?? 0n))) continue;
+    const tabKey = `agon-feetab-${stableUuid(fees.map((p) => p.idempotencyKey).sort().join(",")).slice(0, 23)}`;
+    for (const p of fees) await deps.store.upsertJobPayment({ ...p, status: "pending", detail: `Agon routing fee, tab ${tabKey}`, updatedAt: deps.now() });
+    await sendTab(deps, wallet.walletId, fees, tabKey, deps.feeWaitMs ?? 20_000);
+  }
+}
+
+async function sendTab(deps: HireDeps, walletId: string, fees: FeePayment[], tabKey: string, waitMs: number): Promise<void> {
+  const amount = fees.reduce((total, p) => total + p.amount, 0n);
+  let id: string;
+  try {
+    id = (await deps.ops.transfer({ walletId, destinationAddress: fees[0]!.payee, amountBaseUnits: amount, idempotencyKey: stableUuid(tabKey), refId: tabKey })).id;
+  } catch {
+    // Still marked with the tab key: reconcile sends the same fees again under the same key.
+    for (const p of fees) await deps.store.upsertJobPayment({ ...p, status: "pending", detail: `Agon routing fee, tab ${tabKey}`, updatedAt: deps.now() });
+    return;
+  }
+  for (const [i, p] of fees.entries()) {
+    if (!deps.feeTxState) {
+      await deps.store.upsertJobPayment({ ...p, status: "settled", detail: `Agon routing fee, transfer ${id}`, updatedAt: deps.now() });
+      continue;
+    }
+    await deps.store.upsertJobPayment({ ...p, status: "pending", detail: `Agon routing fee, transfer ${id}`, updatedAt: deps.now() });
+    await checkFee(deps, p, id, i === 0 ? waitMs : 0);
+  }
 }
 
 type FeePayment = Omit<import("./types.ts").JobPayment, "status" | "detail" | "updatedAt">;
@@ -347,8 +409,16 @@ export async function reconcileStuckHires(deps: HireDeps, input: { olderThanMs?:
   }
   // Routing fees: a sent transfer is checked, an unsent one is retried with the
   // same idempotency key, and a fee still unpaid after a day is given up.
+  const tabs = new Map<string, FeePayment[]>();
   for (const fee of await deps.store.listPendingPayments("fee", new Date(now.getTime() - (input.olderThanMs ?? 600_000)), deps.network.id)) {
     if (fee.network !== deps.network.id) continue;
+    // A fee on the tab waits for the tab; one whose tab transfer was refused is sent again with its tab.
+    if (fee.detail === ON_TAB) continue;
+    const tab = /tab (agon-feetab-\S+)$/.exec(fee.detail ?? "")?.[1];
+    if (tab) {
+      tabs.set(tab, [...(tabs.get(tab) ?? []), fee]);
+      continue;
+    }
     if (now.getTime() - fee.createdAt.getTime() > FEE_GIVE_UP_MS) {
       await deps.store.upsertJobPayment({ ...fee, status: "failed", detail: "Agon routing fee not paid; given up after a day", updatedAt: now });
       continue;
@@ -362,6 +432,14 @@ export async function reconcileStuckHires(deps: HireDeps, input: { olderThanMs?:
     const ownerRef = job ? ownerRefFromWalletRef(job.buyerRef) : null;
     const wallet = ownerRef ? await deps.store.getBudgetWallet(ownerRef, deps.network.id) : null;
     if (wallet && wallet.address.toLowerCase() === fee.payer.toLowerCase()) await sendFee(deps, wallet.walletId, fee, 0);
+  }
+  for (const [tabKey, listed] of tabs) {
+    // Every fee carrying this key, not only the ones listed: the tab is resent whole or not at all.
+    const fees = (await deps.store.listOwedFees(listed[0]!.payer, deps.network.id)).filter((p) => p.detail === `Agon routing fee, tab ${tabKey}`);
+    const job = await deps.store.getJob(listed[0]!.jobId);
+    const ownerRef = job ? ownerRefFromWalletRef(job.buyerRef) : null;
+    const wallet = ownerRef ? await deps.store.getBudgetWallet(ownerRef, deps.network.id) : null;
+    if (wallet && fees.length > 0 && wallet.address.toLowerCase() === fees[0]!.payer.toLowerCase()) await sendTab(deps, wallet.walletId, fees, tabKey, 0);
   }
   return tally;
 }

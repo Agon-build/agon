@@ -55,6 +55,8 @@ export function createRouter(deps: {
   judge?: (text: string, list: CatalogEntry[]) => Promise<string[] | null>;
   fill: (entry: CatalogEntry, text: string, intent: Intent) => ReturnType<typeof fillInput>;
   feeBps: number;
+  /** The smallest routing fee in USDC base units, shown on the pick as it will be charged. */
+  feeMin?: bigint;
   feeAddress: Partial<Record<NetworkId, Address | null>>;
   leadAsk: (ownerRef: string, question: string) => Promise<AskResult>;
   store: Pick<PaymentsStore, "latestConfirmation" | "getJob" | "getBudgetWallet">;
@@ -101,7 +103,7 @@ export function createRouter(deps: {
       const sources = deps.sources.map((s) => ({ id: s.id, status: s.status() }));
       const list = shortlist(found.flat(), intent, text);
       const fitted = deps.judge ? await deps.judge(text, list).catch(() => null) : null;
-      const ranked = rankCandidates(list, intent, { feeBps: deps.feeBps, downranked: downranked(), feeBpsFor: (e) => (deps.feeAddress[e.network] ? deps.feeBps : 0), fitted });
+      const ranked = rankCandidates(list, intent, { feeBps: deps.feeBps, feeMin: deps.feeMin, downranked: downranked(), feeBpsFor: (e) => (deps.feeAddress[e.network] ? deps.feeBps : 0), fitted });
       if (!ranked.pick) return { kind: "none", sources };
       const routeId = (deps.newId ?? randomUUID)();
       keepRoom(ownerRef);

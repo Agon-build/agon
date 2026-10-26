@@ -26,6 +26,10 @@ export type PaymentSettings = {
   off: { all: boolean; budget: boolean; lead: boolean };
   /** Agon routing fee in basis points of the agent price; 0 turns it off. */
   routingFeeBps: number;
+  /** The smallest routing fee, in USDC base units (5% of a sub-cent service earns nothing). */
+  routingFeeMin: bigint;
+  /** Fees collect per wallet and are sent in one transfer once they reach this. */
+  feeTabThreshold: bigint;
   /** Where routing fees go on this network; null means fees are not collected. */
   feeAddress: Address | null;
 };
@@ -131,6 +135,7 @@ export function resolvePaymentSettings(env: Record<string, string | undefined>):
   }
   if (houseAsk !== null && houseFloor !== null && houseFloor > houseAsk) problems.push("AGON_HOUSE_FLOOR must not exceed AGON_HOUSE_ASK");
 
+  const fees = feePolicy(env, problems);
   const offTokens = (env.AGON_PAYMENTS_OFF ?? "").split(",").map((t) => t.trim()).filter(Boolean);
   const off = { all: false, budget: false, lead: false };
   for (const token of offTokens) {
@@ -144,11 +149,24 @@ export function resolvePaymentSettings(env: Record<string, string | undefined>):
   return {
     enabled: true,
     ok: true,
-    settings: { network, publicApiUrl, lead, standin, houseSellers, specialistSellers, leadPrice, subHireBudget, houseAsk, houseFloor, off, routingFeeBps, feeAddress },
+    settings: { network, publicApiUrl, lead, standin, houseSellers, specialistSellers, leadPrice, subHireBudget, houseAsk, houseFloor, off, routingFeeBps, ...fees, feeAddress },
   };
 }
 
-export type OutsideSettings = { network: AgonNetwork; feeAddress: Address | null; routingFeeBps: number };
+/// The fee floor and the fee tab, shared by both runtimes. Each is whole USDC
+/// base units, 0 allowed (0 turns the floor or the tab off), at most 1 USDC.
+function feePolicy(env: Record<string, string | undefined>, problems: string[]): { routingFeeMin: bigint; feeTabThreshold: bigint } {
+  const read = (key: string, fallback: bigint): bigint => {
+    const raw = env[key]?.trim();
+    if (!raw) return fallback;
+    if (/^\d{1,7}$/.test(raw) && BigInt(raw) <= 1_000_000n) return BigInt(raw);
+    problems.push(`${key} must be a whole number of USDC base units from 0 to 1000000`);
+    return fallback;
+  };
+  return { routingFeeMin: read("AGON_ROUTING_FEE_MIN", 10_000n), feeTabThreshold: read("AGON_FEE_TAB_THRESHOLD", 100_000n) };
+}
+
+export type OutsideSettings = { network: AgonNetwork; feeAddress: Address | null; routingFeeBps: number; routingFeeMin: bigint; feeTabThreshold: bigint };
 
 /// The slim Arc mainnet runtime that pays outside (Circle) services. Off unless
 /// AGON_OUTSIDE_ENABLED is exactly true; it shares the routing fee rate.
@@ -167,6 +185,7 @@ export function resolveOutsideSettings(env: Record<string, string | undefined>):
     if (/^0x[0-9a-fA-F]{40}$/.test(rawFee)) feeAddress = rawFee.toLowerCase() as Address;
     else problems.push("AGON_OUTSIDE_FEE_ADDRESS must be a 0x address");
   }
+  const fees = feePolicy(env, problems);
   // Circle refuses a TEST_API key on mainnets, so Arc mainnet wallets need the live keys.
   const liveKey = env.CIRCLE_LIVE_API_KEY?.trim() ?? "";
   if (!liveKey) problems.push("CIRCLE_LIVE_API_KEY is not set (a Circle LIVE_API key)");
@@ -174,5 +193,5 @@ export function resolveOutsideSettings(env: Record<string, string | undefined>):
   if (!env.CIRCLE_LIVE_ENTITY_SECRET?.trim()) problems.push("CIRCLE_LIVE_ENTITY_SECRET is not set");
   if (!env.CIRCLE_LIVE_WALLET_SET_ID?.trim()) problems.push("CIRCLE_LIVE_WALLET_SET_ID is not set");
   if (problems.length > 0) return { enabled: true, ok: false, problems };
-  return { enabled: true, ok: true, settings: { network: agonNetwork("arc"), feeAddress, routingFeeBps } };
+  return { enabled: true, ok: true, settings: { network: agonNetwork("arc"), feeAddress, routingFeeBps, ...fees } };
 }

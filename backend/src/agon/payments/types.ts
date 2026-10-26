@@ -135,4 +135,6 @@ export interface PaymentsStore {
   listJobPayments(rootId: string): Promise<JobPayment[]>;
   /** Payments of one kind still pending and last changed before the cutoff, oldest first. */
   listPendingPayments(kind: JobPaymentKind, updatedBefore: Date, network?: string): Promise<JobPayment[]>;
+  /** Every routing fee a wallet still owes on one network, oldest first: its fee tab. */
+  listOwedFees(payer: Address, network: string): Promise<JobPayment[]>;
 }

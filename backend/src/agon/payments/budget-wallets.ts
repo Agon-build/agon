@@ -16,6 +16,8 @@ export type WalletDeps = {
   store: PaymentsStore; ops: WalletOps; network: AgonNetwork; now: () => Date;
   /** Starting limits for new wallets; the mainnet wallet for outside services starts lower. */
   defaults?: { perHireCap: bigint; dailyCap: bigint };
+  /** Pays the wallet's owed routing fees; a withdrawal runs it first so the tab is never left behind. */
+  settleOwed?: (wallet: BudgetWallet) => Promise<void>;
 };
 
 export const budgetWalletRef = (ownerRef: string) => `budget:${ownerRef}`;
@@ -92,6 +94,8 @@ export async function completeWithdraw(deps: WalletDeps, token: string): Promise
   const ownerRef = ownerRefFromWalletRef(approval.walletRef);
   const wallet = ownerRef ? await deps.store.getBudgetWallet(ownerRef, deps.network.id) : null;
   if (!wallet) return { ok: false, code: "no_wallet" };
+  // A tab that cannot be sent now stays owed and is retried by reconcile; the withdrawal goes ahead.
+  await deps.settleOwed?.(wallet).catch(() => undefined);
   const refId = `agon-withdraw-${token.slice(0, 16)}`;
   const transfer = await deps.ops.transfer({
     walletId: wallet.walletId,

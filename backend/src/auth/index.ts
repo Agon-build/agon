@@ -901,6 +901,7 @@ if (agonPayments) {
     testnetFeeAddress: agonPayments.settings.feeAddress,
     outside: outsideRuntime,
     feeBps: agonPayments.settings.routingFeeBps,
+    feeMin: agonPayments.settings.routingFeeMin,
     callModel: async (p) => ({ text: (await callModel(p)).text }),
     model: stage.settings.classifierModel,
     store: agonPayments.store,

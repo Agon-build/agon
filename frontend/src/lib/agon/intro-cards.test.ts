@@ -13,11 +13,11 @@ test("seven cards, each labelled by what is true today (capabilities.md)", () =>
   assert.equal(INTRO_CARD_MS, 4500);
 });
 
-test("the route example uses a real listed agent's price and the 5% routing fee", () => {
+test("the route example uses a real listed agent's price and the 0.01 minimum routing fee", () => {
   const route = INTRO_CARDS.find((c) => c.id === "route")!;
   assert.ok(route.lines.some((l) => /Scout/.test(l) && /0\.10\b/.test(l)), route.lines.join(" | "));
-  assert.ok(route.lines.some((l) => /routing fee/i.test(l) && /\b5%/.test(l) && /0\.005\b/.test(l)));
-  assert.ok(route.lines.some((l) => /Total/.test(l) && /0\.105\b/.test(l)));
+  assert.ok(route.lines.some((l) => /routing fee/i.test(l) && /0\.01\b/.test(l)));
+  assert.ok(route.lines.some((l) => /Total/.test(l) && /0\.11\b/.test(l)));
 });
 
 test("no card advertises Discover, hidden agents or a count", () => {

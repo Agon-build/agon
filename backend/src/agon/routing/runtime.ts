@@ -60,6 +60,7 @@ export function startRouting(deps: {
   testnetFeeAddress: Address | null;
   outside: { hire: HireService; balanceOf(address: Address): Promise<bigint | null>; feeAddress: Address | null } | null;
   feeBps: number;
+  feeMin?: bigint;
   callModel: ModelCaller;
   model: string;
   store: Pick<PaymentsStore, "latestConfirmation" | "getJob" | "getBudgetWallet">;
@@ -90,6 +91,7 @@ export function startRouting(deps: {
     judge: (text, list) => judgeFit(text, list, deps.callModel, deps.model),
     fill: (entry, text, intent) => fillInput(entry, text, intent, deps.callModel, deps.model),
     feeBps: deps.feeBps,
+    feeMin: deps.feeMin,
     feeAddress: { "arc-testnet": deps.testnetFeeAddress, arc: deps.outside?.feeAddress ?? null },
     leadAsk: deps.leadAsk,
     store: deps.store,

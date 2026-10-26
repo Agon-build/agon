@@ -29,7 +29,7 @@ import { waitForCircleTx } from "./circle-poll.ts";
 import { createCircleExactSettler } from "./exact-seller.ts";
 import { createGuardedSigner } from "./guarded-signer.ts";
 import { refundUndeliveredLeadHires } from "./auto-refund.ts";
-import { completeApprovedHire, confirmHire, quoteHire, reconcileStuckHires, type HireDeps, type HireOutcome, type HireRequest } from "./hire.ts";
+import { completeApprovedHire, confirmHire, quoteHire, reconcileStuckHires, settleFeeTab, type HireDeps, type HireOutcome, type HireRequest } from "./hire.ts";
 import { createPaymentRoutes } from "./routes.ts";
 import { resolveOutsideSettings, resolvePaymentSettings, type PaymentSettings, type WalletHandle } from "./settings.ts";
 import { createStandinRoutes } from "./standin-seller.ts";
@@ -113,6 +113,8 @@ export function startPaymentsRuntime(input: {
       signJson,
       off: { all: s.off.all, budget: s.off.budget },
       feeTxState: getTxState,
+      feeMin: s.routingFeeMin,
+      feeTab: s.feeTabThreshold,
       authorizationUsed: async (authorizer, nonce) =>
         (await client.readContract({ address: network.usdc, abi: AUTHORIZATION_STATE_ABI, functionName: "authorizationState", args: [authorizer, nonce] })) as boolean,
     };
@@ -189,7 +191,7 @@ export function startPaymentsRuntime(input: {
         requestUnfreeze: (ownerRef) => wallets.requestUnfreeze(walletDeps, ownerRef),
         completeUnfreeze: (token) => wallets.completeUnfreeze(walletDeps, token),
         requestWithdraw: (ownerRef, to, amount) => wallets.requestWithdraw(walletDeps, ownerRef, to, amount),
-        completeWithdraw: (token) => wallets.completeWithdraw(walletDeps, token),
+        completeWithdraw: (token) => wallets.completeWithdraw({ ...walletDeps, settleOwed: (w) => settleFeeTab(hireDeps, w, { force: true }) }, token),
       },
     };
 
@@ -269,6 +271,8 @@ export function startOutsideRuntime(input: { env?: Record<string, string | undef
       signJson: (walletId: string, json: string) => signTypedDataJson(walletId, json, network.circleChain),
       off: { all: false, budget: false },
       feeTxState: (id: string) => getTxState(id, network.circleChain),
+      feeMin: resolved.settings.routingFeeMin,
+      feeTab: resolved.settings.feeTabThreshold,
       authorizationUsed: async (authorizer, nonce) =>
         (await client.readContract({ address: network.usdc, abi: AUTHORIZATION_STATE_ABI, functionName: "authorizationState", args: [authorizer, nonce] })) as boolean,
     };
@@ -286,7 +290,7 @@ export function startOutsideRuntime(input: { env?: Record<string, string | undef
         requestUnfreeze: (ownerRef) => wallets.requestUnfreeze(walletDeps, ownerRef),
         completeUnfreeze: (token) => wallets.completeUnfreeze(walletDeps, token),
         requestWithdraw: (ownerRef, to, amount) => wallets.requestWithdraw(walletDeps, ownerRef, to, amount),
-        completeWithdraw: (token) => wallets.completeWithdraw(walletDeps, token),
+        completeWithdraw: (token) => wallets.completeWithdraw({ ...walletDeps, settleOwed: (w) => settleFeeTab(hireDeps, w, { force: true }) }, token),
       },
     };
     if (input.startLoops !== false) {

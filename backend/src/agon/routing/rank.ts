@@ -24,7 +24,7 @@ const offKind = (e: CatalogEntry, intent: Intent) => (intent.kind === "analysis"
 /// service that recently failed after payment goes last.
 /// `fitted` is the model's judgement of which services do the job; without it,
 /// the words decide: one shared word for a one or two word request, two for a longer one.
-export function rankCandidates(entries: CatalogEntry[], intent: Intent, opts: { feeBps: number; downranked: Set<string>; feeBpsFor?: (e: CatalogEntry) => number; fitted?: string[] | null }): { pick: Ranked | null; alternatives: Ranked[] } {
+export function rankCandidates(entries: CatalogEntry[], intent: Intent, opts: { feeBps: number; feeMin?: bigint; downranked: Set<string>; feeBpsFor?: (e: CatalogEntry) => number; fitted?: string[] | null }): { pick: Ranked | null; alternatives: Ranked[] } {
   const words = wordsOf(intent.query);
   const needed = words.length <= 2 ? 1 : 2;
   const fitted = opts.fitted ? new Set(opts.fitted) : null;
@@ -32,7 +32,7 @@ export function rankCandidates(entries: CatalogEntry[], intent: Intent, opts: { 
   if (fitting.length === 0) return { pick: null, alternatives: [] };
   const ranked = fitting
     // No fee address for a network means no fee is charged there, so none is shown.
-    .map((e) => ({ e, fee: feeFor(e.price, opts.feeBpsFor ? opts.feeBpsFor(e) : opts.feeBps), down: opts.downranked.has(e.reference) ? 1 : 0, off: offKind(e, intent) }))
+    .map((e) => ({ e, fee: feeFor(e.price, opts.feeBpsFor ? opts.feeBpsFor(e) : opts.feeBps, opts.feeMin ?? 0n), down: opts.downranked.has(e.reference) ? 1 : 0, off: offKind(e, intent) }))
     .sort((a, b) =>
       a.down - b.down
       || a.off - b.off
