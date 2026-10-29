@@ -381,8 +381,9 @@ Dates are 2026. Status of each item is tracked in capabilities.md.
   open and commit.
 - Send Circle the scan scope: contracts marked in scope in section 7, the
   commit, and this document.
-- Close open owner items: the 0.30 USDC refund owed, the suspended listing,
-  first-party flags for Drift and Scout.
+- Close open owner items: the suspended listing, first-party flags for Drift
+  and Scout. (The 0.30 USDC "refund owed" was job 8d392214: its hire
+  authorization expired unused on 12 October, so nothing was paid.)
 
 ### 28 October to 2 November: first agent upgrade and demo readiness
 
