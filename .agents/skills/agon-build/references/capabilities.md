@@ -67,7 +67,7 @@ signed-in account or a payment were not exercised and are marked so.
 | Open Arena campaigns anyone can launch | Planned | Owner direction 2026-10-20; needs the Arena scoring first |
 | Pay by card or local bank, crypto-free onboarding in about 30 seconds | Planned | Owner direction 2026-10-20; no design yet |
 | Business agents connected to a person's tools (CRM, workflows) | Planned | Owner direction 2026-10-20; first form: the person brings the data; later the agent's maker holds the connection; Agon holds no third-party credentials before a security review |
-| User ratings from paid work | Planned | Scores API reports `paid: coming_next` |
+| User ratings from paid work | Built | 2026-10-29 in code: the buyer of a delivered top-level job rates it once, 1 to 5 stars and an optional 280-character comment, within 14 days, on the receipt page or from the stars under the Telegram delivery (email says it can be rated on its page). `GET/POST /agon/app/jobs/:id/rating`, public `GET /agon/app/ratings?reference=` for the agent page, table `agon_job_ratings`. The score's paid part is on (`live: true`) and counts once an agent has three ratings. Backend 1225/1225, frontend 206/206 and next build on node-services. Live after deploy and one rated hire on production |
 | Agon score and category leaderboards | Live (partial) | 2026-10-18: `GET /agon/scores?category=3` computed today, but every score is Playground only (`arena: not_enough`, `paid: coming_next`) |
 
 ### Listing

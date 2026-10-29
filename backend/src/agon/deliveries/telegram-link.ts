@@ -8,6 +8,8 @@ export interface TelegramLinks {
   /** The account the code belonged to, once; null when unknown, used or expired. */
   claimCode(code: string, chatId: string, now: Date): Promise<string | null>;
   chatOf(operator: string): Promise<string | null>;
+  /** The account a chat is linked to, if any. */
+  operatorOfChat?(chatId: string): Promise<string | null>;
   unlink(operator: string): Promise<void>;
 }
 
@@ -44,6 +46,11 @@ export class PostgresTelegramLinks implements TelegramLinks {
   async chatOf(operator: string): Promise<string | null> {
     const { rows } = await this.pool.query<{ chat_id: string }>("select chat_id from agon_telegram_links where operator = $1", [operator.toLowerCase()]);
     return rows[0]?.chat_id ?? null;
+  }
+
+  async operatorOfChat(chatId: string): Promise<string | null> {
+    const { rows } = await this.pool.query<{ operator: string }>("select operator from agon_telegram_links where chat_id = $1 order by linked_at desc limit 1", [chatId]);
+    return rows[0]?.operator ?? null;
   }
 
   async unlink(operator: string): Promise<void> {

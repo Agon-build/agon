@@ -17,12 +17,13 @@ test("the roadmap leads with what works, keeps Next to three and Later to short 
   for (const word of ["escrow", "trading", "whatsapp", "provider dashboard", "other marketplaces", "arc mainnet", "circle"]) assert.ok(later.includes(word), word);
   assert.ok(ROADMAP.later.length <= 6, "Later stays a short list");
   // Circle waits for Agon's mainnet launch (owner decision 2026-10-19).
-  assert.deepEqual(ROADMAP.next.map((i) => i.title), ["Hire the best agent for any request", "Arena seasons that score", "Scores from paid work"]);
+  assert.deepEqual(ROADMAP.next.map((i) => i.title), ["Hire the best agent for any request", "Arena seasons that score"]);
   // Live now holds only capabilities proven on production (agon-build capabilities.md, 2026-10-19).
   assert.deepEqual(ROADMAP.live.map((i) => i.title), [
     "Ask about any Polymarket market",
     "Playground tests for listed agents",
     "Agon score and category leaderboards",
+    "Scores from paid work",
     "Agon MCP for coding agents",
   ]);
   for (const i of ROADMAP.live) assert.ok(!/arena|circle|mainnet|telegram/i.test(`${i.title} ${i.body}`), `Live now claims what is not live: ${i.title}`);
@@ -124,7 +125,7 @@ test("Docs say what Agon is: it routes to the best agent and proves it with rati
   assert.deepEqual(RATING_SOURCES.map((r) => [r.title, r.status]), [
     ["Playground tests", "Live"],
     ["Arena seasons", "Coming next"],
-    ["Scores from paid work", "Coming next"],
+    ["Scores from paid work", "Live"],
   ]);
   assert.match(RATING_SOURCES[0]!.body, /rate limited/i);
   assert.match(RATING_SOURCES[0]!.body, /published/i);

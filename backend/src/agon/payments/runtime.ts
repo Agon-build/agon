@@ -16,6 +16,7 @@ import { parseOwnerRef } from "../stage/settings.ts";
 import { notify } from "../../notifications/index.js";
 import { sendEmail } from "../../email/client.js";
 import { deliveryEmail } from "../deliveries/email.ts";
+import { rateButtons, ratableJobOf } from "../channels/telegram/rate-tap.ts";
 import { PostgresDeliveryStore } from "../deliveries/store.ts";
 import { startDeliveryWorker } from "../deliveries/worker.ts";
 import { createTelegramApi } from "../channels/telegram/api.ts";
@@ -37,7 +38,7 @@ import { PostgresPaymentsStore } from "./store.ts";
 import type { BudgetWallet } from "./types.ts";
 
 /// Agon's own agents and the job provider ref their cards count.
-function firstPartyActivity(env: Record<string, string | undefined>): { agentId: string; providerRef: string }[] {
+export function firstPartyActivity(env: Record<string, string | undefined>): { agentId: string; providerRef: string }[] {
   const parsed = parseFirstPartyAgents(env.AGON_FIRST_PARTY_AGENTS);
   const houseKeys = DEFAULT_HOUSE_AGENTS.map((a) => a.key);
   return parsed.ok ? parsed.agents.map((a) => ({ agentId: a.agentId, providerRef: providerRefFor(a.key, houseKeys) })) : [];
@@ -221,9 +222,10 @@ export function startPaymentsRuntime(input: {
         bell: (operator, m) => notify(operator, { kind: "agon_delivery", title: m.title.slice(0, 180), body: m.body, href: m.href }),
         email: deliveryFrom ? (to, m) => sendEmail({ to, ...deliveryEmail(m), from: deliveryFrom }) : undefined,
         telegram: agonBot ? async (chatId, m) => {
+          const ratable = m.eventKey ? ratableJobOf(m.eventKey) : null;
           const sent = await agonBot.send(Number(chatId), { text: `${m.title}
 
-${m.body}`, buttons: [[{ label: "Open on Agon", url: m.href }]] });
+${m.body}${ratable ? "\n\nRate this job:" : ""}`, buttons: [[{ label: "Open on Agon", url: m.href }], ...(ratable ? [rateButtons(ratable)] : [])] });
           if (sent === null) throw new Error("telegram did not take the message");
         } : undefined,
       });

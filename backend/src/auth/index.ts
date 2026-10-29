@@ -27,7 +27,10 @@ import { lookup as dnsLookup } from "node:dns/promises";
 import { createOAuthRoutes } from "../agon/mcp-oauth/routes.js";
 import { PostgresOAuthStore } from "../agon/mcp-oauth/store.js";
 import { startSeasonRuntime } from "../agon/playground/seasons/runtime.ts";
-import { startOutsideRuntime, startPaymentsRuntime } from "../agon/payments/runtime.ts";
+import { firstPartyActivity, startOutsideRuntime, startPaymentsRuntime } from "../agon/payments/runtime.ts";
+import { paidAverages, refsForListing } from "../agon/ratings/rules.ts";
+import { createRatings, type Ratings } from "../agon/ratings/service.ts";
+import { PostgresRatingsStore } from "../agon/ratings/store.ts";
 import { approvalsByNetwork, startRouting, type ListingView } from "../agon/routing/runtime.ts";
 import type { Router } from "../agon/routing/router.ts";
 import { PostgresChannelStore } from "../agon/channels/store.ts";
@@ -845,6 +848,14 @@ const stage = resolveStageSettings(process.env);
 for (const problem of stage.problems) console.error(`[stage] ${problem}`);
 const agonPayments = startPaymentsRuntime({ season: agonSeason, blockedProviders: () => stage.settings.providerBlocklist, siteUrl: stage.settings.siteUrl, telegramBotToken: stage.settings.telegram?.botToken ?? null });
 const telegramLinks = new PostgresTelegramLinks(pool);
+// User ratings from paid work: stored per job under the job's provider ref, read into the score's paid part.
+const ratingsStore = new PostgresRatingsStore(pool);
+const firstPartyRefs = firstPartyActivity(process.env);
+const ratingRefsFor = async (reference: string) => {
+  const listing = (await listLiveListings()).find((l) => l.id === reference);
+  return listing ? refsForListing({ agentId: listing.agentId, listingReference: listing.id }, firstPartyRefs) : [reference];
+};
+let agonRatings: Ratings | undefined;
 const channelStore = new PostgresChannelStore(pool);
 const monitorStore = new PostgresMonitorStore(pool);
 let stageServices: StageServices | null = null;
@@ -885,6 +896,8 @@ if (agonPayments) {
       })
     : undefined;
   const leadServices = stageServices;
+  const paymentsStore = agonPayments.store;
+  agonRatings = createRatings({ store: ratingsStore, getJob: (jobId) => paymentsStore.getJob(jobId), refsFor: ratingRefsFor, now: () => new Date() });
   agonRouter = startRouting({
     listListingViews: async () => {
       const page = await agonService.listListings({ limit: 100, cursor: null, category: null, agentId: null, includeManifest: true });
@@ -913,7 +926,7 @@ if (agonPayments) {
     requireAuth, links: telegramLinks, emailOf: (operator) => new PostgresDeliveryStore(pool).emailOf(operator),
     emailOn: Boolean(process.env.AGON_DELIVERY_EMAIL_FROM?.trim()), botUsername: stage.settings.telegram?.botUsername ?? null,
   }));
-  app.route("/agon/app", createAppRoutes({ services: stageServices, requireAuth, off: () => stage.settings.channelsOff.web, terms: custodyTerms, router: agonRouter, outside: outsideServices }));
+  app.route("/agon/app", createAppRoutes({ services: stageServices, requireAuth, off: () => stage.settings.channelsOff.web, terms: custodyTerms, router: agonRouter, outside: outsideServices, ratings: agonRatings }));
   app.route("/agon", createApprovalRoutes({
     gate: { payments: agonPayments.store, channels: channelStore, chatIdPepper: stage.settings.chatIdPepper, network: agonPayments.settings.network, now: () => new Date() },
     hire: approvalsByNetwork(agonPayments.hire, outsideRuntime?.hire ?? null, agonPayments.store),
@@ -932,6 +945,8 @@ if (agonPayments) {
       off: () => stage.settings.channelsOff.telegram,
       log: (m) => console.warn(`[telegram] ${m}`),
       linkDelivery: async (code, chatId) => (await telegramLinks.claimCode(code, chatId, new Date())) !== null,
+      rate: (jobId, stars, refs) => agonRatings!.rate(jobId, refs, stars),
+      operatorOfChat: (chatId) => telegramLinks.operatorOfChat(chatId),
     });
     app.route("/agon/telegram", telegram.routes);
     console.log(`[stage] Telegram channel on @${stage.settings.telegram.botUsername}`);
@@ -1019,8 +1034,15 @@ if (config.agon.ratings.scoresWorkerEnabled) {
       listListed: async () => (await listLiveListings()).map((l) => ({ agentId: l.agentId, listingReference: l.id, categoryId: l.category, firstParty: l.firstParty })),
       tests: agonTestResults,
       seasonRaw: async () => (agonSeason ? agonSeason.store.scoringRaw(agonSeason.season.seasonId) : null),
-      // Buyer scores arrive with the Orders plan; until then the part shows Coming next.
-      paid: { live: false, aggregates: async () => new Map() },
+      // User ratings from paid work, per agent, across the refs its jobs carry.
+      paid: {
+        live: true,
+        aggregates: async (categoryId, since, until) => {
+          const listed = (await listLiveListings()).filter((l) => l.category === categoryId).map((l) => ({ agentId: l.agentId, listingReference: l.id }));
+          const refs = listed.flatMap((l) => refsForListing(l, firstPartyRefs));
+          return paidAverages(listed, firstPartyRefs, await ratingsStore.totals(refs, since, until));
+        },
+      },
       weights: parseWeights(config.agon.ratings.weights),
     },
     log: (message) => console.warn(`[agon-scores] ${message}`),

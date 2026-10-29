@@ -8,6 +8,8 @@ import { LoginButton } from "@/components/pengu/LoginButton";
 import { TagButton } from "@/components/redesign/TagButton";
 import { WINDOW_CHOICES, categoryLabel, changeLabel, evidenceLine, partStatusLabel, runErrorText, scoreLine, testInfo } from "@/lib/agon/rating-view";
 import { getAgentScore, getRemaining, getTests, runTest, type AgentScore, type ScoreRow, type ScoreWindow, type TestRun } from "@/lib/agon/scores-api";
+import { ratedLine } from "@/lib/agon/job-rating-view";
+import { getAgentReviews, type JobRating } from "@/lib/agon/ratings-api";
 
 const PARTS: { key: keyof ScoreRow["parts"]; label: string; weight: string }[] = [
   { key: "paid", label: "Paid jobs", weight: "50%" },
@@ -19,17 +21,19 @@ const PARTS: { key: keyof ScoreRow["parts"]; label: string; weight: string }[] =
 export function AgentRating({ agentId, listingReference, categoryId, manifestBody }: { agentId: string; listingReference: string; categoryId: string; manifestBody?: unknown }) {
   const [score, setScore] = useState<AgentScore | null | undefined>(undefined);
   const [runs, setRuns] = useState<TestRun[]>([]);
+  const [reviews, setReviews] = useState<JobRating[]>([]);
   const [remaining, setRemaining] = useState<number | null>(null);
   const [range, setRange] = useState<ScoreWindow>("all");
   const [state, setState] = useState<{ kind: "idle" | "running" } | { kind: "done"; run: TestRun } | { kind: "error"; text: string; signIn: boolean }>({ kind: "idle" });
   const test = testInfo(categoryId, manifestBody);
 
   const load = useCallback(async () => {
-    const [s, r, left] = await Promise.all([getAgentScore(agentId).catch(() => null), getTests(agentId, 20).catch(() => []), getRemaining(agentId)]);
+    const [s, r, left, rv] = await Promise.all([getAgentScore(agentId).catch(() => null), getTests(agentId, 20).catch(() => []), getRemaining(agentId), getAgentReviews(listingReference).catch(() => [])]);
     setScore(s);
     setRuns(r);
+    setReviews(rv);
     setRemaining(left);
-  }, [agentId]);
+  }, [agentId, listingReference]);
   useEffect(() => { void load(); }, [load]);
 
   async function run() {
@@ -68,7 +72,7 @@ export function AgentRating({ agentId, listingReference, categoryId, manifestBod
 
       <dl className="mt-6 grid gap-px bg-[color:var(--hairline)] sm:grid-cols-3">
         {PARTS.map((p) => {
-          const part = row?.parts[p.key] ?? { value: null, count: 0, atMinimum: false, status: p.key === "paid" ? "coming_next" as const : test || p.key === "arena" ? "not_enough" as const : "no_test" as const };
+          const part = row?.parts[p.key] ?? { value: null, count: 0, atMinimum: false, status: p.key === "paid" ? "not_enough" as const : test || p.key === "arena" ? "not_enough" as const : "no_test" as const };
           return (
             <div key={p.key} className="bg-canvas p-4">
               <dt className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">{p.label}</dt>
@@ -102,6 +106,20 @@ export function AgentRating({ agentId, listingReference, categoryId, manifestBod
           {state.kind === "error" ? <div className="flex flex-wrap items-center gap-3"><p className="font-mono text-[12px] text-ink-2">{state.text}</p>{state.signIn ? <LoginButton /> : null}</div> : null}
         </div>
       </div>
+
+      {reviews.length > 0 ? (
+        <div className="mt-8">
+          <div className="mb-3 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">From people who paid</div>
+          <ul className="divide-y divide-[color:var(--hairline)] border-y border-[color:var(--hairline)]">
+            {reviews.map((r, i) => (
+              <li key={`${r.createdAt}-${i}`} className="py-3">
+                <p className="font-mono text-[11px] text-ink-3">{ratedLine(r.stars, r.createdAt)}</p>
+                {r.comment ? <p className="mt-1 max-w-[70ch] break-words text-sm leading-6 text-ink">{r.comment}</p> : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       <div className="mt-8">
         <div className="mb-3 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">Latest tests</div>

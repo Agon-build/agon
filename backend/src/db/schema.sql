@@ -2611,3 +2611,17 @@ create table if not exists agon_telegram_link_codes (
   expires_at timestamptz not null,
   used_at    timestamptz
 );
+
+-- User ratings from paid work (2026-10-29): the person who paid rates a delivered
+-- job once, 1 to 5 stars and an optional comment. provider_ref is the job's, so a
+-- rating follows the agent that did the work.
+create table if not exists agon_job_ratings (
+  job_id       uuid primary key references agon_jobs(job_id),
+  rater        text not null check (char_length(rater) between 1 and 200),
+  provider_ref text not null check (char_length(provider_ref) between 1 and 600),
+  network      text not null check (network in ('arc-testnet', 'arc')),
+  stars        smallint not null check (stars between 1 and 5),
+  comment      text check (comment is null or char_length(comment) between 1 and 280),
+  created_at   timestamptz not null default now()
+);
+create index if not exists agon_job_ratings_ref_idx on agon_job_ratings(provider_ref, created_at desc);

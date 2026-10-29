@@ -1,7 +1,10 @@
 import type { Hono } from "hono";
 
 import type { StageServices } from "../../stage/services.ts";
-import { telegramOwnerRef, type TelegramSettings } from "../../stage/settings.ts";
+import { hashChatUser, operatorOwnerRef, telegramOwnerRef, type TelegramSettings } from "../../stage/settings.ts";
+import { budgetWalletRef } from "../../payments/budget-wallets.ts";
+import type { RateOutcome } from "../../ratings/service.ts";
+import { RATE_TAP, rateReply } from "./rate-tap.ts";
 import { handleChatMessage, type ConversationDeps } from "../chat/conversation.ts";
 import { createRateLimiter } from "../../stage/rate-limit.ts";
 import type { ChatIntent } from "../chat/intents.ts";
@@ -28,6 +31,10 @@ export function createTelegramChannel(deps: {
   sleep?: (ms: number) => Promise<void>;
   /** Links this chat to the Agon account that made the code (Account, Connect Telegram); true when it did. */
   linkDelivery?: (code: string, chatId: string) => Promise<boolean>;
+  /** Rates a delivered job from the stars under its delivery message. */
+  rate?: (jobId: string, stars: number, raterRefs: string[]) => Promise<RateOutcome>;
+  /** The Agon account this chat is linked to for deliveries, if any. */
+  operatorOfChat?: (chatId: string) => Promise<string | null>;
 }): { routes: Hono; api: TelegramApi } {
   const now = deps.now ?? (() => new Date());
   const perUser = createRateLimiter({ limit: 20, windowMs: 60_000 });
@@ -39,6 +46,14 @@ export function createTelegramChannel(deps: {
     log: deps.log,
     onUpdate: async (u) => {
       if (u.callbackId) await api.answerTap(u.callbackId);
+      const tap = u.kind === "tap" && deps.rate ? RATE_TAP.exec(u.text) : null;
+      if (tap) {
+        // The chat's own wallet, and the web account it is linked to: either may have paid.
+        const operator = deps.operatorOfChat ? await deps.operatorOfChat(String(u.chatId)) : null;
+        const refs = [budgetWalletRef(telegramOwnerRef(hashChatUser(deps.pepper, "telegram", u.userId))), ...(operator ? [budgetWalletRef(operatorOwnerRef(operator))] : [])];
+        await api.send(u.chatId, { text: rateReply(await deps.rate!(tap[1]!.toLowerCase(), Number(tap[2]), refs)) });
+        return;
+      }
       const link = u.kind === "start" && deps.linkDelivery ? LINK_START.exec(u.text) : null;
       if (link) {
         const linked = await deps.linkDelivery!(link[1]!, String(u.chatId));

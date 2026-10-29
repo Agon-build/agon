@@ -10,6 +10,9 @@ import type { AskResult, StageServices, WalletView } from "./services.ts";
 import { operatorOwnerRef } from "./settings.ts";
 import type { Ranked } from "../routing/rank.ts";
 import type { RouteQuote, Router } from "../routing/router.ts";
+import { budgetWalletRef } from "../payments/budget-wallets.ts";
+import type { Rating } from "../ratings/rules.ts";
+import type { Ratings } from "../ratings/service.ts";
 
 const askBody = z.object({ question: z.string().max(2000), maxPrice: z.string().max(32).optional() });
 const confirmBody = z.object({ code: z.string().max(16) });
@@ -19,6 +22,9 @@ const routeDirectBody = z.object({ reference: z.string().trim().min(1).max(600),
 const routeQuoteBody = z.object({ routeId: z.string().max(64), reference: z.string().max(600), input: z.record(z.unknown()).optional() });
 const limitsBody = z.object({ perHire: z.string().max(32).optional(), daily: z.string().max(32).optional() });
 const withdrawBody = z.object({ to: z.string().regex(/^0x[0-9a-fA-F]{40}$/), amount: z.string().max(32) });
+const rateBody = z.object({ stars: z.number().int().min(1).max(5), comment: z.string().max(1000).optional() });
+
+const ratingJson = (r: Rating) => ({ stars: r.stars, comment: r.comment, createdAt: r.createdAt.toISOString() });
 
 const money = (atomic: bigint | null) => (atomic === null ? null : formatUsdc(atomic));
 
@@ -78,6 +84,8 @@ export function createAppRoutes(deps: {
   router?: Router;
   /** The Arc mainnet wallet services for outside routes (?network=arc). */
   outside?: StageServices;
+  /** User ratings from paid work; the routes answer 404 without it. */
+  ratings?: Ratings;
 }): Hono {
   const app = new Hono<{ Variables: { address: string } }>();
   const askLimit = deps.askLimit ?? createRateLimiter({ limit: 10, windowMs: 60_000 });
@@ -102,6 +110,7 @@ export function createAppRoutes(deps: {
   app.use("/terms", deps.requireAuth);
   app.use("/route", deps.requireAuth);
   app.use("/route/*", deps.requireAuth);
+  app.use("/jobs/*", deps.requireAuth);
   const servicesFor = (c: { req: { query(name: string): string | undefined } }) => (c.req.query("network") === "arc" ? deps.outside ?? null : deps.services);
 
   app.get("/terms", async (c) => c.json({ version: CUSTODY_TERMS_VERSION, lines: CUSTODY_TERMS, accepted: await deps.terms.isAccepted(owner(c)) }));
@@ -176,6 +185,29 @@ export function createAppRoutes(deps: {
         ? { ok: true, jobId: out.jobId, amount: formatUsdc(out.amount), txHash: out.txHash, result: out.result ?? null }
         : { ok: false, code: out.code, ...(out.jobId ? { jobId: out.jobId } : {}), ...(out.detail ? { detail: out.detail } : {}) },
     );
+  });
+
+  // The newest rated jobs with a comment, for an agent's page. Public, like the agent page.
+  app.get("/ratings", async (c) => {
+    if (!deps.ratings) return c.json({ error: "ratings_off" }, 404);
+    const reference = (c.req.query("reference") ?? "").trim();
+    if (!reference || reference.length > 600) return c.json({ error: "validation_failed", message: "Pass the listing reference." }, 400);
+    return c.json({ items: (await deps.ratings.recentFor(reference)).map(ratingJson) });
+  });
+
+  // Only the person who paid may rate, once, within 14 days of delivery.
+  app.get("/jobs/:jobId/rating", async (c) => {
+    if (!deps.ratings) return c.json({ error: "ratings_off" }, 404);
+    const status = await deps.ratings.status(c.req.param("jobId"), [budgetWalletRef(owner(c))]);
+    return c.json(status.canRate ? { canRate: true } : { canRate: false, reason: status.reason, ...(status.rating ? { rating: ratingJson(status.rating) } : {}) });
+  });
+
+  app.post("/jobs/:jobId/rating", async (c) => {
+    if (!deps.ratings) return c.json({ error: "ratings_off" }, 404);
+    const body = rateBody.safeParse(await readJson(c));
+    if (!body.success) return c.json({ error: "invalid_body" }, 400);
+    const out = await deps.ratings.rate(c.req.param("jobId"), [budgetWalletRef(owner(c))], body.data.stars, body.data.comment);
+    return out.ok ? c.json({ ok: true, rating: ratingJson(out.rating) }) : c.json({ ok: false, reason: out.reason }, out.reason === "not_found" ? 404 : 409);
   });
 
   // Paged: one extra row tells whether an older page exists.
