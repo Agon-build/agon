@@ -310,7 +310,7 @@ test("the model's fit decides across categories, and its none means none", async
   const picked = await build(["circle:ratings"]).route("op:x", "Give me analyst ratings for AAPL");
   assert.ok(picked.kind === "pick");
   assert.equal(picked.pick.reference, "circle:ratings", "a FINANCIAL_ANALYSIS service answers a request read as research");
-  assert.ok(queries[0]!.includes("CREATIVE") && queries[0]!.includes("FINANCIAL_ANALYSIS"), "sources are searched across every category");
+  assert.ok(queries[0]!.includes("INFERENCE") && queries[0]!.includes("FINANCIAL_ANALYSIS"), "sources are searched across every category");
   assert.equal((await build([]).route("op:x", "Give me analyst ratings for AAPL")).kind, "none");
   const fallback = await build(null).route("op:x", "Give me analyst ratings for AAPL");
   assert.ok(fallback.kind === "pick" && fallback.pick.reference === "circle:ratings", "without the model the word scores still find it");

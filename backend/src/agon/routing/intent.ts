@@ -1,25 +1,24 @@
 import { z } from "zod";
 
 import type { ModelCaller } from "../playground/seasons/house-agents.ts";
+import { HIRE_CATEGORIES } from "./categories.ts";
 
-export const INTENT_KINDS = ["forecast", "research", "market_data", "analysis", "social", "content", "infrastructure", "other"] as const;
+export const INTENT_KINDS = ["forecast", "research", "market_data", "analysis", "social", "content", "infrastructure", "business", "other"] as const;
 export type IntentKind = (typeof INTENT_KINDS)[number];
 export type Intent = { kind: IntentKind; query: string; values: Record<string, string> };
 
 export const ALL_AGON = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
-export const ALL_CIRCLE = ["WEB_SEARCH_RESEARCH", "DATA_ENRICHMENT", "FINANCIAL_ANALYSIS", "PREDICTION_MARKETS", "SOCIAL_INTELLIGENCE", "CREATIVE", "INFRASTRUCTURE"];
+export const ALL_CIRCLE = [...new Set(HIRE_CATEGORIES.flatMap((c) => c.circleCategories))];
 
-/// Which categories serve each kind of task, in Agon's ids and Circle's names.
-export const KIND_SOURCES: Record<IntentKind, { agonCategories: string[]; circleCategories: string[] }> = {
-  forecast: { agonCategories: ["3", "4"], circleCategories: ["PREDICTION_MARKETS"] },
-  research: { agonCategories: ["1"], circleCategories: ["WEB_SEARCH_RESEARCH", "DATA_ENRICHMENT"] },
-  market_data: { agonCategories: ["2"], circleCategories: ["FINANCIAL_ANALYSIS"] },
-  analysis: { agonCategories: ["3"], circleCategories: ["FINANCIAL_ANALYSIS"] },
-  social: { agonCategories: ["1"], circleCategories: ["SOCIAL_INTELLIGENCE"] },
-  content: { agonCategories: ["6"], circleCategories: ["CREATIVE"] },
-  infrastructure: { agonCategories: ["7"], circleCategories: ["INFRASTRUCTURE"] },
-  other: { agonCategories: ALL_AGON, circleCategories: ALL_CIRCLE },
-};
+/// Which categories serve each kind of task, in Agon's ids and Circle's names,
+/// taken from the Hire categories that kind belongs to. "other" searches everything.
+export const KIND_SOURCES: Record<IntentKind, { agonCategories: string[]; circleCategories: string[] }> = Object.fromEntries(
+  INTENT_KINDS.map((kind) => {
+    if (kind === "other") return [kind, { agonCategories: ALL_AGON, circleCategories: ALL_CIRCLE }];
+    const cats = HIRE_CATEGORIES.filter((c) => c.kinds.includes(kind));
+    return [kind, { agonCategories: [...new Set(cats.flatMap((c) => c.agonCategories))], circleCategories: [...new Set(cats.flatMap((c) => c.circleCategories))] }];
+  }),
+) as Record<IntentKind, { agonCategories: string[]; circleCategories: string[] }>;
 
 // A question about how likely something is. It wins over market-check words, so a
 // forecast never leaves the Lead because it also mentions rules or volume.
@@ -53,6 +52,7 @@ async function readWithModel(text: string, callModel: ModelCaller, model: string
         "You route requests to paid agent services. Classify the request and extract search words and values. " +
         `kind is one of: ${INTENT_KINDS.join(", ")}. forecast means the request asks how likely a future event is. ` +
         "analysis means it asks about a market or asset itself, such as whether a market is worth trading, its liquidity or its rules. " +
+        "business means office and sales work, such as CRM, company or contact lookup, lead enrichment, email, SMS, documents or scheduling. " +
         'Answer with JSON only: {"kind": "...", "query": "<3 to 8 search words>", "values": {"<name>": "<value the person gave, such as a ticker, URL, address or date>"}}.',
       userPrompt: text.slice(0, 600),
       maxTokens: 300,

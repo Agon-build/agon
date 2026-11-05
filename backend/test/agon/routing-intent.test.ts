@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { INTENT_KINDS, KIND_SOURCES, kindFromWords, readIntent } from "../../src/agon/routing/intent.ts";
+import { ALL_CIRCLE, INTENT_KINDS, KIND_SOURCES, kindFromWords, readIntent } from "../../src/agon/routing/intent.ts";
 
 test("code reads market checks and chances before the model does", () => {
   assert.equal(kindFromWords("Is this Polymarket market worth trading? polymarket.com/event/fed-cut"), "analysis");
@@ -41,6 +41,11 @@ test("every kind maps to at least one source category", () => {
     const s = KIND_SOURCES[kind];
     assert.ok(s.agonCategories.length + s.circleCategories.length > 0, kind);
   }
-  assert.deepEqual(KIND_SOURCES.forecast.circleCategories, ["PREDICTION_MARKETS"]);
+  assert.deepEqual(KIND_SOURCES.forecast.circleCategories, ["FINANCIAL_ANALYSIS"]);
   assert.ok(KIND_SOURCES.other.circleCategories.includes("FINANCIAL_ANALYSIS"));
+  assert.deepEqual(KIND_SOURCES.business.circleCategories, ["DATA_ENRICHMENT", "COMMUNICATION"]);
+});
+
+test("Circle's category names are the ones its live catalog uses (read 2026-11-05)", () => {
+  assert.deepEqual([...ALL_CIRCLE].sort(), ["COMMUNICATION", "DATA_ENRICHMENT", "FINANCIAL_ANALYSIS", "INFERENCE", "INFRASTRUCTURE", "MAPS_WEATHER", "SOCIAL_INTELLIGENCE", "WEB_SEARCH_RESEARCH"]);
 });
