@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { CategoryGrid } from "@/components/stage/CategoryGrid";
+import { CategorySelect } from "@/components/stage/CategorySelect";
 import { ChoiceList } from "@/components/stage/ChoiceList";
 import { Composer } from "@/components/stage/Composer";
 import { PhaseRail } from "@/components/stage/PhaseRail";
@@ -246,7 +246,7 @@ export function HireClient() {
             {mode.kind === "idle" || mode.kind === "quoting" ? (
               <div className="mt-10"><Composer disabled={mode.kind === "quoting"} signedIn={canAct} onSubmit={(q, max) => void ask(q, max)} agentName={agentRef ? (agentName ?? "this agent") : null} /></div>
             ) : null}
-            {(mode.kind === "idle" || mode.kind === "quoting") && !agentRef ? <CategoryGrid categories={categories} disabled={mode.kind === "quoting" || !canAct} onPick={(id) => browse(id)} /> : null}
+            {(mode.kind === "idle" || mode.kind === "quoting") && !agentRef ? <CategorySelect categories={categories} disabled={mode.kind === "quoting" || !canAct} onPick={(id) => browse(id)} /> : null}
             {mode.kind === "refused" && !shortOf && mode.code !== "terms_required" ? (
               <div role="alert" className="stage-print mt-8 border-y border-[color:var(--hairline-strong)] py-6">
                 <p className="text-base leading-7 text-ink">{askRefusalText(mode.code, mode.amount)}</p>
