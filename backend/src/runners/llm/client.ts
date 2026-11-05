@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { envModelMap, remapModel } from "./model-map.js";
+import { anthropicRequest } from "./anthropic-request.js";
 import { config } from "../../config/index.js";
 import { query } from "../../db/pool.js";
 import { bedrockSender, callBedrock, modelFamily, type BedrockSend } from "./bedrock.js";
@@ -270,15 +271,8 @@ async function callModelOnce(params: CallParams): Promise<CallResult> {
       // Server-side tools (code_execution, web_search) are typed loosely by
       // the SDK's union shape. The runtime accepts the {type, name} object
       // form directly; cast keeps the call site readable.
-      const response = await provider.client.messages.create({
-        model,
-        max_tokens: params.maxTokens,
-        temperature: params.temperature,
-        system: params.systemPrompt,
-        messages: [{ role: "user", content: params.userPrompt }],
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ...(params.tools && params.tools.length > 0 ? { tools: params.tools as any } : {}),
-      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const response = await provider.client.messages.create(anthropicRequest(params, model) as any);
       const latencyMs = Date.now() - t0;
 
       const text = response.content
