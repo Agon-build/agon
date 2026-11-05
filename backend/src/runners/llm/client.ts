@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { envModelMap, remapModel } from "./model-map.js";
 import { config } from "../../config/index.js";
 import { query } from "../../db/pool.js";
 import { bedrockSender, callBedrock, modelFamily, type BedrockSend } from "./bedrock.js";
@@ -201,6 +202,9 @@ export async function callModel(params: CallParams): Promise<CallResult> {
     if (spent >= cap) throw new DailyKillError(spent, cap);
   }
 
+  // LLM_MODEL_MAP moves calls to another provider during an outage (see model-map.ts).
+  const map = envModelMap();
+  params = { ...params, model: remapModel(map, params.model), ...(params.fallbackModel ? { fallbackModel: remapModel(map, params.fallbackModel) } : {}) };
   try {
     return await callModelOnce(params);
   } catch (err) {
@@ -211,7 +215,7 @@ export async function callModel(params: CallParams): Promise<CallResult> {
     // is never retried. The fallback runs its own provider/breaker path, so a
     // different family (OpenRouter) can pick it up when Anthropic is down.
     // Prefer the caller's ranked per-tier fallback; else the global default.
-    const fb = params.fallbackModel || config.llm.fallbackModel;
+    const fb = params.fallbackModel || (config.llm.fallbackModel ? remapModel(map, config.llm.fallbackModel) : undefined);
     if (err instanceof DailyKillError || !fb || fb === params.model) throw err;
     console.warn(
       `llm: model ${params.model} failed everywhere (${err instanceof Error ? err.message : err}); retrying with fallback ${fb}`,
