@@ -1,4 +1,4 @@
-import { matchCount, type CatalogEntry, type RouteQuery, type RouteSource } from "./catalog.ts";
+import { matchCount, type CatalogEntry, type Proof, type RouteQuery, type RouteSource } from "./catalog.ts";
 
 /// The fields of an Agon listing the router needs, read from the indexed market.
 export type AgonListingLite = {
@@ -22,11 +22,12 @@ const NOT_ROUTED = [/\/agon\/agents\/lead\//, /\/agon\/agents\/house\//];
 
 export function createAgonSource(deps: {
   listListings: () => Promise<AgonListingLite[]>;
-  scoreFor: (agentId: string) => Promise<number | null>;
+  proofFor: (agentId: string) => Promise<Proof | null>;
 }): RouteSource & { entryFor(reference: string): Promise<CatalogEntry | null> } {
   let healthy = true;
   const entryOf = async (l: AgonListingLite): Promise<CatalogEntry> => {
-    const score = l.verified ? await deps.scoreFor(l.agentId).catch(() => null) : null;
+    const proof = l.verified ? await deps.proofFor(l.agentId).catch(() => null) : null;
+    const score = proof?.score ?? null;
     return {
       name: l.name, description: l.description, provider: "Agon", tags: [],
       source: "agon",
@@ -38,7 +39,7 @@ export function createAgonSource(deps: {
       price: l.priceAtomic,
       payTo: null,
       network: "arc-testnet",
-      rating: { tier: !l.verified ? "listed" : score === null ? "verified" : "scored", score },
+      rating: { tier: !l.verified ? "listed" : score === null ? "verified" : "scored", score, proof },
       latencyMs: l.latencyMs,
     };
   };

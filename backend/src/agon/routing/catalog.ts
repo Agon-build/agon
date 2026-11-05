@@ -1,5 +1,15 @@
 import type { Address } from "viem";
 
+/// One part of the Agon score (Playground, Arena or paid work), as the scores service reports it.
+export type ProofPart = { value: number | null; count: number; status: "rated" | "not_enough" | "coming_next" | "no_test" };
+/// The Agon score of one agent and the three parts behind it, over all time.
+export type Proof = { score: number | null; playground: ProofPart; arena: ProofPart; paid: ProofPart };
+
+/// Whether any part has enough results to count. Only such agents are ranked on Hire.
+export function hasRatedPart(p: Proof | null): boolean {
+  return Boolean(p && (p.playground.status === "rated" || p.arena.status === "rated" || p.paid.status === "rated"));
+}
+
 /// One hireable service, from any source, in the shape the router ranks.
 export type CatalogEntry = {
   source: "agon" | "circle";
@@ -15,7 +25,8 @@ export type CatalogEntry = {
   /** Known from the catalog for outside services; for Agon listings it comes from the live 402 at quote time. */
   payTo: Address | null;
   network: "arc-testnet" | "arc";
-  rating: { tier: "scored" | "verified" | "listed" | "unrated"; score: number | null };
+  /** proof is the Agon evidence for its own listings; outside services never carry it. */
+  rating: { tier: "scored" | "verified" | "listed" | "unrated"; score: number | null; proof?: Proof | null };
   latencyMs: number | null;
   tags: string[];
 };

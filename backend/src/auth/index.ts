@@ -32,6 +32,7 @@ import { paidAverages, refsForListing } from "../agon/ratings/rules.ts";
 import { createRatings, type Ratings } from "../agon/ratings/service.ts";
 import { PostgresRatingsStore } from "../agon/ratings/store.ts";
 import { approvalsByNetwork, startRouting, type ListingView } from "../agon/routing/runtime.ts";
+import type { Proof, ProofPart } from "../agon/routing/catalog.ts";
 import type { Router } from "../agon/routing/router.ts";
 import { PostgresChannelStore } from "../agon/channels/store.ts";
 import { createApprovalRoutes } from "../agon/stage/approval-routes.ts";
@@ -903,11 +904,16 @@ if (agonPayments) {
       const page = await agonService.listListings({ limit: 100, cursor: null, category: null, agentId: null, includeManifest: true });
       return page.ok ? (page.value.items as unknown as ListingView[]) : [];
     },
-    scoreFor: async (agentId) => {
+    // The all-time Agon score and its three parts, as the scores route reports them.
+    proofFor: async (agentId) => {
       const res = await agonScoresRoutes.request(`/${encodeURIComponent(agentId)}`);
       if (!res.ok) return null;
-      const body = (await res.json()) as { windows?: { all?: { score?: number | null } | null } };
-      return body.windows?.all?.score ?? null;
+      const body = (await res.json()) as { windows?: { all?: { score?: number | null; parts?: Partial<Proof> } | null } };
+      const all = body.windows?.all;
+      const parts = all?.parts;
+      if (!all || !parts?.playground || !parts.arena || !parts.paid) return null;
+      const part = (p: ProofPart): ProofPart => ({ value: p.value ?? null, count: p.count ?? 0, status: p.status });
+      return { score: all.score ?? null, playground: part(parts.playground), arena: part(parts.arena), paid: part(parts.paid) };
     },
     testnet: agonPayments.hire,
     testnetBalanceOf: agonPayments.balanceOf,

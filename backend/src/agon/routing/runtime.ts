@@ -8,6 +8,7 @@ import type { ModelCaller } from "../playground/seasons/house-agents.ts";
 import { parseUsdc } from "../stage/money.ts";
 import type { AskResult } from "../stage/services.ts";
 import { createAgonSource, type AgonListingLite } from "./agon-source.ts";
+import type { Proof } from "./catalog.ts";
 import { createCircleSource } from "./circle-source.ts";
 import { fillInput } from "./fill-input.ts";
 import { judgeFit } from "./fit.ts";
@@ -54,7 +55,7 @@ function namedInputs(schema: { properties?: unknown; required?: unknown } | unde
 /// runtime per network.
 export function startRouting(deps: {
   listListingViews: () => Promise<ListingView[]>;
-  scoreFor: (agentId: string) => Promise<number | null>;
+  proofFor: (agentId: string) => Promise<Proof | null>;
   testnet: HireService;
   testnetBalanceOf: (address: Address) => Promise<bigint | null>;
   testnetFeeAddress: Address | null;
@@ -77,7 +78,7 @@ export function startRouting(deps: {
       cache = { at: Date.now(), rows };
       return rows;
     },
-    scoreFor: deps.scoreFor,
+    proofFor: deps.proofFor,
   });
   const circle = createCircleSource();
   if (deps.startLoops !== false) {
