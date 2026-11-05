@@ -1,15 +1,17 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { TagButton } from "@/components/redesign/TagButton";
 import { ratedLine, refusalText, starsLabel } from "@/lib/agon/job-rating-view";
 import { COMMENT_MAX, getJobRating, rateJob, type RatingStatus } from "@/lib/agon/ratings-api";
 
 /// Under a delivered job's receipt: the person who paid rates it once, 1 to 5 stars.
-/// Hidden for anyone else and for jobs that cannot be rated.
-export function RatePanel({ jobId, agent }: { jobId: string; agent: string | null }) {
+/// Hidden for anyone else and for jobs that cannot be rated. `initialStars` comes from a rating
+/// link; it only picks the stars, the person still saves. The page scrolls here on #rate.
+export function RatePanel({ jobId, agent, initialStars = 0 }: { jobId: string; agent: string | null; initialStars?: number }) {
   const [status, setStatus] = useState<RatingStatus | null>(null);
-  const [stars, setStars] = useState(0);
+  const [stars, setStars] = useState(initialStars);
+  const ref = useRef<HTMLElement | null>(null);
   const [comment, setComment] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,6 +21,10 @@ export function RatePanel({ jobId, agent }: { jobId: string; agent: string | nul
     getJobRating(jobId).then((s) => { if (live) setStatus(s); }).catch(() => { if (live) setStatus(null); });
     return () => { live = false; };
   }, [jobId]);
+
+  useEffect(() => {
+    if (status && typeof window !== "undefined" && window.location.hash === "#rate") ref.current?.scrollIntoView({ block: "start" });
+  }, [status]);
 
   async function send() {
     if (stars < 1) return;
@@ -38,7 +44,7 @@ export function RatePanel({ jobId, agent }: { jobId: string; agent: string | nul
   if (!status.canRate) {
     if (status.rating) {
       return (
-        <section aria-labelledby="rate-heading" className="mt-12 border-t border-[color:var(--hairline-strong)] pt-6">
+        <section ref={ref} id="rate" aria-labelledby="rate-heading" className="mt-12 scroll-mt-24 border-t border-[color:var(--hairline-strong)] pt-6">
           <h2 id="rate-heading" className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Your rating</h2>
           <p className="mt-3 font-mono text-[13px] text-ink">{ratedLine(status.rating.stars, status.rating.createdAt)}</p>
           {status.rating.comment ? <p className="mt-2 max-w-[60ch] text-sm leading-6 text-ink-2">{status.rating.comment}</p> : null}
@@ -46,11 +52,11 @@ export function RatePanel({ jobId, agent }: { jobId: string; agent: string | nul
       );
     }
     const text = refusalText(status.reason);
-    return text ? <p className="mt-12 border-t border-[color:var(--hairline-strong)] pt-6 text-sm text-ink-3">{text}</p> : null;
+    return text ? <p id="rate" className="mt-12 scroll-mt-24 border-t border-[color:var(--hairline-strong)] pt-6 text-sm text-ink-3">{text}</p> : null;
   }
 
   return (
-    <section aria-labelledby="rate-heading" className="mt-12 border-t border-[color:var(--hairline-strong)] pt-6">
+    <section ref={ref} id="rate" aria-labelledby="rate-heading" className="mt-12 scroll-mt-24 border-t border-[color:var(--hairline-strong)] pt-6">
       <h2 id="rate-heading" className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Rate this job</h2>
       <p className="mt-3 text-sm text-ink-2">How well did {agent ?? "the agent"} do the job?</p>
       <div role="radiogroup" aria-label="Stars" className="mt-4 flex flex-wrap gap-2">

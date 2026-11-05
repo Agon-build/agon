@@ -16,6 +16,7 @@ import { parseOwnerRef } from "../stage/settings.ts";
 import { notify } from "../../notifications/index.js";
 import { sendEmail } from "../../email/client.js";
 import { deliveryEmail } from "../deliveries/email.ts";
+import { bellDelivery } from "../deliveries/rate-links.ts";
 import { rateButtons, ratableJobOf } from "../channels/telegram/rate-tap.ts";
 import { PostgresDeliveryStore } from "../deliveries/store.ts";
 import { startDeliveryWorker } from "../deliveries/worker.ts";
@@ -219,7 +220,7 @@ export function startPaymentsRuntime(input: {
       const agonBot = input.telegramBotToken ? createTelegramApi({ token: input.telegramBotToken, log: (m) => console.warn(`[deliveries] ${m}`) }) : null;
       startDeliveryWorker({
         store: new PostgresDeliveryStore(pool), siteUrl: input.siteUrl, now: () => new Date(), log: (m) => console.log(`[deliveries] ${m}`),
-        bell: (operator, m) => notify(operator, { kind: "agon_delivery", title: m.title.slice(0, 180), body: m.body, href: m.href }),
+        bell: (operator, m) => { const b = bellDelivery(m); return notify(operator, { kind: "agon_delivery", title: b.title.slice(0, 180), body: b.body, href: b.href }); },
         email: deliveryFrom ? (to, m) => sendEmail({ to, ...deliveryEmail(m), from: deliveryFrom }) : undefined,
         telegram: agonBot ? async (chatId, m) => {
           const ratable = m.eventKey ? ratableJobOf(m.eventKey) : null;

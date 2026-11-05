@@ -137,3 +137,18 @@ test("MCP provider draft returns a stable draft and pre-publication checks", asy
     }
   }
 });
+
+test("MCP search lists a listing's named inputs as what it accepts, and falls back to its tags", async () => {
+  const withInputs = { ...listing, manifest: { ...listing.manifest, body: { ...listing.manifest.body, invocation: { ...listing.manifest.body.invocation, requestSchema: { type: "object", properties: { market: { type: "string", description: "a Polymarket market link, slug or condition id" }, note: { type: "string" } }, required: ["market"] } } } } };
+  const adapter = createMcpAccessAdapter({
+    async listListings() { return { ok: true, value: { items: [withInputs, listing], nextCursor: null } }; },
+    async getListing() { return { ok: true, value: withInputs }; },
+    async prepareX402Call() { throw new Error("not used"); },
+  } as never);
+  const found = await adapter.searchServices({});
+  assert.equal(found.ok, true);
+  if (found.ok) {
+    assert.deepEqual(found.value.services[0]?.accepts, ["market: a Polymarket market link, slug or condition id", "note"]);
+    assert.deepEqual(found.value.services[1]?.accepts, ["crm"]);
+  }
+});

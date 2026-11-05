@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 
 import { RatePanel } from "@/components/stage/RatePanel";
 import { RunView } from "@/components/stage/RunView";
@@ -8,11 +8,13 @@ import { StageShell } from "@/components/stage/StageShell";
 import { StatusMark } from "@/components/stage/StatusMark";
 import { TxLink } from "@/components/stage/TxLink";
 import { useLiveJob } from "@/components/stage/useLiveJob";
+import { starsFromLink } from "@/lib/agon/job-rating-view";
 import { flattenPayments } from "@/lib/agon/stage-view";
 
 export function ReceiptClient() {
   const params = useParams<{ job: string }>();
   const jobId = typeof params?.job === "string" ? params.job : null;
+  const linkStars = starsFromLink(useSearchParams()?.get("rate") ?? null);
   const { live, error } = useLiveJob(jobId, { active: false, intervalMs: 1500 });
   const [copied, setCopied] = useState(false);
   const rows = flattenPayments(live?.receipt ?? null);
@@ -39,7 +41,7 @@ export function ReceiptClient() {
               </div>
             </header>
             <div className="mt-10"><RunView live={live} /></div>
-            {live.phase === "answered" && !live.preview ? <RatePanel jobId={live.jobId} agent={live.receipt?.label ?? null} /> : null}
+            {live.phase === "answered" && !live.preview ? <RatePanel jobId={live.jobId} agent={live.receipt?.label ?? null} initialStars={linkStars} /> : null}
             <section aria-labelledby="payments-heading" className="mt-16">
               <h2 id="payments-heading" className="border-b border-[color:var(--hairline-strong)] pb-3 font-mono text-[10px] uppercase tracking-[0.16em] text-accent">All payments</h2>
               {rows.length === 0 ? <p className="py-6 text-sm text-ink-3">No payments yet.</p> : (

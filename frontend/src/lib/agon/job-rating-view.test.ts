@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { ratedLine, refusalText, starsLabel } from "./job-rating-view.ts";
+import { ratedLine, refusalText, starsFromLink, starsLabel } from "./job-rating-view.ts";
 
 test("the rating panel speaks only when a rating is closed, and states a rating plainly", () => {
   assert.equal(refusalText("too_late"), "Ratings close 14 days after delivery.");
@@ -9,4 +9,10 @@ test("the rating panel speaks only when a rating is closed, and states a rating 
   assert.equal(starsLabel(4), "4 of 5");
   assert.equal(ratedLine(4, "2026-10-29T12:00:00Z", "en-GB"), "Rated 4 of 5 on 29 Oct");
   assert.equal(ratedLine(2, "not a date"), "Rated 2 of 5");
+});
+
+test("stars from a rating link are 1 to 5, anything else picks none", () => {
+  assert.equal(starsFromLink("4"), 4);
+  assert.equal(starsFromLink("1"), 1);
+  for (const v of [null, "", "0", "6", "3.5", "abc", " 5"]) assert.equal(starsFromLink(v), 0);
 });

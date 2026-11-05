@@ -84,6 +84,12 @@ export function ctaButton(label: string, href: string): string {
   </tr></table>`;
 }
 
+/// Five star links in a row, each opening the job page with that many stars picked.
+export function starLinks(hrefFor: (stars: number) => string): string {
+  const cells = [1, 2, 3, 4, 5].map((n) => `<td style="padding-right:8px;"><a href="${esc(hrefFor(n))}" style="display:inline-block;min-width:44px;padding:11px 0;text-align:center;border:1px solid ${C.hairline};font-family:${C.mono};font-size:14px;color:${C.ink};text-decoration:none;">${n} &#9733;</a></td>`).join("");
+  return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:14px;"><tr>${cells}</tr></table>`;
+}
+
 /// The sign-in code. The code, in Geist Mono, is the hero of the message.
 export function otpEmailTemplate(code: string): BuiltEmail {
   const bodyHtml = `

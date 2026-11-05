@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 import { Composer } from "@/components/stage/Composer";
 import { PhaseRail } from "@/components/stage/PhaseRail";
+import { RatePanel } from "@/components/stage/RatePanel";
 import { QuoteCard } from "@/components/stage/QuoteCard";
 import { RouteCard } from "@/components/stage/RouteCard";
 import { RunView } from "@/components/stage/RunView";
@@ -280,6 +281,7 @@ export function HireClient() {
         {mode.kind === "run" ? (
           <div className="mt-14">
             {shown ? <RunView live={shown} /> : <p className="text-sm text-ink-3">{liveError ? "Agon could not load this job." : "Loading the job."}</p>}
+            {live && live.phase === "answered" && !live.preview ? <RatePanel jobId={live.jobId} agent={live.receipt?.label ?? null} /> : null}
             {live ? (
               <div className="mt-12 flex flex-wrap gap-4 border-t border-[color:var(--hairline-strong)] pt-6">
                 <a href={`/r/${live.jobId}`} className="inline-flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.14em] text-ink hover:text-accent">Open the receipt →</a>

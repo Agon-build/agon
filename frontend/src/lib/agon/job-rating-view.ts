@@ -15,3 +15,8 @@ export function ratedLine(stars: number, createdAt: string, locale?: string): st
   const day = Number.isNaN(d.getTime()) ? "" : ` on ${d.toLocaleDateString(locale ?? "en-GB", { day: "numeric", month: "short" })}`;
   return `Rated ${starsLabel(stars)}${day}`;
 }
+
+/// The stars a rating link picks (the `rate` query value from a delivery email), or 0 for none.
+export function starsFromLink(value: string | null): number {
+  return value && /^[1-5]$/.test(value) ? Number(value) : 0;
+}

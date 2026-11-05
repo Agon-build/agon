@@ -30,6 +30,17 @@ function number(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
+/// The named inputs a listing asks for, as "name: description", or null when it declares none.
+function inputsOf(invocation: Record<string, unknown>): string[] | null {
+  const schema = invocation.requestSchema && typeof invocation.requestSchema === "object" ? invocation.requestSchema as Record<string, unknown> : {};
+  const props = schema.properties && typeof schema.properties === "object" && !Array.isArray(schema.properties) ? schema.properties as Record<string, unknown> : {};
+  const out = Object.entries(props).slice(0, 32).map(([name, v]) => {
+    const d = v && typeof v === "object" ? (v as Record<string, unknown>).description : undefined;
+    return typeof d === "string" && d.trim() ? `${name}: ${d.trim()}`.slice(0, 200) : name;
+  }).filter((x) => x.trim());
+  return out.length ? out : null;
+}
+
 function toServiceReference(listing: AgonListingView): ServiceReference {
   const body = listing.manifest.body && typeof listing.manifest.body === "object" ? listing.manifest.body as Record<string, unknown> : {};
   const service = body.service && typeof body.service === "object" ? body.service as Record<string, unknown> : body;
@@ -52,7 +63,7 @@ function toServiceReference(listing: AgonListingView): ServiceReference {
     availability,
     verification,
     privacy: text((invocation.privacy as Record<string, unknown> | undefined)?.description, "See provider terms"),
-    accepts: tags.length ? tags : [endpoint ? "structured request" : "service input"],
+    accepts: inputsOf(invocation) ?? (tags.length ? tags : [endpoint ? "structured request" : "service input"]),
     returns: ["service result"],
   });
 }

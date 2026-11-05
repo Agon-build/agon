@@ -25,7 +25,7 @@ export type DeliveryDeps = {
   store: DeliveryStore;
   siteUrl: string;
   now: () => Date;
-  bell: (operator: string, m: DeliveryMessage) => Promise<void>;
+  bell: (operator: string, m: DeliveryMessage & { eventKey?: string }) => Promise<void>;
   /** Present only when a delivery sender address is set. */
   email?: (to: string, m: DeliveryMessage & { eventKey?: string }) => Promise<void>;
   /** Present only when the AGON bot is set up; rejects when Telegram did not take the message. */
