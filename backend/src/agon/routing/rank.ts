@@ -1,4 +1,5 @@
-import { matchCount, wordsOf, type CatalogEntry } from "./catalog.ts";
+import { hasRatedPart, matchCount, wordsOf, type CatalogEntry } from "./catalog.ts";
+import { circleFits, type HireCategoryId } from "./categories.ts";
 import { formatUsdc } from "../payments/bargain.ts";
 import { feeFor } from "./fee.ts";
 import { kindFromWords, type Intent } from "./intent.ts";
@@ -42,4 +43,48 @@ export function rankCandidates(entries: CatalogEntry[], intent: Intent, opts: { 
   const minPrice = ranked.reduce((m, r) => (r.e.price < m ? r.e.price : m), ranked[0]!.e.price);
   const out: Ranked[] = ranked.slice(0, 4).map(({ e, fee }) => ({ ...e, fee, total: e.price + fee, reason: reasonFor(e, e.price === minPrice && ranked.length > 1) }));
   return { pick: out[0]!, alternatives: out.slice(1) };
+}
+
+export type Group = "ranked" | "new" | "outside";
+export type Choice = Ranked & { group: Group };
+export type Groups = { ranked: Choice[]; fresh: Choice[]; outside: Choice[] };
+export type GroupOptions = { feeBps: number; feeMin?: bigint; downranked: Set<string>; feeBpsFor?: (e: CatalogEntry) => number; fitted?: string[] | null; category: HireCategoryId };
+
+/// Shown per group on Hire before the person asks for no more.
+export const GROUP_MAX = 12;
+/// Two Agon scores this close are treated as equal, so the lower total decides.
+export const SCORE_TIE = 2;
+const OUTSIDE_REASON = "Outside market, not ranked by Agon";
+
+/// The person's choices for one request, in three groups. Agon agents with proof
+/// are ranked by their Agon score (close scores by total, then speed). Agon agents
+/// without proof yet are new, by total. Outside services are never ranked: they
+/// must belong to the category and are sorted by total. A service that recently
+/// failed after payment goes last in its group.
+export function groupCandidates(entries: CatalogEntry[], intent: Intent, opts: GroupOptions): Groups {
+  const words = wordsOf(intent.query);
+  const needed = words.length <= 2 ? 1 : 2;
+  const fitted = opts.fitted ? new Set(opts.fitted) : null;
+  const fitting = fitted ? entries.filter((e) => fitted.has(e.reference)) : words.length === 0 ? [] : entries.filter((e) => matchCount(e, words) >= needed);
+  const priced = fitting.map((e) => {
+    const fee = feeFor(e.price, opts.feeBpsFor ? opts.feeBpsFor(e) : opts.feeBps, opts.feeMin ?? 0n);
+    return { e, fee, total: e.price + fee, down: opts.downranked.has(e.reference) ? 1 : 0 };
+  });
+  type P = (typeof priced)[number];
+  const byTotal = (a: P, b: P) => (a.total < b.total ? -1 : a.total > b.total ? 1 : 0) || (a.e.latencyMs ?? Number.MAX_SAFE_INTEGER) - (b.e.latencyMs ?? Number.MAX_SAFE_INTEGER);
+  const score = (p: P) => p.e.rating.proof?.score ?? p.e.rating.score ?? 0;
+  const byScore = (a: P, b: P) => (Math.abs(score(a) - score(b)) <= SCORE_TIE ? byTotal(a, b) : score(b) - score(a));
+  const done = (list: P[], group: Group, sort: (a: P, b: P) => number): Choice[] => {
+    const minPrice = list.reduce((m, r) => (r.e.price < m ? r.e.price : m), list[0]?.e.price ?? 0n);
+    return list
+      .sort((a, b) => a.down - b.down || sort(a, b))
+      .slice(0, GROUP_MAX)
+      .map(({ e, fee, total }) => ({ ...e, fee, total, group, reason: group === "outside" ? OUTSIDE_REASON : reasonFor(e, e.price === minPrice && list.length > 1) }));
+  };
+  const agon = priced.filter((p) => p.e.source === "agon");
+  return {
+    ranked: done(agon.filter((p) => hasRatedPart(p.e.rating.proof ?? null)), "ranked", byScore),
+    fresh: done(agon.filter((p) => !hasRatedPart(p.e.rating.proof ?? null)), "new", byTotal),
+    outside: done(priced.filter((p) => p.e.source !== "agon" && circleFits(opts.category, p.e)), "outside", (a, b) => offKind(a.e, intent) - offKind(b.e, intent) || byTotal(a, b)),
+  };
 }
