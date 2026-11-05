@@ -315,8 +315,11 @@ async function routeTask(deps: ConversationDeps, ownerRef: string, text: string)
     await deps.reply.send({ text: circleDown ? "Nothing on Agon fits this request, and Circle's marketplace could not be reached just now. Try again in a few minutes." : "Nothing on Agon or Circle fits this request yet. Try describing it differently." });
     return;
   }
+  // Chat never asks for choices; a choices result cannot reach here.
+  if (routed.kind === "choices") return;
   const pick = routed.pick;
   const q = await router.quote(ownerRef, routed.routeId, pick.reference);
+  if (q.ok && "lead" in q) return sendLeadQuote(deps, deps.services, ownerRef, text.slice(0, 300), q.lead);
   if (!q.ok) {
     if (q.code === "missing_input" && "question" in q) {
       await deps.reply.send({ text: `${pick.name} can do this. ${q.question} Send your request again with that included.` });

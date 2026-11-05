@@ -100,6 +100,7 @@ export function startRouting(deps: {
     approvalUrl: deps.approvalUrl,
     newWalletAllowed: deps.newWalletAllowed,
     directEntry: (reference) => agon.entryFor(reference),
+    leadEntry: () => agon.leadEntry(),
     safeDestination: (url) => assertPublicHttpsDestination(url).then(() => true, () => false),
   });
 }

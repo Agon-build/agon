@@ -246,3 +246,31 @@ test("final I1: a failed routed quote never echoes the raw network error", async
   const out = (await (await call("/route/quote", { body: { routeId: "r1", reference: PICK.reference } })).json()) as Record<string, unknown>;
   assert.deepEqual(out, { ok: false, code: "network_error" });
 });
+
+test("the web route asks for choices in a category, returns three groups, refuses a bad category, and lists categories without sign-in", async () => {
+  const seen: unknown[] = [];
+  const choice = { source: "circle", reference: "circle:sms", name: "Send SMS", provider: "P", category: "COMMUNICATION", description: "SMS", url: "https://sms.example", method: "POST", inputSchema: null, price: 10_000n, payTo: null, network: "arc", rating: { tier: "unrated", score: null }, latencyMs: null, tags: [], fee: 10_000n, total: 20_000n, reason: "Outside market, not ranked by Agon", group: "outside" };
+  const router = {
+    ...fakeRouter([]),
+    route: async (_o: string, _t: string, opts: unknown) => { seen.push(opts); return { kind: "choices", routeId: "r1", category: "business", groups: { ranked: [], fresh: [], outside: [choice] }, sources: [{ id: "circle", status: "ok" }] }; },
+    categories: async () => [{ id: "prediction", label: "Prediction markets", agon: 2, outside: 0 }],
+  } as unknown as Router;
+  const { call } = setup({ router });
+  const body = (await (await call("/route", { body: { request: "send a text message to my phone", category: "business" } })).json()) as { kind: string; groups: { outside: { group: string; total: string }[] } };
+  assert.equal(body.kind, "choices");
+  assert.deepEqual([body.groups.outside[0]!.group, body.groups.outside[0]!.total], ["outside", "0.02"]);
+  assert.deepEqual(seen[0], { choices: true, category: "business" });
+  assert.equal((await call("/route", { body: { request: "send a text message to my phone", category: "nope" } })).status, 400);
+  const cats = await call("/categories", { as: null });
+  assert.equal(cats.status, 200);
+  assert.deepEqual(await cats.json(), { items: [{ id: "prediction", label: "Prediction markets", agon: 2, outside: 0 }] });
+});
+
+test("a category with nothing typed is browsed, and a request with neither is refused", async () => {
+  const seen: string[] = [];
+  const router = { ...fakeRouter([]), browse: async (_o: string, cat: string) => { seen.push(cat); return { kind: "choices", routeId: "r2", category: cat, groups: { ranked: [], fresh: [], outside: [] }, sources: [] }; } } as unknown as Router;
+  const { call } = setup({ router });
+  const out = (await (await call("/route", { body: { category: "creative" } })).json()) as { kind: string; category: string };
+  assert.deepEqual([out.kind, out.category, seen[0]], ["choices", "creative", "creative"]);
+  assert.equal((await call("/route", { body: {} })).status, 400);
+});

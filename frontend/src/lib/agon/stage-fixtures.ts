@@ -1,4 +1,4 @@
-import type { RouteResponse, AskResponse, LeaderboardResponse, LiveView, RatingCell, RatingsResponse, SeasonEntry, SeasonInfo, SeasonRoundSummary, StageConfig, StageEvent, StageWallet, ApprovalView } from "./stage-types.ts";
+import type { HireCategory, HireCategoryId, RouteResponse, AskResponse, LeaderboardResponse, LiveView, RatingCell, RatingsResponse, SeasonEntry, SeasonInfo, SeasonRoundSummary, StageConfig, StageEvent, StageWallet, ApprovalView } from "./stage-types.ts";
 
 /// Labelled preview data for design review (NEXT_PUBLIC_AGON_PREVIEW_FIXTURES=1).
 /// Every object carries preview: true and the UI shows PREVIEW DATA; none of it
@@ -136,4 +136,36 @@ export function previewRouteQuote(reference: string): AskResponse {
     network: p.network === "arc" ? "Arc" : "Arc Testnet", testnet: p.network !== "arc", expiresAt: new Date(Date.now() + 300_000).toISOString(), code: "4821",
     input: p.source === "circle" ? { symbol: "AAPL" } : { market: "arsenal-epl" }, source: p.source, reason: p.reason,
   };
+}
+
+/// Example figures for the Hire choices preview: one ranked Agon agent, one new, one outside.
+const part = (status: "rated" | "not_enough" | "coming_next", value: number | null = null, count = 0) => ({ value, count, status });
+const PREVIEW_LEAD = {
+  source: "agon" as const, reference: "5042002:0xf017:1", name: "Agon Lead Agent", provider: "Agon", category: "3", description: "Buys market data, hires the best forecaster and gives you a forecast",
+  method: "POST" as const, network: "arc-testnet" as const, reason: "Verified on Agon, score 78", price: "0.30", fee: "0.015", total: "0.315", group: "ranked" as const,
+  rating: { tier: "scored" as const, score: 78, proof: { score: 78, playground: part("rated", 81, 12), arena: part("rated", 70, 40), paid: part("rated", 92, 4) } },
+};
+const PREVIEW_NEW = { ...PREVIEW_ALT, reference: "5042002:0xf017:7", name: "Rules check", description: "Reads the resolution rules and flags dispute risk", rating: { tier: "verified" as const, score: null, proof: null }, reason: "Verified on Agon, not scored yet", group: "new" as const };
+const PREVIEW_OUTSIDE = { ...PREVIEW_PICK, reference: "circle:https://odds.example/polymarket", name: "Polymarket odds", description: "Live odds for any Polymarket market", reason: "Outside market, not ranked by Agon", group: "outside" as const };
+
+export function previewChoices(request: string, category?: HireCategoryId): RouteResponse {
+  const cat = category ?? (/btc|bitcoin|chance|will |polymarket|market/i.test(request) ? "prediction" : "research");
+  if (cat === "creative") return { kind: "choices", routeId: "preview-route", category: cat, groups: { ranked: [], fresh: [], outside: [] }, sources: [{ id: "agon", status: "ok" }, { id: "circle", status: "ok" }] };
+  return {
+    kind: "choices", routeId: "preview-route", category: cat,
+    groups: cat === "prediction" ? { ranked: [PREVIEW_LEAD, { ...PREVIEW_ALT, group: "ranked" as const, rating: { tier: "scored" as const, score: 82, proof: { score: 82, playground: part("rated", 85, 9), arena: part("coming_next"), paid: part("not_enough", null, 2) } } }], fresh: [PREVIEW_NEW], outside: [PREVIEW_OUTSIDE] } : { ranked: [], fresh: [], outside: [{ ...PREVIEW_PICK, group: "outside" as const, reason: "Outside market, not ranked by Agon" }] },
+    sources: [{ id: "agon", status: "ok" }, { id: "circle", status: "ok" }],
+  };
+}
+
+export function previewCategories(): HireCategory[] {
+  return [
+    { id: "prediction", label: "Prediction markets", agon: 6, outside: 4 },
+    { id: "research", label: "Research and web search", agon: 0, outside: 575 },
+    { id: "market_data", label: "Market and crypto data", agon: 0, outside: 159 },
+    { id: "social", label: "News and social", agon: 0, outside: 985 },
+    { id: "creative", label: "Images and creative", agon: 0, outside: 0 },
+    { id: "developer", label: "Developer tools and infrastructure", agon: 0, outside: 179 },
+    { id: "business", label: "Business and office tools", agon: 0, outside: 289 },
+  ];
 }

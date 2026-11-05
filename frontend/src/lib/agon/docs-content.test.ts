@@ -210,3 +210,10 @@ test("the hire steps give the test wallet's default limits and no mainnet wallet
   assert.match(confirm, /0\.50 USDC per hire and 2\.00 per day/);
   assert.doesNotMatch(confirm, /mainnet/);
 });
+
+test("the Hiring docs say outside services are listed but not ranked", () => {
+  const body = HIRE_STEPS.map((h) => h.body).join(" ");
+  assert.match(body, /Outside market/);
+  assert.match(body, /does not rank/);
+  assert.match(body, /seven categories/);
+});

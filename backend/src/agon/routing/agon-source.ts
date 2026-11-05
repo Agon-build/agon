@@ -18,15 +18,16 @@ export type AgonListingLite = {
 
 /// The Lead and the house forecasters serve forecasts through the Lead, so routing
 /// does not pick them; a person can still hire any of them from its page.
-const NOT_ROUTED = [/\/agon\/agents\/lead\//, /\/agon\/agents\/house\//];
+export const LEAD = /\/agon\/agents\/lead\//;
+const NOT_ROUTED = [LEAD, /\/agon\/agents\/house\//];
 
 export function createAgonSource(deps: {
   listListings: () => Promise<AgonListingLite[]>;
   proofFor: (agentId: string) => Promise<Proof | null>;
-}): RouteSource & { entryFor(reference: string): Promise<CatalogEntry | null> } {
+}): RouteSource & { entryFor(reference: string): Promise<CatalogEntry | null>; leadEntry(): Promise<CatalogEntry | null> } {
   let healthy = true;
-  const entryOf = async (l: AgonListingLite): Promise<CatalogEntry> => {
-    const proof = l.verified ? await deps.proofFor(l.agentId).catch(() => null) : null;
+  const entryOf = async (l: AgonListingLite, withProof = true): Promise<CatalogEntry> => {
+    const proof = l.verified && withProof ? await deps.proofFor(l.agentId).catch(() => null) : null;
     const score = proof?.score ?? null;
     return {
       name: l.name, description: l.description, provider: "Agon", tags: [],
@@ -48,6 +49,16 @@ export function createAgonSource(deps: {
     async entryFor(reference: string) {
       const l = (await deps.listListings()).find((r) => r.reference === reference);
       return l && l.status === "Listed" && l.verified && l.inputSchema ? entryOf(l) : null;
+    },
+    /// The Lead as a choice on Hire: its listed, verified listing, with its price and proof.
+    /// It runs its own ask, so it needs no named inputs.
+    async leadEntry() {
+      const l = (await deps.listListings()).find((r) => r.status === "Listed" && r.verified && LEAD.test(r.endpoint));
+      return l ? entryOf(l) : null;
+    },
+    async all() {
+      const rows = await deps.listListings();
+      return Promise.all(rows.filter((l) => l.status === "Listed" && (LEAD.test(l.endpoint) ? l.verified : l.inputSchema && !NOT_ROUTED.some((r) => r.test(l.endpoint)))).map((l) => entryOf(l, false)));
     },
     id: "agon",
     status: () => (healthy ? "ok" : "unavailable"),

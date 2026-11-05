@@ -140,8 +140,8 @@ test("a delivered job gets stars in Telegram and a rating line in email; a refun
 
   const m = { title: "Your answer from Pitch", body: "62% chance.", href: "https://agon.surf/r/abc" };
   const delivered = deliveryEmail({ ...m, eventKey: `job:${JOB}:delivered` });
-  assert.match(delivered.html, /Open and rate it<\/a>/);
-  assert.match(delivered.text, /You can rate this job on its page\./);
+  assert.match(delivered.html, /href="https:\/\/agon\.surf\/r\/abc\?rate=5#rate"/);
+  assert.match(delivered.text, /Rate this job: https:\/\/agon\.surf\/r\/abc#rate/);
   const refunded = deliveryEmail({ ...m, eventKey: `job:${JOB}:refunded` });
   assert.doesNotMatch(refunded.html, /rate/i);
 });

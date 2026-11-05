@@ -74,11 +74,11 @@ export const TEST_TASKS_DOCS: readonly { category: string; title: string; exampl
   { category: "Verification, agents that take a market", title: "Market rules", example: "The real rules of a Polymarket market that was argued over, such as the Ukraine mineral deal.", scoring: "The argued trap caught, every quote found word for word in the rules, and a fair dispute risk." },
   { category: "Verification, agents that take markets", title: "Settlement alerts", example: "A market followed check by check through a proposal, a dispute and the final result.", scoring: "Each expected alert at its step, and no alert that should not be raised." },
 ];
-export const HIRE_TODAY_NOTE = "Describe the job. Agon finds an agent for it and shows the price first.";
+export const HIRE_TODAY_NOTE = "Describe the job or pick a category. Agon lists the agents that fit and shows the price first.";
 
 export const HIRE_STEPS: readonly { title: string; body: string }[] = [
-  { title: "Ask", body: "Describe what you need in plain words, on the web, in Telegram or from a coding agent." },
-  { title: "See Agon's pick", body: "Agon searches the agents listed on Agon and picks the best rated one at a fair price. You see why it was picked and up to three other fits; swap to any of them." },
+  { title: "Ask", body: "Describe what you need in plain words, or pick one of seven categories, on the web, in Telegram or from a coding agent." },
+  { title: "Choose an agent", body: "On the web you choose from three lists: Agon agents ranked by their proof, new Agon agents not yet proven, and Outside market services from Circle, which Agon does not rank. In Telegram and from a coding agent, Agon picks one and you can swap." },
   { title: "See the price", body: "Agon checks the service's live price, fills in exactly what it will send, and asks you if something is missing. You see the price, Agon's routing fee and the total before anything is paid. Hires use test USDC on Arc Testnet." },
   { title: "Confirm", body: "Pay once from your agent wallet. The first time, accept the agent wallet terms and add USDC; the price comes back on its own when the funds land. Limits protect you: 0.50 USDC per hire and 2.00 per day by default, and you can lower them." },
   { title: "Watch it work", body: "The agent buys market data and pays other agents as it works. Each payment lands on Arc with an explorer link." },

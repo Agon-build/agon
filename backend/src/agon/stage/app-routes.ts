@@ -17,7 +17,9 @@ import type { Ratings } from "../ratings/service.ts";
 const askBody = z.object({ question: z.string().max(2000), maxPrice: z.string().max(32).optional() });
 const confirmBody = z.object({ code: z.string().max(16) });
 const termsBody = z.object({ version: z.string().max(64) });
-const routeBody = z.object({ request: z.string().trim().min(8).max(600) });
+const HIRE_CATEGORY = z.enum(["prediction", "research", "market_data", "social", "creative", "developer", "business"]);
+// A request, or a category to browse with nothing typed.
+const routeBody = z.object({ request: z.string().trim().min(8).max(600).optional(), category: HIRE_CATEGORY.optional() }).refine((b) => b.request !== undefined || b.category !== undefined);
 const routeDirectBody = z.object({ reference: z.string().trim().min(1).max(600), request: z.string().trim().min(3).max(600) });
 const routeQuoteBody = z.object({ routeId: z.string().max(64), reference: z.string().max(600), input: z.record(z.unknown()).optional() });
 const limitsBody = z.object({ perHire: z.string().max(32).optional(), daily: z.string().max(32).optional() });
@@ -36,8 +38,9 @@ export function walletJson(w: WalletView) {
   };
 }
 
-export function rankedJson(r: Ranked) {
+export function rankedJson(r: Ranked & { group?: string }) {
   return {
+    ...(r.group ? { group: r.group } : {}),
     source: r.source, reference: r.reference, name: r.name, provider: r.provider, category: r.category, description: r.description,
     method: r.method, network: r.network, rating: r.rating, reason: r.reason,
     price: formatUsdc(r.price), fee: formatUsdc(r.fee), total: formatUsdc(r.total),
@@ -45,6 +48,8 @@ export function rankedJson(r: Ranked) {
 }
 
 export function routeQuoteJson(q: RouteQuote) {
+  // The Lead was chosen: its own quote, in the Lead ask shape.
+  if (q.ok && "lead" in q) return { kind: "lead" as const, ...askJson(q.lead) };
   if (!q.ok) {
     const out: Record<string, unknown> = { ok: false, code: q.code };
     if ("question" in q) Object.assign(out, { question: q.question, missing: q.missing });
@@ -90,6 +95,14 @@ export function createAppRoutes(deps: {
   const app = new Hono<{ Variables: { address: string } }>();
   const askLimit = deps.askLimit ?? createRateLimiter({ limit: 10, windowMs: 60_000 });
   const owner = (c: { get(key: "address"): string }) => operatorOwnerRef(c.get("address"));
+
+  // Public: the Hire categories with how many services each holds now (null when a source is down).
+  let categoriesCache: { at: number; items: unknown } | null = null;
+  app.get("/categories", async (c) => {
+    if (!deps.router) return c.json({ error: "web_off" }, 503);
+    if (!categoriesCache || Date.now() - categoriesCache.at > 60_000) categoriesCache = { at: Date.now(), items: await deps.router.categories() };
+    return c.json({ items: categoriesCache.items });
+  });
 
   app.get("/config", async (c) => {
     const price = await deps.services.leadPrice().catch(() => null);
@@ -147,7 +160,13 @@ export function createAppRoutes(deps: {
     if (!body.success) return c.json({ error: "invalid_body" }, 400);
     if (!askLimit(c.get("address"))) return c.json({ error: "rate_limited" }, 429);
     if (!(await deps.terms.isAccepted(owner(c)))) return c.json({ ok: false, code: "terms_required" });
-    const out = await deps.router.route(owner(c), body.data.request);
+    // The web lists choices; the person picks one, and only then is anything quoted.
+    const out = body.data.request === undefined
+      ? await deps.router.browse(owner(c), body.data.category!)
+      : await deps.router.route(owner(c), body.data.request, { choices: true, ...(body.data.category ? { category: body.data.category } : {}) });
+    if (out.kind === "choices") {
+      return c.json({ kind: "choices", routeId: out.routeId, category: out.category, groups: { ranked: out.groups.ranked.map(rankedJson), fresh: out.groups.fresh.map(rankedJson), outside: out.groups.outside.map(rankedJson) }, sources: out.sources });
+    }
     if (out.kind === "lead") return c.json(out.ask ? { kind: "lead", ...askJson(out.ask) } : { kind: "lead" });
     if (out.kind === "none") return c.json({ kind: "none", sources: out.sources });
     return c.json({ kind: "pick", routeId: out.routeId, pick: rankedJson(out.pick), alternatives: out.alternatives.map(rankedJson), sources: out.sources });

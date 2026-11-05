@@ -7,7 +7,7 @@ import type { RoutePick } from "@/lib/agon/stage-types";
 
 /// Agon's pick for a request, with the other fits to swap to. Asking for the
 /// exact price checks the service's live terms and fills its input.
-export function RouteCard({ pick, alternatives, question, missing, busy, note, onSwap, onQuote, onCancel }: {
+export function RouteCard({ pick, alternatives, question, missing, busy, note, onSwap, onQuote, onCancel, heading = "Agon's pick", cancelLabel = "Cancel" }: {
   pick: RoutePick;
   alternatives: RoutePick[];
   question: string | null;
@@ -17,6 +17,8 @@ export function RouteCard({ pick, alternatives, question, missing, busy, note, o
   onSwap: (p: RoutePick) => void;
   onQuote: (answers?: Record<string, string>) => void;
   onCancel: () => void;
+  heading?: string;
+  cancelLabel?: string;
 }) {
   const [answer, setAnswer] = useState("");
   const field = missing[0] ?? null;
@@ -25,7 +27,7 @@ export function RouteCard({ pick, alternatives, question, missing, busy, note, o
   const submit = () => onQuote(field && answer.trim() ? { [field]: answer.trim() } : undefined);
   return (
     <section aria-labelledby="route-heading" className="stage-print border border-[color:var(--hairline-strong)] bg-canvas-2 p-5 sm:p-7">
-      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Agon's pick</p>
+      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">{heading}</p>
       <h2 id="route-heading" className="mt-3 break-words font-display text-2xl uppercase leading-tight tracking-[-.02em] text-ink sm:text-3xl">{pick.name}</h2>
       <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.12em] text-ink-2">{sourceLabel(pick)}</p>
       {pick.description ? <p className="mt-4 text-sm leading-6 text-ink-2">{pick.description}</p> : null}
@@ -54,7 +56,7 @@ export function RouteCard({ pick, alternatives, question, missing, busy, note, o
 
       <div className="mt-7 flex flex-wrap items-center gap-3">
         <TagButton onClick={submit} disabled={busy || (Boolean(field) && !answer.trim())}>{busy ? "Checking" : "Get the exact price"}</TagButton>
-        <TagButton variant="ghost" onClick={onCancel} disabled={busy}>Cancel</TagButton>
+        <TagButton variant="ghost" onClick={onCancel} disabled={busy}>{cancelLabel}</TagButton>
       </div>
 
       {alternatives.length > 0 ? (

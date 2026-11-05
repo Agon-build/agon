@@ -10,7 +10,8 @@ import { wordsOf, type CatalogEntry, type RouteSource } from "./catalog.ts";
 import { cleanGiven, type fillInput } from "./fill-input.ts";
 import { shortlist } from "./fit.ts";
 import { ALL_AGON, ALL_CIRCLE, type Intent } from "./intent.ts";
-import { rankCandidates, type Ranked } from "./rank.ts";
+import { groupCandidates, rankCandidates, type Groups, type Ranked } from "./rank.ts";
+import { categoryForKind, circleFits, HIRE_CATEGORIES, hireCategory, type HireCategoryId } from "./categories.ts";
 
 type NetworkId = "arc-testnet" | "arc";
 
@@ -25,7 +26,8 @@ export type RouteRuntime = {
 export type RouteResult =
   | { kind: "lead"; ask?: AskResult }
   | { kind: "pick"; routeId: string; intent: Intent; pick: Ranked; alternatives: Ranked[]; sources: { id: string; status: "ok" | "unavailable" }[] }
-  | { kind: "none"; sources: { id: string; status: "ok" | "unavailable" }[] };
+  | { kind: "none"; sources: { id: string; status: "ok" | "unavailable" }[] }
+  | { kind: "choices"; routeId: string; category: HireCategoryId; groups: Groups; sources: { id: string; status: "ok" | "unavailable" }[] };
 
 export type RouteQuote =
   | {
@@ -33,6 +35,7 @@ export type RouteQuote =
       network: string; testnet: boolean; expiresAt: Date; code?: string; approvalUrl?: string; input: Record<string, unknown>;
       source: "agon" | "circle"; reason: string;
     }
+  | { ok: true; lead: AskResult }
   | { ok: false; code: "missing_input"; question: string; missing: string[] }
   | { ok: false; code: "insufficient_balance"; amount: bigint; depositAddress: Address; network: NetworkId }
   | { ok: false; code: string; detail?: string };
@@ -68,12 +71,14 @@ export function createRouter(deps: {
   approvalUrl: (token: string) => string;
   /** One Agon listing a person chose themselves (listed, verified, with named inputs), or null. */
   directEntry?: (reference: string) => Promise<CatalogEntry | null>;
+  /** The Lead as a choice in Prediction markets; choosing it runs leadAsk. */
+  leadEntry?: () => Promise<CatalogEntry | null>;
   now?: () => Date;
   newId?: () => string;
 }) {
   const now = deps.now ?? (() => new Date());
   // A direct route is one the person picked themselves; it carries no routing fee.
-  const routes = new Map<string, { ownerRef: string; text: string; intent: Intent; entries: Ranked[]; expiresAt: number; direct?: boolean }>();
+  const routes = new Map<string, { ownerRef: string; text: string; intent: Intent; entries: Ranked[]; expiresAt: number; direct?: boolean; lead?: string; browse?: boolean }>();
   const down = new Map<string, number>();
   const downranked = () => {
     const t = now().getTime();
@@ -94,8 +99,28 @@ export function createRouter(deps: {
 
   return {
     /// quoteLead false is for discovery: a forecast names the Lead without creating a quote.
-    async route(ownerRef: string, text: string, opts: { quoteLead?: boolean } = {}): Promise<RouteResult> {
+    /// choices is the web's Hire: three groups in one category for the person to choose
+    /// from, the Lead included as a card, and nothing quoted until they choose.
+    async route(ownerRef: string, text: string, opts: { quoteLead?: boolean; choices?: boolean; category?: HireCategoryId } = {}): Promise<RouteResult> {
       const intent = await deps.readIntent(text);
+      if (opts.choices) {
+        const category = opts.category ?? categoryForKind(intent.kind);
+        const cat = hireCategory(category);
+        const query = { words: wordsOf(`${intent.query} ${text}`), agonCategories: [...cat.agonCategories], circleCategories: [...cat.circleCategories] };
+        const found = await Promise.all(deps.sources.map((s) => s.search(query).catch(() => [] as CatalogEntry[])));
+        const sources = deps.sources.map((s) => ({ id: s.id, status: s.status() }));
+        const lead = category === "prediction" && deps.leadEntry ? await deps.leadEntry().catch(() => null) : null;
+        const list = shortlist(found.flat(), intent, text);
+        const fitted = deps.judge ? await deps.judge(text, list).catch(() => null) : null;
+        const groups = groupCandidates(lead ? [lead, ...list] : list, intent, {
+          feeBps: deps.feeBps, feeMin: deps.feeMin, downranked: downranked(), feeBpsFor: (e) => (deps.feeAddress[e.network] ? deps.feeBps : 0), fitted, category,
+          always: lead && intent.kind === "forecast" ? [lead.reference] : [],
+        });
+        const routeId = (deps.newId ?? randomUUID)();
+        keepRoom(ownerRef);
+        routes.set(routeId, { ownerRef, text, intent, entries: [...groups.ranked, ...groups.fresh, ...groups.outside], expiresAt: now().getTime() + ROUTE_TTL_MS, ...(lead ? { lead: lead.reference } : {}) });
+        return { kind: "choices", routeId, category, groups, sources };
+      }
       if (intent.kind === "forecast") return opts.quoteLead === false ? { kind: "lead" } : { kind: "lead", ask: await deps.leadAsk(ownerRef, text) };
       // Every category is searched: a request read as research may be served by a finance service.
       const query = { words: wordsOf(`${intent.query} ${text}`), agonCategories: ALL_AGON, circleCategories: ALL_CIRCLE };
@@ -111,8 +136,44 @@ export function createRouter(deps: {
       return { kind: "pick", routeId, intent, pick: ranked.pick, alternatives: ranked.alternatives, sources };
     },
 
+    /// Everything in one category, with no request typed: every Agon agent in it (the Lead
+    /// in Prediction markets) and every outside service that belongs, in the three groups.
+    async browse(ownerRef: string, category: HireCategoryId): Promise<Extract<RouteResult, { kind: "choices" }>> {
+      const cat = hireCategory(category);
+      const sources = deps.sources.map((s) => ({ id: s.id, status: s.status() }));
+      const found = await Promise.all(deps.sources.map((s) => (s.all ? s.all().catch(() => [] as CatalogEntry[]) : Promise.resolve([] as CatalogEntry[]))));
+      const lead = category === "prediction" && deps.leadEntry ? await deps.leadEntry().catch(() => null) : null;
+      const inCategory = found.flat().filter((e) => e.source !== "agon" || (cat.agonCategories.includes(e.category) && !/\/agon\/agents\/lead\//.test(e.url)));
+      const withProof = await Promise.all(inCategory.map(async (e) => (e.source === "agon" && deps.directEntry ? (await deps.directEntry(e.reference).catch(() => null)) ?? e : e)));
+      const list = lead ? [lead, ...withProof] : withProof;
+      const intent: Intent = { kind: "other", query: "", values: {} };
+      const groups = groupCandidates(list, intent, {
+        feeBps: deps.feeBps, feeMin: deps.feeMin, downranked: downranked(), feeBpsFor: (e) => (deps.feeAddress[e.network] ? deps.feeBps : 0), category, always: list.map((e) => e.reference),
+      });
+      const routeId = (deps.newId ?? randomUUID)();
+      keepRoom(ownerRef);
+      routes.set(routeId, { ownerRef, text: cat.label, intent, entries: [...groups.ranked, ...groups.fresh, ...groups.outside], expiresAt: now().getTime() + ROUTE_TTL_MS, browse: true, ...(lead ? { lead: lead.reference } : {}) });
+      return { kind: "choices", routeId, category, groups, sources };
+    },
+
+    /// How many services each Hire category holds now: Agon agents (the Lead counts in
+    /// Prediction markets) and outside services. A source that is down counts as null.
+    async categories(): Promise<{ id: HireCategoryId; label: string; agon: number | null; outside: number | null }[]> {
+      const read = async (id: string) => {
+        const s = deps.sources.find((x) => x.id === id);
+        if (!s?.all || s.status() !== "ok") return null;
+        return s.all().catch(() => null);
+      };
+      const [agon, outside] = await Promise.all([read("agon"), read("circle")]);
+      return HIRE_CATEGORIES.map((c) => ({
+        id: c.id, label: c.label,
+        agon: agon ? agon.filter((e) => (c.id === "prediction" && /\/agon\/agents\/lead\//.test(e.url)) || (c.agonCategories.includes(e.category) && !/\/agon\/agents\/lead\//.test(e.url))).length : null,
+        outside: outside ? outside.filter((e) => circleFits(c.id, e)).length : null,
+      }));
+    },
+
     /// The person chose this agent from its page: no reading, no ranking, no routing fee.
-    async direct(ownerRef: string, reference: string, text: string): Promise<Exclude<RouteResult, { kind: "none" }> | { kind: "not_hireable" }> {
+    async direct(ownerRef: string, reference: string, text: string): Promise<Extract<RouteResult, { kind: "pick" | "lead" }> | { kind: "not_hireable" }> {
       const entry = deps.directEntry ? await deps.directEntry(reference) : null;
       if (!entry) return { kind: "not_hireable" };
       // The Lead runs its own hire, with its data purchases and forecaster.
@@ -130,6 +191,13 @@ export function createRouter(deps: {
       if (!route || route.ownerRef !== ownerRef || route.expiresAt <= now().getTime()) return { ok: false, code: "route_expired" };
       const entry = route.entries.find((e) => e.reference === reference);
       if (!entry) return { ok: false, code: "route_expired" };
+      // The Lead runs its own hire, with its data purchases and forecaster.
+      if (route.lead === reference) {
+        // Browsing typed no question, so the Lead asks for one first.
+        const question = route.browse ? (typeof given?.question === "string" ? given.question.trim() : "") : route.text;
+        if (!question) return { ok: false, code: "missing_input", question: "What do you want forecast? Paste a Polymarket link or ask about an event.", missing: ["question"] };
+        return { ok: true, lead: await deps.leadAsk(ownerRef, question) };
+      }
       const runtime = deps.runtimes[entry.network];
       if (!runtime) return { ok: false, code: "outside_off" };
       if (deps.safeDestination && !(await deps.safeDestination(entry.url).catch(() => false))) return { ok: false, code: "unavailable" };

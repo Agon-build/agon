@@ -48,7 +48,7 @@ export function rankCandidates(entries: CatalogEntry[], intent: Intent, opts: { 
 export type Group = "ranked" | "new" | "outside";
 export type Choice = Ranked & { group: Group };
 export type Groups = { ranked: Choice[]; fresh: Choice[]; outside: Choice[] };
-export type GroupOptions = { feeBps: number; feeMin?: bigint; downranked: Set<string>; feeBpsFor?: (e: CatalogEntry) => number; fitted?: string[] | null; category: HireCategoryId };
+export type GroupOptions = { feeBps: number; feeMin?: bigint; downranked: Set<string>; feeBpsFor?: (e: CatalogEntry) => number; fitted?: string[] | null; category: HireCategoryId; always?: string[] };
 
 /// Shown per group on Hire before the person asks for no more.
 export const GROUP_MAX = 12;
@@ -65,7 +65,8 @@ export function groupCandidates(entries: CatalogEntry[], intent: Intent, opts: G
   const words = wordsOf(intent.query);
   const needed = words.length <= 2 ? 1 : 2;
   const fitted = opts.fitted ? new Set(opts.fitted) : null;
-  const fitting = fitted ? entries.filter((e) => fitted.has(e.reference)) : words.length === 0 ? [] : entries.filter((e) => matchCount(e, words) >= needed);
+  const always = new Set(opts.always ?? []);
+  const fitting = entries.filter((e) => always.has(e.reference) || (fitted ? fitted.has(e.reference) : words.length > 0 && matchCount(e, words) >= needed));
   const priced = fitting.map((e) => {
     const fee = feeFor(e.price, opts.feeBpsFor ? opts.feeBpsFor(e) : opts.feeBps, opts.feeMin ?? 0n);
     return { e, fee, total: e.price + fee, down: opts.downranked.has(e.reference) ? 1 : 0 };

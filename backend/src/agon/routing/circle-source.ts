@@ -68,7 +68,7 @@ function retryAfterMs(res: Response, attempt: number): number {
 
 /// Circle's Agent Marketplace, read from the public discovery API and kept in
 /// memory. A failed refresh keeps the last good copy, reports unavailable and logs why.
-export function createCircleSource(opts: { fetchImpl?: typeof fetch; baseUrl?: string; sleep?: (ms: number) => Promise<void>; log?: (line: string) => void } = {}): RouteSource & { refresh(): Promise<void>; entries(): CatalogEntry[] } {
+export function createCircleSource(opts: { fetchImpl?: typeof fetch; baseUrl?: string; sleep?: (ms: number) => Promise<void>; log?: (line: string) => void } = {}): RouteSource & { refresh(): Promise<void>; entries(): CatalogEntry[]; all(): Promise<CatalogEntry[]> } {
   const fetchImpl = opts.fetchImpl ?? fetch;
   const base = opts.baseUrl ?? "https://api.circle.com/v2/x402/discovery/resources";
   const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
@@ -119,6 +119,7 @@ export function createCircleSource(opts: { fetchImpl?: typeof fetch; baseUrl?: s
     id: "circle",
     refresh,
     entries: () => catalog,
+    all: async () => catalog,
     status: () => (healthy ? "ok" : "unavailable"),
     async search(q: RouteQuery) {
       return catalog

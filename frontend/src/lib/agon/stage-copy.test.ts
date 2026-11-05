@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { KIND_LABEL, approvalFailureText, askRefusalText, confirmFailureText, failureText, hireHeading, showConfirmError } from "./stage-copy.ts";
+import { CHOICES_COPY, KIND_LABEL, approvalFailureText, askRefusalText, confirmFailureText, failureText, hireHeading, showConfirmError } from "./stage-copy.ts";
 
 test("every refusal a person can hit has a plain sentence", () => {
   assert.equal(askRefusalText("insufficient_balance", "0.30"), "Your agent wallet needs 0.30 USDC for this hire.");
@@ -41,4 +41,12 @@ test("'still confirming' gives way once the job has a final outcome", () => {
   assert.equal(showConfirmError("payment_unknown", "refunded"), false);
   assert.equal(showConfirmError("market_closed", "failed"), true, "a refusal stays: it is the reason");
   assert.equal(showConfirmError(null, "paying"), false);
+});
+
+test("the choices list says each state plainly, with no em dash and no plus used as a word", () => {
+  assert.equal(CHOICES_COPY.loading, "Finding agents for this.");
+  assert.equal(CHOICES_COPY.empty, "No agents here yet.");
+  assert.equal(CHOICES_COPY.circleDown, "Circle is not answering right now.");
+  assert.equal(askRefusalText("route_expired"), "These choices expired. Search again.");
+  for (const line of Object.values(CHOICES_COPY)) assert.ok(!line.includes("—") && !line.includes(" + "), line);
 });

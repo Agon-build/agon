@@ -2,6 +2,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+import { CategoryGrid } from "@/components/stage/CategoryGrid";
+import { ChoiceList } from "@/components/stage/ChoiceList";
 import { Composer } from "@/components/stage/Composer";
 import { PhaseRail } from "@/components/stage/PhaseRail";
 import { RatePanel } from "@/components/stage/RatePanel";
@@ -16,21 +18,24 @@ import { useLiveJob } from "@/components/stage/useLiveJob";
 import { useNow } from "@/components/stage/useNow";
 import { LoginButton } from "@/components/pengu/LoginButton";
 import { useAuth } from "@/hooks/useAuth";
-import { confirmHire, getHistory, getLeaderboard, getStageConfig, getWallet, quoteRoute, routeDirect, routeRequest, StageApiError } from "@/lib/agon/stage";
+import { confirmHire, getCategories, getHistory, getLeaderboard, getStageConfig, getWallet, quoteRoute, routeDirect, routeRequest, StageApiError } from "@/lib/agon/stage";
 import { presentListing } from "@/lib/agon/catalog";
 import { getListing, inspectManifest } from "@/lib/agon/client";
 import { canAfford } from "@/lib/agon/hire-panel";
 import { mainnetInView, mergeAnswers, sourcesNote } from "@/lib/agon/route-view";
-import { askRefusalText, confirmFailureText, hireHeading, showConfirmError } from "@/lib/agon/stage-copy";
-import type { AskResponse, HistoryItem, LeaderboardRow, RoutePick, StageConfig, StageWallet } from "@/lib/agon/stage-types";
+import { askRefusalText, CHOICES_COPY, confirmFailureText, hireHeading, showConfirmError } from "@/lib/agon/stage-copy";
+import type { AskResponse, ChoiceGroups, HireCategory, HireCategoryId, HistoryItem, LeaderboardRow, RoutePick, RouteSourceStatus, StageConfig, StageWallet } from "@/lib/agon/stage-types";
 import { beatsMarketText, hireLabel, hireStateText, phaseStep } from "@/lib/agon/stage-view";
 
 type Quote = Extract<AskResponse, { ok: true }>;
 /// Agon's pick for a request, before the exact price is asked for.
-type Routed = { kind: "routed"; question: string; routeId: string; pick: RoutePick; alternatives: RoutePick[]; missing: string[]; prompt: string | null; busy: boolean; answers: Record<string, string>; note: string | null };
+/// The choices for a request or a browsed category; typed is null when the person browsed.
+type Choices = { kind: "choices"; question: string; typed: string | null; routeId: string; category: HireCategoryId; groups: ChoiceGroups; sources: RouteSourceStatus[]; busy: boolean };
+type Routed = { kind: "routed"; question: string; routeId: string; pick: RoutePick; alternatives: RoutePick[]; missing: string[]; prompt: string | null; busy: boolean; answers: Record<string, string>; note: string | null; choices?: Choices };
 type Mode =
   | { kind: "idle" }
   | { kind: "quoting"; question: string }
+  | Choices
   | Routed
   | { kind: "quote"; question: string; quote: Quote }
   | { kind: "refused"; question: string; maxPrice: string | null; code: string; amount?: string; network?: "arc-testnet" | "arc"; back?: Routed; note?: string | null }
@@ -50,6 +55,8 @@ export function HireClient() {
   const [wallet, setWallet] = useState<StageWallet | null>(null);
   const [mainnetWallet, setMainnetWallet] = useState<StageWallet | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [categories, setCategories] = useState<HireCategory[]>([]);
+  useEffect(() => { getCategories().then(setCategories).catch(() => setCategories([])); }, []);
   const [best, setBest] = useState<LeaderboardRow | null>(null);
   const [mode, setMode] = useState<Mode>(resumeJob ? { kind: "run", jobId: resumeJob, question: null, paying: false, confirmError: null, mainnet: false } : { kind: "idle" });
   const { live, error: liveError } = useLiveJob(mode.kind === "run" ? mode.jobId : null, { active: mode.kind === "run" && mode.paying });
@@ -85,11 +92,14 @@ export function HireClient() {
   const refreshMainnet = useCallback(() => { getWallet("arc").then(setMainnetWallet).catch(() => {}); }, []);
 
   // Agon reads the request and picks: forecasts go to the Lead, anything else to the best fit across Agon and Circle.
-  async function ask(question: string, maxPrice: string | null) {
+  async function ask(question: string, maxPrice: string | null, category?: HireCategoryId, typed: string | null = question) {
     setMode({ kind: "quoting", question });
     try {
-      const routed = agentRef ? await routeDirect(agentRef, question) : await routeRequest(question);
-      if (routed.kind === "pick") {
+      const routed = agentRef ? await routeDirect(agentRef, question) : await routeRequest(typed, category);
+      if (routed.kind === "choices") {
+        setMode({ kind: "choices", question, typed, routeId: routed.routeId, category: routed.category, groups: routed.groups, sources: routed.sources, busy: false });
+        if (routed.groups.outside.length > 0) refreshMainnet();
+      } else if (routed.kind === "pick") {
         setMode({ kind: "routed", question, routeId: routed.routeId, pick: routed.pick, alternatives: routed.alternatives, missing: [], prompt: null, busy: false, answers: {}, note: sourcesNote(routed.sources) });
         if (routed.pick.network === "arc" || routed.alternatives.some((a) => a.network === "arc")) refreshMainnet();
       } else if (routed.kind === "none") {
@@ -128,6 +138,17 @@ export function HireClient() {
     }
     refreshWallet();
     if (r.pick.network === "arc") refreshMainnet();
+  }
+
+  // Browse a category with nothing typed, or move a typed request to another category.
+  function browse(category: HireCategoryId, typed: string | null = null) {
+    const label = categories.find((c) => c.id === category)?.label ?? "Agents";
+    void ask(typed ?? label, null, category, typed);
+  }
+
+  function choose(c: Choices, pick: RoutePick) {
+    setMode({ kind: "routed", question: c.question, routeId: c.routeId, pick, alternatives: [], missing: [], prompt: null, busy: false, answers: {}, note: null, choices: c });
+    if (pick.network === "arc") refreshMainnet();
   }
 
   function swap(r: Routed, next: RoutePick) {
@@ -223,8 +244,9 @@ export function HireClient() {
               </ul>
             ) : null}
             {mode.kind === "idle" || mode.kind === "quoting" ? (
-              <div className="mt-10"><Composer disabled={mode.kind === "quoting"} signedIn={canAct} onSubmit={ask} agentName={agentRef ? (agentName ?? "this agent") : null} /></div>
+              <div className="mt-10"><Composer disabled={mode.kind === "quoting"} signedIn={canAct} onSubmit={(q, max) => void ask(q, max)} agentName={agentRef ? (agentName ?? "this agent") : null} /></div>
             ) : null}
+            {(mode.kind === "idle" || mode.kind === "quoting") && !agentRef ? <CategoryGrid categories={categories} disabled={mode.kind === "quoting" || !canAct} onPick={(id) => browse(id)} /> : null}
             {mode.kind === "refused" && !shortOf && mode.code !== "terms_required" ? (
               <div role="alert" className="stage-print mt-8 border-y border-[color:var(--hairline-strong)] py-6">
                 <p className="text-base leading-7 text-ink">{askRefusalText(mode.code, mode.amount)}</p>
@@ -266,10 +288,19 @@ export function HireClient() {
                 ) : null}
               </aside>
             ) : null}
+            {mode.kind === "quoting" && !agentRef ? <p role="status" className="border-y border-[color:var(--hairline-strong)] py-6 text-sm text-ink-2">{CHOICES_COPY.loading}</p> : null}
+            {mode.kind === "choices" ? (
+              <ChoiceList
+                category={mode.category} categories={categories} groups={mode.groups} sources={mode.sources} busy={mode.busy}
+                onChoose={(p) => choose(mode, p)} onCategory={(id) => browse(id, mode.typed)} onCancel={reset}
+              />
+            ) : null}
             {mode.kind === "routed" ? (
               <RouteCard
                 pick={mode.pick} alternatives={mode.alternatives} question={mode.prompt} missing={mode.missing} busy={mode.busy} note={mode.note}
-                onSwap={(p) => swap(mode, p)} onQuote={(answers) => void quoteRouted(mode, answers)} onCancel={reset}
+                onSwap={(p) => swap(mode, p)} onQuote={(answers) => void quoteRouted(mode, answers)}
+                onCancel={() => (mode.choices ? setMode(mode.choices) : reset())}
+                {...(mode.choices ? { heading: "Your choice", cancelLabel: "Back to choices" } : {})}
               />
             ) : null}
             {mode.kind === "quote" ? <QuoteCard quote={mode.quote} nowMs={now} paying={false} onPay={() => void pay(mode.quote, mode.question)} onCancel={reset} /> : null}

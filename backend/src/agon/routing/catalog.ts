@@ -38,6 +38,8 @@ export type RouteQuery = { words: string[]; agonCategories: string[]; circleCate
 export interface RouteSource {
   id: "agon" | "circle";
   search(q: RouteQuery): Promise<CatalogEntry[]>;
+  /** Every routable service this source holds now, without proof, for category counts. */
+  all?(): Promise<CatalogEntry[]>;
   status(): "ok" | "unavailable";
 }
 

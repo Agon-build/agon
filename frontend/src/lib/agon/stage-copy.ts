@@ -30,7 +30,7 @@ const ASK: Record<string, string> = {
   no_match: "Nothing on Agon or Circle fits this yet. Try describing it differently.",
   outside_off: "That service is on Circle and outside hires are switched off right now.",
   terms_changed: "That service changed its price or payee just now. Nothing was charged; ask again.",
-  route_expired: "That choice expired. Ask again for a fresh pick.",
+  route_expired: "These choices expired. Search again.",
   ...MARKET_REFUSALS,
 };
 
@@ -103,3 +103,15 @@ export function showConfirmError(code: string | null | undefined, phase: string 
   if (!code) return false;
   return !(code === "payment_unknown" && (phase === "failed" || phase === "answered" || phase === "refunded"));
 }
+
+/// The states of the Hire choices list.
+export const CHOICES_COPY = {
+  loading: "Finding agents for this.",
+  empty: "No agents here yet.",
+  listOne: "List an agent",
+  circleDown: "Circle is not answering right now.",
+  outsideNote: "Outside services are listed by price. Agon has no proof for them, so it does not rank them.",
+  newNote: "Listed on Agon with no proof yet. You can hire them; they are not ranked.",
+  categories: "Or browse by category",
+  change: "Change category",
+} as const;
