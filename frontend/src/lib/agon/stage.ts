@@ -118,14 +118,27 @@ export async function getLive(jobId: string): Promise<LiveView> {
 }
 /// One page of the signed-in account's hires, newest first.
 /// Where finished work is sent: email (masked) and the AGON bot on Telegram.
-export type DeliverySettings = { email: { on: boolean; address: string | null }; telegram: { available: boolean; connected: boolean } };
+export type DeliverySettings = {
+  email: { on: boolean; address: string | null; source?: "account" | "added" | null; canAdd?: boolean; pending?: string | null };
+  telegram: { available: boolean; connected: boolean };
+};
 export async function getDeliveries(): Promise<DeliverySettings> {
-  if (AGON_PREVIEW_MODE) return { email: { on: true, address: "yo***@example.com" }, telegram: { available: true, connected: false } };
+  if (AGON_PREVIEW_MODE) return { email: { on: false, address: null, source: null, canAdd: true, pending: null }, telegram: { available: true, connected: false } };
   return call<DeliverySettings>("/agon/app/deliveries");
 }
 /// A one-time link that opens the AGON bot and connects this account's chat.
 export async function connectTelegram(): Promise<{ url: string }> {
   return call<{ url: string }>("/agon/app/deliveries/telegram", { body: {} });
+}
+/// A wallet account adds an email for deliveries: Agon sends it a 6-digit code first.
+export async function addDeliveryEmail(email: string): Promise<{ pending: string }> {
+  return call<{ pending: string }>("/agon/app/deliveries/email", { body: { email } });
+}
+export async function verifyDeliveryEmail(code: string): Promise<{ address: string }> {
+  return call<{ address: string }>("/agon/app/deliveries/email/verify", { body: { code } });
+}
+export async function removeDeliveryEmail(): Promise<void> {
+  await call("/agon/app/deliveries/email", { method: "DELETE" });
 }
 export async function disconnectTelegram(): Promise<void> {
   await call("/agon/app/deliveries/telegram", { method: "DELETE" });

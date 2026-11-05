@@ -163,7 +163,8 @@ function feePolicy(env: Record<string, string | undefined>, problems: string[]):
     problems.push(`${key} must be a whole number of USDC base units from 0 to 1000000`);
     return fallback;
   };
-  return { routingFeeMin: read("AGON_ROUTING_FEE_MIN", 10_000n), feeTabThreshold: read("AGON_FEE_TAB_THRESHOLD", 100_000n) };
+  // Owner decision 2026-11-05: the fee is 5% of the price with no minimum (a 0.01 floor was 5x a 0.002 service).
+  return { routingFeeMin: read("AGON_ROUTING_FEE_MIN", 0n), feeTabThreshold: read("AGON_FEE_TAB_THRESHOLD", 100_000n) };
 }
 
 export type OutsideSettings = { network: AgonNetwork; feeAddress: Address | null; routingFeeBps: number; routingFeeMin: bigint; feeTabThreshold: bigint };

@@ -5,6 +5,7 @@ import { AgentAccess } from "@/components/agon/AgentAccess";
 import { DeliverySettings } from "@/components/agon/DeliverySettings";
 import { MyListings } from "@/components/agon/MyListings";
 import { AppHeader } from "@/components/pengu/AppHeader";
+import { Pager } from "@/components/redesign/Pager";
 import { TagButton } from "@/components/redesign/TagButton";
 import { WalletStrip } from "@/components/stage/WalletStrip";
 import { useNow } from "@/components/stage/useNow";
@@ -12,6 +13,18 @@ import { useAuth } from "@/hooks/useAuth";
 import { getHistory, getWallet, StageApiError } from "@/lib/agon/stage";
 import type { HistoryItem, StageWallet } from "@/lib/agon/stage-types";
 import { historyRows } from "@/lib/agon/stage-view";
+import { tabFromHash } from "@/lib/agon/page-tabs";
+
+/// Account shows one part at a time; the part is in the address (/account#deliveries).
+const TABS = [
+  { id: "hires", label: "Hires" },
+  { id: "wallet", label: "Wallet" },
+  { id: "deliveries", label: "Deliveries" },
+  { id: "listings", label: "Listings" },
+  { id: "access", label: "Agent access" },
+] as const;
+type TabId = (typeof TABS)[number]["id"];
+const TAB_IDS = TABS.map((t) => t.id);
 
 type WalletState = { kind: "loading" } | { kind: "none" } | { kind: "error" } | { kind: "ready"; wallet: StageWallet };
 
@@ -31,6 +44,13 @@ export function AccountClient() {
   const [hires, setHires] = useState<HistoryItem[] | null>(null);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
+  const [tab, setTab] = useState<TabId>("hires");
+  useEffect(() => {
+    const read = () => setTab(tabFromHash(window.location.hash, TAB_IDS, "hires") as TabId);
+    read();
+    window.addEventListener("hashchange", read);
+    return () => window.removeEventListener("hashchange", read);
+  }, []);
 
   const loadWallet = useCallback(() => {
     getWallet()
@@ -55,20 +75,31 @@ export function AccountClient() {
       <main className="mx-auto grid max-w-[1120px] gap-12 px-4 pb-24 pt-14 sm:px-6">
         <header>
           <h1 className="font-stencil text-[clamp(42px,7vw,80px)] uppercase leading-[0.9]">ACCOUNT</h1>
+          <nav aria-label="Account" className="mt-8 flex flex-wrap gap-2 border-b border-[color:var(--hairline-strong)] pb-3">
+            {TABS.map((t) => (
+              <a key={t.id} href={`#${t.id}`} aria-current={tab === t.id ? "page" : undefined}
+                className={`inline-flex min-h-11 items-center border px-3 font-mono text-[10px] uppercase tracking-[0.14em] ${tab === t.id ? "border-accent text-accent" : "border-[color:var(--hairline)] text-ink-2 hover:text-ink"}`}>
+                {t.label}
+              </a>
+            ))}
+          </nav>
         </header>
 
-        {me?.walletKind === "circle" && me.address ? (
+        {tab === "wallet" && me?.walletKind === "circle" && me.address ? (
           <Section id="sign-in-wallet" title="Sign-in wallet">
             <p className="text-sm text-ink-2">Created with your email sign-in. Listing fees are paid from it, so keep a little USDC on Arc here.</p>
             <p className="mt-3 break-all font-mono text-[12px] text-ink">{me.address}</p>
           </Section>
         ) : null}
 
-        <Section id="deliveries" title="Where your results go">
+        {tab === "deliveries" ? (
+        <Section id="deliveries-section" title="Where your results go">
           <DeliverySettings />
         </Section>
+        ) : null}
 
-        <Section id="wallet" title="Paying for hires">
+        {tab === "wallet" ? (
+        <Section id="wallet-section" title="Paying for hires">
           {wallet.kind === "loading" ? <p className="text-sm text-ink-3">Loading your wallet.</p> : null}
           {wallet.kind === "error" ? <p role="alert" className="text-sm text-ink">Agon could not load your wallet right now.</p> : null}
           {wallet.kind === "none" ? (
@@ -79,8 +110,10 @@ export function AccountClient() {
           ) : null}
           {wallet.kind === "ready" ? <WalletStrip wallet={wallet.wallet} onChanged={loadWallet} /> : null}
         </Section>
+        ) : null}
 
-        <Section id="hires" title="Your hires">
+        {tab === "hires" ? (
+        <Section id="hires-section" title="Your hires">
           {hires === null ? <p className="text-sm text-ink-3">Loading your hires.</p> : rows.length === 0 && page === 1 ? (
             <p className="text-sm text-ink-2">No hires yet. <a href="/" className="underline underline-offset-4 hover:text-accent">Hire an agent</a></p>
           ) : (
@@ -97,24 +130,23 @@ export function AccountClient() {
               ))}
             </ul>
           )}
-          {hires !== null && (page > 1 || hasMore) ? (
-            <nav aria-label="Hire pages" className="mt-4 flex items-center gap-4 font-mono text-[11px] uppercase tracking-[0.12em]">
-              <button type="button" disabled={page === 1} onClick={() => setPage((p) => Math.max(1, p - 1))} className="min-h-11 px-2 text-ink hover:text-accent disabled:text-ink-3">Newer</button>
-              <span className="text-ink-3">Page {page}</span>
-              <button type="button" disabled={!hasMore} onClick={() => setPage((p) => p + 1)} className="min-h-11 px-2 text-ink hover:text-accent disabled:text-ink-3">Older</button>
-            </nav>
-          ) : null}
+          {hires !== null ? <Pager page={page} hasMore={hasMore} onPage={setPage} label="Hire pages" /> : null}
         </Section>
+        ) : null}
 
-        <Section id="listings" title="My listings">
+        {tab === "listings" ? (
+        <Section id="listings-section" title="My listings">
           <div className="mb-5"><TagButton href="/list" size="sm">List your agent</TagButton></div>
           <MyListings />
         </Section>
+        ) : null}
 
-        <Section id="access" title="Agent access">
+        {tab === "access" ? (
+        <Section id="access-section" title="Agent access">
           <p className="mb-5 max-w-[64ch] text-sm leading-6 text-ink-2">Tokens let a coding agent use Agon for you over MCP. Create one per agent and revoke it when you stop using it.</p>
           <AgentAccess />
         </Section>
+        ) : null}
       </main>
     </div>
   );

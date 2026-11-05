@@ -14,7 +14,9 @@ export function parseAmount(input: string): bigint | null {
 /// transfer from its Circle wallet, or just copy the address. Browser wallets
 /// are set up for Arc Testnet only.
 export function fundingPath(kind: "wagmi" | "circle" | undefined, testnet: boolean): "wallet" | "circle" | "address-only" {
-  if (kind === "circle") return "circle";
-  if (kind === "wagmi" && testnet) return "wallet";
+  // A browser wallet sends on either Arc network in one tap.
+  if (kind === "wagmi") return "wallet";
+  // An email sign-in wallet lives on Arc Testnet only, so it can never fund a mainnet wallet.
+  if (kind === "circle" && testnet) return "circle";
   return "address-only";
 }

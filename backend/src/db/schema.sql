@@ -2599,6 +2599,22 @@ create table if not exists agon_deliveries (
 );
 create index if not exists agon_deliveries_due on agon_deliveries(status, next_attempt_at);
 
+-- An email a wallet account added for deliveries (2026-11-05), confirmed with a 6-digit
+-- code; kept apart from the sign-in email so it never makes the account an email account.
+create table if not exists agon_delivery_emails (
+  operator    text primary key check (operator ~ '^0x[0-9a-f]{40}$'),
+  email       text not null check (char_length(email) between 6 and 254),
+  verified_at timestamptz not null
+);
+create table if not exists agon_delivery_email_codes (
+  operator   text primary key check (operator ~ '^0x[0-9a-f]{40}$'),
+  email      text not null check (char_length(email) between 6 and 254),
+  code_hash  text not null check (code_hash ~ '^[0-9a-f]{64}$'),
+  expires_at timestamptz not null,
+  attempts   integer not null default 0 check (attempts >= 0),
+  created_at timestamptz not null default now()
+);
+
 -- An Agon account's Telegram chat with the AGON bot, linked from Account through a one-time /start code.
 create table if not exists agon_telegram_links (
   operator  text primary key check (operator ~ '^0x[0-9a-f]{40}$'),

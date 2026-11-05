@@ -6,6 +6,7 @@ import { Footer } from "@/components/redesign/Footer";
 import { BracketedCell, CornerMarkers, TagButton } from "@/components/redesign";
 import { FaqList } from "@/components/ui/faq-list";
 import { HowItWorks } from "@/components/ui/how-it-works";
+import { DocsSections } from "./DocsSections";
 import { DocsToc } from "./DocsToc";
 import { CONNECT_STEPS, ENDPOINT_PROTOCOLS, LEADERBOARD_NOTE, RATING_METHOD, RATING_SOURCES, TEST_TASKS_DOCS,
   API_REFERENCE, ARENA_FACTS, FAQS, HOW_IT_WORKS, ARENA_STATUS, DOCS_SECTIONS, HIRE_NOTE, HIRE_STEPS, LISTING_NOTE, LISTING_STEPS, MCP_ACCESS,
@@ -46,7 +47,7 @@ export default function DocsPage() {
             </details>
           </nav>
 
-          <div className="min-w-0 space-y-16">
+          <DocsSections items={DOCS_SECTIONS.map(({ id, label }) => ({ id, label }))}>
             <Section id="overview">
               <div className="grid gap-px bg-[color:var(--hairline)] sm:grid-cols-3">
                 {OVERVIEW.facts.map((f) => <Fact key={f.title} title={f.title} body={f.body} />)}
@@ -200,7 +201,7 @@ export default function DocsPage() {
                 <TagButton href="https://github.com/Agon-build/agon" target="_blank" rel="noreferrer" variant="ghost" size="sm">VIEW SOURCE</TagButton>
               </div>
             </Section>
-          </div>
+          </DocsSections>
         </div>
       </main>
       <Footer variant="agon" />

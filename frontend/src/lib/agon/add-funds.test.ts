@@ -21,6 +21,6 @@ test("wallet users sign a transfer, Circle wallet users confirm one, others get 
   assert.equal(fundingPath("wagmi", true), "wallet");
   assert.equal(fundingPath("circle", true), "circle");
   assert.equal(fundingPath(undefined, true), "address-only");
-  assert.equal(fundingPath("wagmi", false), "address-only", "browser wallets are set up for Arc Testnet only");
-  assert.equal(fundingPath("circle", false), "circle");
+  assert.equal(fundingPath("wagmi", false), "wallet", "a browser wallet tops up Arc mainnet in one tap");
+  assert.equal(fundingPath("circle", false), "address-only", "an email sign-in wallet is on Arc Testnet and cannot fund mainnet");
 });

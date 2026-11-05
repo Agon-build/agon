@@ -1,8 +1,8 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 
-import { connectTelegram, disconnectTelegram, getDeliveries, type DeliverySettings as Settings } from "@/lib/agon/stage";
-import { telegramStart } from "@/lib/agon/delivery-view";
+import { addDeliveryEmail, connectTelegram, disconnectTelegram, getDeliveries, removeDeliveryEmail, StageApiError, verifyDeliveryEmail, type DeliverySettings as Settings } from "@/lib/agon/stage";
+import { emailAddError, telegramStart } from "@/lib/agon/delivery-view";
 
 /// Account: where finished jobs and watch alerts are sent, and connecting Telegram.
 export function DeliverySettings() {
@@ -11,6 +11,9 @@ export function DeliverySettings() {
   const [note, setNote] = useState<string | null>(null);
   const [link, setLink] = useState<{ url: string; command: string; bot: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [emailInput, setEmailInput] = useState("");
+  const [codeInput, setCodeInput] = useState("");
+  const [emailNote, setEmailNote] = useState<string | null>(null);
 
   const load = useCallback(() => {
     getDeliveries().then(setS).catch(() => setS("error"));
@@ -44,6 +47,20 @@ export function DeliverySettings() {
     }
   }
 
+  const reason = (e: unknown) => (e instanceof StageApiError ? e.code : "network_unavailable");
+  async function sendCode() {
+    setBusy(true); setEmailNote(null);
+    try { await addDeliveryEmail(emailInput.trim()); setCodeInput(""); load(); } catch (e) { setEmailNote(emailAddError(reason(e))); } finally { setBusy(false); }
+  }
+  async function confirmCode() {
+    setBusy(true); setEmailNote(null);
+    try { await verifyDeliveryEmail(codeInput.trim()); setEmailInput(""); setCodeInput(""); load(); } catch (e) { setEmailNote(emailAddError(reason(e))); } finally { setBusy(false); }
+  }
+  async function removeEmail() {
+    setBusy(true); setEmailNote(null);
+    try { await removeDeliveryEmail(); load(); } catch (e) { setEmailNote(emailAddError(reason(e))); } finally { setBusy(false); }
+  }
+
   async function disconnect() {
     setBusy(true); setNote(null);
     try { await disconnectTelegram(); load(); } catch { setNote("Agon could not disconnect Telegram. Try again."); } finally { setBusy(false); }
@@ -57,11 +74,37 @@ export function DeliverySettings() {
     <div>
       <p className="text-sm leading-6 text-ink-2">Finished hires and watch alerts go here and to your bell.</p>
       <ul className="mt-5 divide-y divide-[color:var(--hairline)] border-y border-[color:var(--hairline)]">
-        <li className="flex flex-wrap items-center justify-between gap-3 py-4">
-          <div>
-            <p className="text-sm text-ink">Email</p>
-            <p className="mt-0.5 text-sm text-ink-2">{s.email.on ? `On, to ${s.email.address}` : s.email.address ? "Coming soon" : "No email on this account"}</p>
+        <li className="py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm text-ink">Email</p>
+              <p className="mt-0.5 text-sm text-ink-2">
+                {s.email.on ? `On, to ${s.email.address}` : s.email.address ? "Coming soon" : s.email.pending ? `Code sent to ${s.email.pending}` : s.email.canAdd ? "Add an email to get your results there" : "No email on this account"}
+              </p>
+            </div>
+            {s.email.source === "added" ? <button type="button" className={button} disabled={busy} onClick={() => void removeEmail()}>Remove</button> : null}
           </div>
+          {!s.email.address && s.email.canAdd ? (
+            s.email.pending ? (
+              <form className="mt-4 flex flex-wrap items-end gap-3" onSubmit={(e) => { e.preventDefault(); void confirmCode(); }}>
+                <label className="grid gap-1">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">6-digit code</span>
+                  <input value={codeInput} onChange={(e) => setCodeInput(e.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" className="min-h-11 w-36 border border-[color:var(--hairline-strong)] bg-canvas px-3 font-mono text-sm tracking-[0.2em] text-ink focus:border-accent focus:outline-none" />
+                </label>
+                <button type="submit" className={button} disabled={busy || codeInput.length !== 6}>Confirm</button>
+                <button type="button" className="min-h-11 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 underline underline-offset-4 hover:text-accent" disabled={busy} onClick={() => void sendCode()}>Send a new code</button>
+              </form>
+            ) : (
+              <form className="mt-4 flex flex-wrap items-end gap-3" onSubmit={(e) => { e.preventDefault(); void sendCode(); }}>
+                <label className="grid min-w-0 flex-1 gap-1">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">Email</span>
+                  <input type="email" value={emailInput} onChange={(e) => setEmailInput(e.target.value)} autoComplete="email" className="min-h-11 w-full max-w-sm border border-[color:var(--hairline-strong)] bg-canvas px-3 text-sm text-ink focus:border-accent focus:outline-none" />
+                </label>
+                <button type="submit" className={button} disabled={busy || !emailInput.includes("@")}>Send code</button>
+              </form>
+            )
+          ) : null}
+          {emailNote ? <p role="alert" className="mt-3 text-sm text-ink">{emailNote}</p> : null}
         </li>
         <li className="py-4">
           <div className="flex flex-wrap items-center justify-between gap-3">

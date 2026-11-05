@@ -82,13 +82,24 @@ export class PostgresDeliveryStore implements DeliveryStore {
     await this.pool.query(`update agon_deliveries set status = 'skipped', last_error = $3 where event_key = $1 and channel = $2`, [eventKey, channel, reason]);
   }
 
+  /// The sign-in email only, for telling an email account from a wallet account.
+  async accountEmailOf(operator: string): Promise<string | null> {
+    const { rows } = await this.pool.query<{ email: string | null }>("select email from operators where address = $1", [operator.toLowerCase()]);
+    const email = rows[0]?.email?.trim() ?? "";
+    return email ? email : null;
+  }
+
   async telegramChatOf(operator: string): Promise<string | null> {
     const { rows } = await this.pool.query<{ chat_id: string }>("select chat_id from agon_telegram_links where operator = $1", [operator.toLowerCase()]);
     return rows[0]?.chat_id ?? null;
   }
 
+  /// The sign-in email of an email account, else an email the person added and confirmed.
   async emailOf(operator: string): Promise<string | null> {
-    const { rows } = await this.pool.query<{ email: string | null }>("select email from operators where address = $1", [operator.toLowerCase()]);
+    const { rows } = await this.pool.query<{ email: string | null }>(
+      `select coalesce((select o.email from operators o where o.address = $1 and o.email is not null and o.email <> ''),
+                       (select d.email from agon_delivery_emails d where d.operator = $1)) as email`,
+      [operator.toLowerCase()]);
     const email = rows[0]?.email ?? null;
     return email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : null;
   }

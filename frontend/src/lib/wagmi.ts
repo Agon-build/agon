@@ -9,6 +9,7 @@ import {
   sepolia,
   unichainSepolia,
 } from "wagmi/chains";
+import { arc as arcBase } from "viem/chains";
 import { getDefaultConfig } from "@rainbow-me/rainbowkit";
 import { injectedWallet } from "@rainbow-me/rainbowkit/wallets";
 import { PRODUCT_NAME } from "./product";
@@ -42,6 +43,12 @@ import { PRODUCT_NAME } from "./product";
 /// dedicated endpoint(s) then the public RPC, so one endpoint failing never breaks
 /// wallet reads. The bridge source chains stay on their bare public RPCs — they're
 /// touched only during an occasional bridge, not on every page.
+/// Arc mainnet, for one-tap top-ups of the mainnet agent wallet that pays outside
+/// services. viem ships it without an RPC; this is the one Agon uses (chain id 5042,
+/// checked with eth_chainId on 2026-11-05).
+export const ARC_MAINNET_RPC = "https://rpc.mainnet.arc.io";
+const arcMainnet = { ...arcBase, rpcUrls: { default: { http: [ARC_MAINNET_RPC] } } } as const;
+
 const walletConnectProjectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID?.trim();
 const projectId = walletConnectProjectId || "agon-walletconnect-disabled";
 const wallets = walletConnectProjectId
@@ -62,6 +69,7 @@ export const config = getDefaultConfig({
   wallets,
   chains: [
     arcTestnet,
+    arcMainnet,
     sepolia,
     baseSepolia,
     arbitrumSepolia,
@@ -72,6 +80,7 @@ export const config = getDefaultConfig({
   ],
   transports: {
     [arcTestnet.id]: arcTransport,
+    [arcMainnet.id]: http(ARC_MAINNET_RPC, ARC_RPC_OPTS),
     [sepolia.id]: http(),
     [baseSepolia.id]: http(),
     [arbitrumSepolia.id]: http(),

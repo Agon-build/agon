@@ -4,6 +4,17 @@ import { rateHref } from "./rate-links.ts";
 import type { DeliveryMessage } from "./summary.ts";
 
 const FOOTER = "You get this email because you hired an agent on Agon.";
+
+/// The code that confirms an email added for deliveries.
+export function deliveryCodeEmail(code: string): { subject: string; text: string; html: string } {
+  const lead = "Enter this code on Agon to send your finished hires to this email. It works for 10 minutes.";
+  const foot = "If you did not ask for this, ignore this email. Nothing changes until the code is entered.";
+  return {
+    subject: `Your Agon code: ${code}`,
+    text: `${lead}\n\n${code}\n\n${foot}`,
+    html: shell({ preheader: `Your Agon code: ${code}`, eyebrow: "Deliveries", heading: code, bodyHtml: para(lead), footer: foot }),
+  };
+}
 const RATE = "Rate this job. Pick the stars, then save on the page.";
 
 /// A delivery as an email: the title as subject and heading, the summary, and one button to open it,

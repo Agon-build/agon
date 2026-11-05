@@ -7,6 +7,7 @@ import { ChoiceList } from "@/components/stage/ChoiceList";
 import { Composer } from "@/components/stage/Composer";
 import { PhaseRail } from "@/components/stage/PhaseRail";
 import { RatePanel } from "@/components/stage/RatePanel";
+import { Pager } from "@/components/redesign/Pager";
 import { QuoteCard } from "@/components/stage/QuoteCard";
 import { RouteCard } from "@/components/stage/RouteCard";
 import { RunView } from "@/components/stage/RunView";
@@ -55,6 +56,8 @@ export function HireClient() {
   const [wallet, setWallet] = useState<StageWallet | null>(null);
   const [mainnetWallet, setMainnetWallet] = useState<StageWallet | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyMore, setHistoryMore] = useState(false);
   const [categories, setCategories] = useState<HireCategory[]>([]);
   useEffect(() => { getCategories().then(setCategories).catch(() => setCategories([])); }, []);
   const [best, setBest] = useState<LeaderboardRow | null>(null);
@@ -73,8 +76,8 @@ export function HireClient() {
   const refreshWallet = useCallback(() => {
     if (!canAct) return;
     getWallet().then(setWallet).catch(() => setWallet(null));
-    getHistory(1, 3).then((h) => setHistory(h.items)).catch(() => setHistory([]));
-  }, [canAct]);
+    getHistory(historyPage, 5).then((h) => { setHistory(h.items); setHistoryMore(h.hasMore); }).catch(() => { setHistory([]); setHistoryMore(false); });
+  }, [canAct, historyPage]);
 
   useEffect(() => {
     getStageConfig().then(setConfig).catch(() => setConfig(null));
@@ -335,7 +338,7 @@ export function HireClient() {
           <section aria-labelledby="history-heading" className="mt-20">
             <h2 id="history-heading" className="border-b border-[color:var(--hairline-strong)] pb-3 font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Your recent hires</h2>
             <ul className="divide-y divide-[color:var(--hairline)]">
-              {history.slice(0, 3).map((h) => (
+              {history.map((h) => (
                 <li key={h.jobId}>
                   <a href={`/r/${h.jobId}`} className="grid min-h-11 gap-1 py-3 sm:grid-cols-[1fr_auto_auto] sm:items-center sm:gap-6 hover:text-accent">
                     <span className="text-sm text-ink">{hireLabel(h)}</span>
@@ -345,6 +348,10 @@ export function HireClient() {
                 </li>
               ))}
             </ul>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <Pager page={historyPage} hasMore={historyMore} onPage={setHistoryPage} label="Recent hire pages" />
+              <a href="/account#hires" className="mt-4 inline-flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 hover:text-accent">All your hires →</a>
+            </div>
           </section>
         ) : null}
       </div>

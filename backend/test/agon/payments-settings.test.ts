@@ -92,10 +92,10 @@ test("settings read the routing fee rate and address, default 500 (5%), refuse o
   assert.ok(badAddr.enabled && !badAddr.ok && badAddr.problems.some((p) => p.includes("AGON_FEE_ADDRESS")));
 });
 
-test("the minimum fee defaults to 0.01 USDC and the fee tab to 0.10 USDC, both settable, both refused when malformed", () => {
+test("the minimum fee defaults to none and the fee tab to 0.10 USDC, both settable, both refused when malformed", () => {
   const out = resolvePaymentSettings(valid);
   if (!out.enabled || !out.ok) throw new Error(JSON.stringify(out));
-  assert.equal(out.settings.routingFeeMin, 10_000n);
+  assert.equal(out.settings.routingFeeMin, 0n);
   assert.equal(out.settings.feeTabThreshold, 100_000n);
   const set = resolvePaymentSettings({ ...valid, AGON_ROUTING_FEE_MIN: "0", AGON_FEE_TAB_THRESHOLD: "0" });
   if (!set.enabled || !set.ok) throw new Error(JSON.stringify(set));
@@ -107,6 +107,6 @@ test("the minimum fee defaults to 0.01 USDC and the fee tab to 0.10 USDC, both s
   }
   const outside = resolveOutsideSettings({ AGON_OUTSIDE_ENABLED: "true", CIRCLE_LIVE_API_KEY: "LIVE_API_KEY:x:y", CIRCLE_LIVE_ENTITY_SECRET: "s", CIRCLE_LIVE_WALLET_SET_ID: "w" });
   if (!outside.enabled || !outside.ok) throw new Error(JSON.stringify(outside));
-  assert.equal(outside.settings.routingFeeMin, 10_000n);
+  assert.equal(outside.settings.routingFeeMin, 0n);
   assert.equal(outside.settings.feeTabThreshold, 100_000n);
 });

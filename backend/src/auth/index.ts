@@ -44,6 +44,9 @@ import { resolveStageSettings } from "../agon/stage/settings.ts";
 import { classifyIntent } from "../agon/channels/chat/intents.ts";
 import { createTelegramChannel } from "../agon/channels/telegram/channel.ts";
 import { createDeliveryRoutes } from "../agon/deliveries/routes.ts";
+import { PostgresDeliveryEmails } from "../agon/deliveries/delivery-email.ts";
+import { sendEmail } from "../email/client.js";
+import { deliveryCodeEmail } from "../agon/deliveries/email.ts";
 import { PostgresDeliveryStore } from "../agon/deliveries/store.ts";
 import { PostgresTelegramLinks } from "../agon/deliveries/telegram-link.ts";
 import { callModel } from "../runners/llm/client.js";
@@ -928,8 +931,12 @@ if (agonPayments) {
     newWalletAllowed,
     leadAsk: (ownerRef, question) => leadServices.ask(ownerRef, { question }),
   });
+  const deliveryFrom = process.env.AGON_DELIVERY_EMAIL_FROM?.trim() || null;
   app.route("/agon/app/deliveries", createDeliveryRoutes({
     requireAuth, links: telegramLinks, emailOf: (operator) => new PostgresDeliveryStore(pool).emailOf(operator),
+    accountEmailOf: (operator) => new PostgresDeliveryStore(pool).accountEmailOf(operator),
+    emails: new PostgresDeliveryEmails(pool),
+    ...(deliveryFrom ? { sendCode: (to: string, code: string) => sendEmail({ to, ...deliveryCodeEmail(code), from: deliveryFrom }) } : {}),
     emailOn: Boolean(process.env.AGON_DELIVERY_EMAIL_FROM?.trim()), botUsername: stage.settings.telegram?.botUsername ?? null,
   }));
   app.route("/agon/app", createAppRoutes({ services: stageServices, requireAuth, off: () => stage.settings.channelsOff.web, terms: custodyTerms, router: agonRouter, outside: outsideServices, ratings: agonRatings }));

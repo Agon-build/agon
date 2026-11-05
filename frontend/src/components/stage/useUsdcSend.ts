@@ -7,6 +7,7 @@ import { fundingPath } from "@/lib/agon/add-funds";
 
 const USDC_ON_ARC = "0x3600000000000000000000000000000000000000" as const;
 const ARC_TESTNET_ID = 5_042_002;
+const ARC_MAINNET_ID = 5_042;
 const AUTH_URL = (process.env.NEXT_PUBLIC_AUTH_URL ?? "http://localhost:8082").replace(/\/+$/, "");
 
 /// Sends USDC on Arc from the signed-in account's own wallet: a browser wallet
@@ -22,8 +23,10 @@ export function useUsdcSend(testnet: boolean) {
   async function send(to: string, atomic: bigint): Promise<{ tx: string | null }> {
     if (path === "wallet") {
       if (!isConnected) throw new Error("connect");
-      if (chainId !== ARC_TESTNET_ID) await switchChainAsync({ chainId: ARC_TESTNET_ID as never });
-      const tx = await writeContractAsync({ address: USDC_ON_ARC, abi: erc20Abi, functionName: "transfer", args: [to as `0x${string}`, atomic], chainId: ARC_TESTNET_ID as never });
+      // The same USDC address on both Arc networks; the chain decides test or real money.
+      const target = testnet ? ARC_TESTNET_ID : ARC_MAINNET_ID;
+      if (chainId !== target) await switchChainAsync({ chainId: target as never });
+      const tx = await writeContractAsync({ address: USDC_ON_ARC, abi: erc20Abi, functionName: "transfer", args: [to as `0x${string}`, atomic], chainId: target as never });
       return { tx };
     }
     if (path === "circle") {

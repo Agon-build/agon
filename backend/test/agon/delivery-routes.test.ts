@@ -29,7 +29,7 @@ test("Account reads where deliveries go, with the email masked, and needs sign-i
   const l = links();
   const app = createDeliveryRoutes({ requireAuth: signedIn, links: l, emailOf: async () => "blessing@example.com", emailOn: true, botUsername: "agon_bot" });
   assert.equal((await app.request("/")).status, 401);
-  assert.deepEqual(await (await app.request("/", auth)).json(), { email: { on: true, address: "bl***@example.com" }, telegram: { available: true, connected: false } });
+  assert.deepEqual(await (await app.request("/", auth)).json(), { email: { on: true, address: "bl***@example.com", source: "added", canAdd: false, pending: null }, telegram: { available: true, connected: false } });
   l.chats.set(OP, "1");
   assert.equal(((await (await app.request("/", auth)).json()) as { telegram: { connected: boolean } }).telegram.connected, true);
 });

@@ -47,7 +47,7 @@ export function AddFunds({ wallet, onDone, suggested, compact = false }: { walle
           </label>
           <TagButton type="submit" disabled={busy || !atomic}>{busy ? "Waiting for approval" : `Add ${atomic ? amount.trim() : ""} USDC`}</TagButton>
           <p className={compact ? "text-xs text-ink-3" : "text-sm text-ink-2 sm:col-span-2"}>
-            {path === "wallet" ? "From your connected wallet" : "From your Agon sign-in wallet"} to your agent wallet on {wallet.network}.
+            {path === "wallet" ? "From your connected wallet" : "From your Agon sign-in wallet"} to your agent wallet on {wallet.network}{wallet.testnet ? "." : ", in real USDC."}
           </p>
         </form>
       ) : null}
