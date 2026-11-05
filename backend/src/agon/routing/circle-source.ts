@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { Address } from "viem";
 
 import { matchCount, type CatalogEntry, type RouteQuery, type RouteSource } from "./catalog.ts";
+import { withPathParams } from "./path-params.ts";
 
 const ARC_MAINNET = "eip155:5042";
 const ARC_USDC = "0x3600000000000000000000000000000000000000";
@@ -22,6 +23,13 @@ const item = z.object({
   }).passthrough(),
 }).passthrough();
 
+/// A short name from Circle's description: its first sentence, at most 60 characters.
+/// ("Token price lookup. Pass coin identifiers as ..." is named "Token price lookup".)
+export function serviceName(description: string): string {
+  const first = description.trim().split(/(?<=[.!?])\s|\n/)[0]!.replace(/[.!?]$/, "").trim();
+  return first.length <= 60 ? first : `${first.slice(0, 57).trimEnd()}...`;
+}
+
 /// Only services Agon can pay: plain x402 `exact` in USDC on Arc mainnet, GET or POST.
 function toEntry(raw: unknown): CatalogEntry | null {
   const parsed = item.safeParse(raw);
@@ -38,13 +46,14 @@ function toEntry(raw: unknown): CatalogEntry | null {
   return {
     source: "circle",
     reference: `circle:${resource}`,
-    name: metadata.description.slice(0, 80) || new URL(resource).hostname,
+    name: serviceName(metadata.description) || new URL(resource).hostname,
     provider: metadata.provider.name,
     category: metadata.provider.category,
     description: metadata.description,
     url: resource,
     method,
-    inputSchema: schema ?? null,
+    // Names in braces in the address are inputs too, so they are filled before Agon pays.
+    inputSchema: withPathParams(resource, (schema as Record<string, unknown> | undefined) ?? null),
     price: BigInt(option.amount),
     payTo: option.payTo.toLowerCase() as Address,
     network: "arc",

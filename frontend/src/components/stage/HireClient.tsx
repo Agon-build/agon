@@ -59,6 +59,14 @@ export function HireClient() {
   useEffect(() => { getCategories().then(setCategories).catch(() => setCategories([])); }, []);
   const [best, setBest] = useState<LeaderboardRow | null>(null);
   const [mode, setMode] = useState<Mode>(resumeJob ? { kind: "run", jobId: resumeJob, question: null, paying: false, confirmError: null, mainnet: false } : { kind: "idle" });
+  // The page follows the address: a job link opens that job, and HIRE in the nav (no job)
+  // leaves a finished job for a fresh start. A payment in flight is never left this way.
+  useEffect(() => {
+    setMode((m) => {
+      if (resumeJob) return m.kind === "run" && m.jobId === resumeJob ? m : { kind: "run", jobId: resumeJob, question: null, paying: false, confirmError: null, mainnet: false };
+      return m.kind === "run" && !m.paying ? { kind: "idle" } : m;
+    });
+  }, [resumeJob]);
   const { live, error: liveError } = useLiveJob(mode.kind === "run" ? mode.jobId : null, { active: mode.kind === "run" && mode.paying });
 
   const canAct = Boolean(me) || Boolean(config?.preview);

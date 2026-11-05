@@ -8,6 +8,7 @@ import type { BudgetWallet, PaymentsStore } from "../payments/types.ts";
 import type { AskResult } from "../stage/services.ts";
 import { wordsOf, type CatalogEntry, type RouteSource } from "./catalog.ts";
 import { cleanGiven, type fillInput } from "./fill-input.ts";
+import { fillPath } from "./path-params.ts";
 import { shortlist } from "./fit.ts";
 import { ALL_AGON, ALL_CIRCLE, type Intent } from "./intent.ts";
 import { groupCandidates, rankCandidates, type Groups, type Ranked } from "./rank.ts";
@@ -212,8 +213,11 @@ export function createRouter(deps: {
         const stillMissing = filled.missing.filter((k) => input[k] === undefined || input[k] === "");
         if (stillMissing.length > 0) return { ok: false, code: "missing_input", question: stillMissing[0] === filled.missing[0] ? filled.question : `What should I use for ${stillMissing[0]}?`, missing: stillMissing };
       }
+      // An input that belongs in the service address goes there, never left as {name}.
+      const path = fillPath(entry.url, input);
+      if (!path.ok) return { ok: false, code: "missing_input", question: `What should I use for ${path.missing[0]}?`, missing: path.missing };
       const quoted = await runtime.quoteHire({
-        ownerRef, providerUrl: entry.url, providerRef: entry.reference, providerLabel: entry.name, body: input, method: entry.method,
+        ownerRef, providerUrl: path.url, providerRef: entry.reference, providerLabel: entry.name, body: path.rest, method: entry.method,
         feeBps: route.direct ? 0 : deps.feeBps, feeAddress: route.direct ? null : deps.feeAddress[entry.network] ?? null,
         // Checked before the quote is written, so a refused quote leaves no job or code behind.
         expect: { amount: entry.price, payTo: entry.payTo },
