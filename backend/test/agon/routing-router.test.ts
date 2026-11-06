@@ -18,11 +18,12 @@ const entry = (over: Partial<CatalogEntry>): CatalogEntry => ({
 });
 const circle = entry({ source: "circle", reference: "circle:ratings", name: "Analyst ratings", provider: "LoneStarOracle", category: "FINANCIAL_ANALYSIS", description: "Analyst ratings and price targets", url: "https://analyst.example/ratings", method: "GET", price: 10_000n, payTo: CIRCLE_PAY, network: "arc", rating: { tier: "unrated", score: null } });
 
-function fakeRuntime(network: "arc-testnet" | "arc", calls: string[], opts: { amount?: bigint; payTo?: Address } = {}): RouteRuntime {
+function fakeRuntime(network: "arc-testnet" | "arc", calls: string[], opts: { amount?: bigint; payTo?: Address; fail?: string } = {}): RouteRuntime {
   return {
     network: agonNetwork(network),
     quoteHire: async (req) => {
       calls.push(`${network}:quote:${req.method}:${JSON.stringify(req.body)}:${req.feeBps}:${req.feeAddress}`);
+      if (opts.fail) return { ok: false, code: "provider_unreachable", detail: opts.fail };
       const amount = opts.amount ?? (network === "arc" ? 10_000n : 100_000n);
       return { ok: true, quote: { jobId: `job-${network}`, amount, fee: 150n, total: amount + 150n, payTo: opts.payTo ?? CIRCLE_PAY, providerLabel: req.providerLabel, network: agonNetwork(network), expiresAt: new Date(Date.now() + 300_000), step: "confirm_code", code: "1234" } };
     },
@@ -31,14 +32,14 @@ function fakeRuntime(network: "arc-testnet" | "arc", calls: string[], opts: { am
   };
 }
 
-function setup(opts: { kind?: Intent["kind"]; outside?: boolean; entries?: CatalogEntry[]; circleStatus?: "ok" | "unavailable"; quoteAmount?: bigint } = {}) {
+function setup(opts: { kind?: Intent["kind"]; outside?: boolean; entries?: CatalogEntry[]; circleStatus?: "ok" | "unavailable"; quoteAmount?: bigint; quoteFail?: string } = {}) {
   const calls: string[] = [];
   const store = new MemoryPaymentsStore();
   const src = (id: "agon" | "circle", rows: CatalogEntry[], status: "ok" | "unavailable" = "ok"): RouteSource => ({ id, status: () => status, search: async () => rows.filter((r) => r.source === id) });
   const rows = opts.entries ?? [entry({}), circle];
   const router = createRouter({
     sources: [src("agon", rows), src("circle", rows, opts.circleStatus)],
-    runtimes: { "arc-testnet": fakeRuntime("arc-testnet", calls), ...(opts.outside === false ? {} : { arc: fakeRuntime("arc", calls, { amount: opts.quoteAmount }) }) },
+    runtimes: { "arc-testnet": fakeRuntime("arc-testnet", calls), ...(opts.outside === false ? {} : { arc: fakeRuntime("arc", calls, { amount: opts.quoteAmount, fail: opts.quoteFail }) }) },
     readIntent: async (text) => ({ kind: opts.kind ?? "analysis", query: text, values: {} }),
     fill: async (e) => (e.source === "circle" ? { ok: true as const, input: { symbol: "AAPL" } } : { ok: true as const, input: { market: "arsenal" } }),
     feeBps: 150,
@@ -314,4 +315,13 @@ test("the model's fit decides across categories, and its none means none", async
   assert.equal((await build([]).route("op:x", "Give me analyst ratings for AAPL")).kind, "none");
   const fallback = await build(null).route("op:x", "Give me analyst ratings for AAPL");
   assert.ok(fallback.kind === "pick" && fallback.pick.reference === "circle:ratings", "without the model the word scores still find it");
+});
+
+test("an outside service that fails before asking for payment is named as the service, not the Lead", async () => {
+  for (const [fail, code] of [["status 400", "service_refused"], ["fetch failed", "service_unreachable"], ["status 503", "service_unreachable"]] as const) {
+    const { router } = setup({ entries: [circle], kind: "market_data", quoteFail: fail });
+    const r = await router.route("op:x", "analyst ratings AAPL");
+    assert.ok(r.kind === "pick");
+    assert.deepEqual(await router.quote("op:x", r.routeId, "circle:ratings"), { ok: false, code, detail: fail });
+  }
 });

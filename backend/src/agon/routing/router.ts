@@ -225,6 +225,11 @@ export function createRouter(deps: {
       });
       if (!quoted.ok) {
         if (quoted.code === "insufficient_balance" && quoted.amount !== undefined && quoted.depositAddress) return { ok: false, code: "insufficient_balance", amount: quoted.amount, depositAddress: quoted.depositAddress, network: entry.network };
+        // The chosen service, not the Lead, failed before asking for payment: a 4xx means it turned the request down.
+        if (quoted.code === "provider_unreachable") {
+          const refused = /^status 4\d\d$/.test(quoted.detail ?? "");
+          return { ok: false, code: refused ? "service_refused" : "service_unreachable", ...(quoted.detail ? { detail: quoted.detail } : {}) };
+        }
         return { ok: false, code: quoted.code, ...(quoted.detail ? { detail: quoted.detail } : {}) };
       }
       const q = quoted.quote;

@@ -50,3 +50,10 @@ test("the choices list says each state plainly, with no em dash and no plus used
   assert.equal(askRefusalText("route_expired"), "These choices expired. Search again.");
   for (const line of Object.values(CHOICES_COPY)) assert.ok(!line.includes("—") && !line.includes(" + "), line);
 });
+
+test("an outside service that fails before payment is named as the service, never the lead agent", () => {
+  for (const code of ["service_unreachable", "service_refused"]) {
+    assert.doesNotMatch(askRefusalText(code), /lead agent/i);
+    assert.match(askRefusalText(code), /Nothing was charged/);
+  }
+});

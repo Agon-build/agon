@@ -46,3 +46,22 @@ test("final I4: with no required list, an empty fill asks about the first field 
   const filled = await fillInput(entry({ inputSchema: loose }), "Ratings for AAPL", intent, model('{"ticker":"AAPL"}'), "m");
   assert.deepEqual(filled, { ok: true, input: { ticker: "AAPL" } });
 });
+
+test("an option field gets its default or first option, never the model's pick, so the request costs the listed price", async () => {
+  // BlockRun's image service, read 2026-11-06: "model" is optional in the schema, but a request without it is refused with 400.
+  const image = { type: "object", required: ["prompt"], properties: {
+    n: { type: "integer", default: 1 },
+    size: { enum: ["1024x1024", "1792x1024"], type: "string", default: "1024x1024" },
+    model: { enum: ["openai/gpt-image-1", "google/nano-banana-pro"], type: "string" },
+    prompt: { type: "string" },
+  } };
+  const e = entry({ inputSchema: image, method: "POST" });
+  const out = await fillInput(e, "a logo of a red fox", intent, model('{"prompt":"a logo of a red fox","model":"google/nano-banana-pro","size":"9x9"}'), "m");
+  assert.deepEqual(out, { ok: true, input: { size: "1024x1024", model: "openai/gpt-image-1", prompt: "a logo of a red fox" } });
+  const asked = await fillInput(e, "make me something", intent, model("{}"), "m");
+  assert.deepEqual(asked, { ok: false, missing: ["prompt"], question: "What should I use for prompt?", partial: { size: "1024x1024", model: "openai/gpt-image-1" } });
+  // With no required list, filled options alone still ask for the open field.
+  const loose = { type: "object", properties: { model: { enum: ["a", "b"] }, prompt: { type: "string" } } };
+  const empty = await fillInput(entry({ inputSchema: loose }), "hi", intent, model("{}"), "m");
+  assert.deepEqual(empty, { ok: false, missing: ["prompt"], question: "What should I use for prompt?", partial: { model: "a" } });
+});

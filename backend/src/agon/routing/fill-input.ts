@@ -2,11 +2,20 @@ import type { ModelCaller } from "../playground/seasons/house-agents.ts";
 import type { CatalogEntry } from "./catalog.ts";
 import type { Intent } from "./intent.ts";
 
-type Prop = { type?: string | string[]; description?: string; title?: string };
+type Prop = { type?: string | string[]; description?: string; title?: string; enum?: unknown[]; default?: unknown };
 type Schema = { required?: string[]; properties?: Record<string, Prop> };
 
+/// A field limited to a list of options: its default, else the first option. The
+/// catalog price is read for that request, so a model never picks a dearer option.
+function fixedChoice(prop: Prop): unknown {
+  if (!Array.isArray(prop.enum) || prop.enum.length === 0) return undefined;
+  return prop.default !== undefined && prop.enum.includes(prop.default) ? prop.default : prop.enum[0];
+}
+
 /// Converts one value to the schema's primitive type, or undefined if it cannot.
+/// A field with options keeps only one of them.
 function coerce(value: unknown, prop: Prop): unknown {
+  if (Array.isArray(prop.enum) && prop.enum.length > 0) return prop.enum.includes(value) ? value : undefined;
   const type = Array.isArray(prop.type) ? prop.type[0] : prop.type;
   if (value === null || value === undefined || value === "") return undefined;
   if (type === "integer" || type === "number") {
@@ -50,11 +59,15 @@ export async function fillInput(
   }
   const input: Record<string, unknown> = {};
   for (const [key, prop] of Object.entries(props)) {
-    const v = coerce(proposed[key], prop);
+    // Some services reject a request without an option they list as optional (BlockRun's image model, 2026-11-06).
+    const v = fixedChoice(prop) ?? coerce(proposed[key], prop);
     if (v !== undefined) input[key] = v;
   }
-  // A schema with no required list still needs something: an empty fill asks about the first field.
-  const required = schema.required && schema.required.length > 0 ? schema.required : Object.keys(input).length === 0 ? [Object.keys(props)[0]!] : [];
+  // A schema with no required list still needs something: an empty fill (options aside) asks about the first open field.
+  const open = Object.keys(props).filter((k) => fixedChoice(props[k]!) === undefined);
+  const required = schema.required && schema.required.length > 0
+    ? schema.required
+    : open.length > 0 && open.every((k) => input[k] === undefined) ? [open[0]!] : [];
   const missing = required.filter((k) => input[k] === undefined);
   if (missing.length > 0) {
     const first = props[missing[0]!] ?? {};

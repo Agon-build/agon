@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import { z } from "zod";
 
+import { CHECKER_HEADER, acceptsProcessChecker } from "../checker-pass.ts";
 import { createRateLimiter } from "../stage/rate-limit.ts";
 
 export const CERTIFICATION_PROTOCOL = "agon-playground/1";
@@ -146,14 +147,16 @@ export function certificationCaller(forwardedFor: string | undefined): string | 
 }
 
 /// Model-run certification answers cost money, so outside callers are limited
-/// per caller and in total. Agon's own checker is never limited.
-export function createCertificationGate(input: { perCaller?: number; total?: number; windowMs?: number } = {}): (c: Context) => boolean {
+/// per caller and in total. Agon's own checker is never limited: it comes from
+/// inside, or through the proxy carrying this process's checker pass.
+export function createCertificationGate(input: { perCaller?: number; total?: number; windowMs?: number; trusts?: (pass: string | undefined) => boolean } = {}): (c: Context) => boolean {
   const windowMs = input.windowMs ?? 60 * 60_000;
   const perCaller = createRateLimiter({ limit: input.perCaller ?? 6, windowMs });
   const total = createRateLimiter({ limit: input.total ?? 60, windowMs });
+  const trusts = input.trusts ?? acceptsProcessChecker;
   return (c) => {
     const caller = certificationCaller(c.req.header("x-forwarded-for"));
-    return caller === null || (perCaller(caller) && total("all"));
+    return caller === null || trusts(c.req.header(CHECKER_HEADER)) || (perCaller(caller) && total("all"));
   };
 }
 

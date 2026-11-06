@@ -16,7 +16,13 @@ export async function alertAgonCertificationOperator(
   const suspended = input.status === "suspended";
   const recovered = input.status === "recovered";
   const fingerprint = `certification:${input.listingReference}@${input.listingVersion}`;
-  if (recovered) await repository.resolve(input.operator, fingerprint);
+  if (recovered) {
+    // A warning that clears on the next check only closes the warning; a fresh
+    // notice each time filled the bell (2026-11-06). A suspension (critical, so
+    // not closed here) still announces its recovery.
+    const closedWarning = await repository.resolve(input.operator, fingerprint);
+    if (closedWarning) return;
+  }
   await repository.raise({
     operator: input.operator,
     fingerprint: recovered ? `${fingerprint}:recovered` : fingerprint,

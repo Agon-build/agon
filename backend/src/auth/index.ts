@@ -120,6 +120,7 @@ import {
   createTelegramAlertSender,
 } from "../agon/operations-alerts.ts";
 import { redactSensitive } from "../agon/redact.ts";
+import { processCheckerPass } from "../agon/checker-pass.ts";
 import { isAgonCertificationSchemaReady } from "../agon/certification-readiness.ts";
 import { PostgresAgonOperationStore } from "../agon/write/repository.js";
 import { CachedAgonReadiness } from "../agon/write/readiness.js";
@@ -537,8 +538,11 @@ const agonPlaygroundProviderRunner = createHttpPlaygroundProviderRunner(config.a
 // Certification discovers each provider endpoint from its immutable manifest.
 // The environment maps remain available only as a compatibility override for
 // older jobs that do not yet carry manifest source fields.
+// Agon's own checks carry the process pass to Agon's own endpoints, so their rate limit never counts Agon.
+const agonCheckerFetch = processCheckerPass([AGON_API_ORIGIN]).wrap((url, init) => fetch(url, init));
 const agonCertificationProviderRunner = createManifestDerivedPlaygroundProviderRunner({
   overrides: config.agon.playground.providerEndpoints,
+  fetch: agonCheckerFetch,
 });
 const agonCertificationEndpointQaRunner = createManifestDerivedAgonEndpointQaRunner({
   overrides: config.agon.playground.endpointQaEndpoints,
@@ -1020,7 +1024,7 @@ const agonTestService = createTestService({
   },
   run: runAgentTest,
   chain: { chainId: () => publicClient.getChainId(), blockNumber: () => publicClient.getBlockNumber() },
-  fetchDeps: { fetch: (url, init) => fetch(url, init), assertPublic: (url) => assertPublicHttpsDestination(url) },
+  fetchDeps: { fetch: agonCheckerFetch, assertPublic: (url) => assertPublicHttpsDestination(url) },
 });
 const agonTestRoutes = createTestRoutes({
   service: agonTestService,

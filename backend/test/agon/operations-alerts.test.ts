@@ -147,7 +147,7 @@ test("fans one canonical service incident out to the default operator and subscr
   assert.equal((await repository.list()).find((alert) => alert.alertId === raised.alertId)?.occurrenceCount, 2);
 });
 
-test("a recovery resolves the active warning but still leaves a single informational audit record", async () => {
+test("a warning that clears on the next check is closed quietly, with no new notice", async () => {
   const listingReference = `5042002:0x${"22".repeat(20)}:9`;
   await alertAgonCertificationOperator({
     operator: OPERATOR, listingReference, listingVersion: "1", status: "warning",
@@ -159,7 +159,23 @@ test("a recovery resolves the active warning but still leaves a single informati
   }, repository);
   const matching = (await repository.list()).filter((alert) => alert.fingerprint.includes(`${listingReference}@1`));
   assert.equal(matching.filter((alert) => alert.status === "open").length, 0);
-  assert.equal(matching.filter((alert) => alert.status === "resolved").length, 2);
+  assert.deepEqual(matching.map((alert) => alert.fingerprint), [`certification:${listingReference}@1`], "no recovered notice for a warning");
+});
+
+test("a recovery after a suspension still says so, once per recovery", async () => {
+  const listingReference = `5042002:0x${"23".repeat(20)}:4`;
+  await alertAgonCertificationOperator({
+    operator: OPERATOR, listingReference, listingVersion: "2", status: "suspended",
+    reasons: ["provider_timeout"], consecutiveFailures: 3,
+  }, repository);
+  await alertAgonCertificationOperator({
+    operator: OPERATOR, listingReference, listingVersion: "2", status: "recovered",
+    reasons: [], consecutiveFailures: 0,
+  }, repository);
+  const matching = (await repository.list()).filter((alert) => alert.fingerprint.includes(`${listingReference}@2`));
+  const recovered = matching.filter((alert) => alert.fingerprint.endsWith(":recovered"));
+  assert.equal(recovered.length, 1);
+  assert.equal(recovered[0]!.title, "Agon service recovered");
 });
 
 test("Telegram delivery retries from the durable outbox without changing incident state", async () => {

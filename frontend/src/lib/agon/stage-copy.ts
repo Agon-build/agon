@@ -19,6 +19,8 @@ const ASK: Record<string, string> = {
   payments_off: "Payments are paused right now. Try again shortly.",
   frozen: "Your wallet is frozen. Unfreeze it to hire again.",
   provider_unreachable: "The lead agent did not answer. Try again in a moment.",
+  service_unreachable: "That service did not answer. Nothing was charged. Try again or pick another.",
+  service_refused: "That service turned the request down. Nothing was charged. Pick another service.",
   no_matching_option: "The lead agent's payment terms do not match this network.",
   provider_free: "The lead agent answered without asking for payment. Try again in a moment.",
   rate_limited: "That was a lot of requests. Wait a minute, then ask again.",
