@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 
-import { ARENA_STATUS, DOCS_SECTIONS, FAQS, HIRE_STEPS, MCP_PROMPTS, MCP_TOOL_GROUPS, PAYMENT_OPTIONS, ROADMAP, copyProblems, docsStrings } from "./docs-content.ts";
+import { ARENA_STATUS, DOCS_SECTIONS, FAQS, HIRE_NOTE, HIRE_STEPS, LEADERBOARD_NOTE, OVERVIEW, TRUST_STATES, MCP_PROMPTS, MCP_TOOL_GROUPS, PAYMENT_OPTIONS, ROADMAP, copyProblems, docsStrings } from "./docs-content.ts";
 import { AGON_NAV } from "./nav.ts";
 import { DOCS_REDIRECTS } from "./docs-redirects.ts";
 
@@ -12,21 +12,32 @@ test("docs sections come in one order with unique, URL-safe ids", () => {
   assert.equal(new Set(DOCS_SECTIONS.map((s) => s.label)).size, DOCS_SECTIONS.length);
 });
 
-test("the roadmap leads with what works, keeps Next to three and Later to short titles", () => {
-  const later = ROADMAP.later.map((i) => i.title.toLowerCase()).join(" | ");
-  for (const word of ["escrow", "trading", "whatsapp", "provider dashboard", "other marketplaces", "arc mainnet", "circle"]) assert.ok(later.includes(word), word);
-  assert.ok(ROADMAP.later.length <= 6, "Later stays a short list");
-  // Circle waits for Agon's mainnet launch (owner decision 2026-10-19).
-  assert.deepEqual(ROADMAP.next.map((i) => i.title), ["Hire the best agent for any request", "Arena seasons that score"]);
-  // Live now holds only capabilities proven on production (agon-build capabilities.md, 2026-10-19).
-  assert.deepEqual(ROADMAP.live.map((i) => i.title), [
-    "Ask about any Polymarket market",
-    "Playground tests for listed agents",
-    "Agon score and category leaderboards",
-    "Scores from paid work",
-    "Agon MCP for coding agents",
-  ]);
-  for (const i of ROADMAP.live) assert.ok(!/arena|circle|mainnet|telegram/i.test(`${i.title} ${i.body}`), `Live now claims what is not live: ${i.title}`);
+test("the roadmap matches what is live on 7 Nov", () => {
+  const live = ROADMAP.live.map((x) => x.title);
+  assert.deepEqual(live, ["Hire in three groups", "Circle services on Arc mainnet", "Playground checks", "Agon score and leaderboards", "Arena Season 2", "Ratings from paid work", "Agon MCP"]);
+  assert.ok(!/Polymarket/.test(live[0]!));
+  assert.deepEqual(ROADMAP.next.map((x) => x.title), ["Enter your agent in the Arena", "Escrow for larger work", "Agon contracts on Arc mainnet"]);
+  assert.deepEqual(ROADMAP.later.map((x) => x.title), ["Trading and LP competitions", "More marketplaces", "Provider dashboard"]);
+  assert.ok(!ROADMAP.later.some((x) => /Circle/.test(x.title)));
+});
+
+test("docs never promise refunds for every hire", () => {
+  const last = HIRE_STEPS.at(-1)!.body;
+  assert.match(last, /No fee unless the answer arrives/);
+  assert.match(last, /Agon's own agents refund/);
+  assert.doesNotMatch(last, /you are refunded automatically/);
+  assert.doesNotMatch(FAQS.find((f) => /refund/i.test(f.q))!.a, /^Yes, automatically/);
+});
+
+test("overview, hire note and arena status say what is true", () => {
+  assert.doesNotMatch(OVERVIEW.facts[2]!.body, /coming next/i);
+  assert.doesNotMatch(HIRE_NOTE, /come with Agon's move/);
+  assert.match(ARENA_STATUS, /Season 2/);
+  assert.match(LEADERBOARD_NOTE, /24 hours, 7 days and 30 days/);
+});
+
+test("Paused reads as a warning, not a failure", () => {
+  assert.equal(TRUST_STATES.find((s) => s.title === "Paused")!.tone, "warn");
 });
 
 test("the MCP section carries the connection, the tool groups and five starting requests", () => {
@@ -124,7 +135,7 @@ test("Docs say what Agon is: it routes to the best agent and proves it with rati
   assert.doesNotMatch(OVERVIEW.lead, /a market for AI agents/i);
   assert.deepEqual(RATING_SOURCES.map((r) => [r.title, r.status]), [
     ["Playground tests", "Live"],
-    ["Arena seasons", "Coming next"],
+    ["Arena seasons", "Live"],
     ["Scores from paid work", "Live"],
   ]);
   assert.match(RATING_SOURCES[0]!.body, /rate limited/i);
@@ -160,7 +171,7 @@ test("docs match the 17 October changes: wallet terms, top-up, automatic refunds
   const hire = HIRE_STEPS.map((s) => s.body).join(" ");
   assert.match(hire, /wallet terms/);
   assert.match(hire, /add USDC/);
-  assert.match(hire, /answer does not arrive/);
+  assert.match(hire, /unless the answer arrives/);
   assert.match(PAYMENT_SAFETY, /Agon holds/);
   assert.match(PAYMENT_SAFETY, /withdraw/);
   const escrow = PAYMENT_OPTIONS.find((p) => /escrow/i.test(p.body))!;
@@ -188,7 +199,7 @@ test("the FAQ answers the questions people ask, in plain words, with no secret h
   for (const t of all) assert.deepEqual(copyProblems(t), [], t);
 });
 
-test("docs present only Live capabilities as working: Circle, mainnet and the Arena read as coming next", () => {
+test("docs present Circle services with their network and the fee as it works", () => {
   const fees = PAYMENT_OPTIONS.map((o) => o.body).join(" ");
   assert.match(fees, /\b5% routing fee/);
   assert.doesNotMatch(fees, /0\.01 USDC/, "no minimum fee (owner decision 2026-11-05)");
@@ -196,12 +207,12 @@ test("docs present only Live capabilities as working: Circle, mainnet and the Ar
   assert.match(fees, /only when the answer arrives/);
   const outsideRoadmap = docsStrings().filter((t) => !ROADMAP.next.some((i) => i.title === t || i.body === t) && !ROADMAP.later.some((i) => i.title === t || i.body === t));
   for (const t of outsideRoadmap) {
-    if (!t.trim().endsWith("?") && /Circle('s)? Agent Marketplace|Circle services?\b/.test(t)) assert.match(t, /move to Arc mainnet/i, `presents Circle services as working: ${t}`);
+    if (!t.trim().endsWith("?") && /Circle('s)? Agent Marketplace|Circle services?\b/.test(t)) assert.match(t, /Arc mainnet|real USDC|does not rank/i, `Circle services without their network: ${t}`);
     assert.doesNotMatch(t, /20 October|late October/, `stale date: ${t}`);
   }
   assert.match(ARENA_STATUS, /scored as the markets resolve/);
   assert.doesNotMatch(ARENA_STATUS, /not scoring/i);
-  assert.match(FAQS.find((f) => /Circle/.test(f.q))!.a, /^Not yet/);
+  assert.match(FAQS.find((f) => /Circle/.test(f.q))!.a, /^Yes/);
   assert.match(HIRE_STEPS.map((h) => h.body).join(" "), /swap/i);
 });
 
