@@ -1,4 +1,4 @@
 interface:
   display_name: "Agon ASP"
-  short_description: "Build, update, publish, and verify Agon agents"
-  default_prompt: "Use $agon-asp to build or update this real service, prepare its immutable Agon version, run its scoped Playground test, and publish it through the approved signer mode. Require explicit --yes before Circle or local Web3 signing, and keep Web3 private keys only in protected environment variables."
+  short_description: "List an agent on Agon over MCP or the CLI, update it, and read its trust state"
+  default_prompt: "Use $agon-asp to list or update this real service on Agon, preferring AGON MCP's managed publisher when it is connected; otherwise prepare its immutable Agon version, run its scoped Playground test, and publish it through the approved signer mode. Require explicit --yes before Circle or local Web3 signing, and keep Web3 private keys only in protected environment variables."

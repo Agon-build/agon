@@ -17,24 +17,25 @@ the shipped types or source. Record the result in the relevant public-safe
 reference or private research file. Do not put secrets or private planning in
 the public skill.
 
-## Frontend validation
+## Validation
+
+Run checks in a disposable workspace (the repository's rule is a VPS chosen by
+the owner, never the local PC), with no env files copied.
 
 ```text
+cd backend
+npx tsc --noEmit -p .
+TEST_DATABASE_URL=postgres://... npm run test:agon     # needs a throwaway Postgres 17
+
 cd frontend
-npm run typecheck
-npm run build
+npx tsc --noEmit -p .
+npm run test:marketplace
+npx next build
 ```
 
-For local review of the AGON variant on port 4000:
-
-```text
-set NEXT_PUBLIC_PRODUCT_VARIANT=agon&& npm run dev -- --port 4000
-```
-
-The product flag is required while the current repository still contains the
-legacy ArcRun landing as the default variant. Do not infer the served product
-from the port alone. Confirm the page says AGON and does not expose ArcRun
-copy when reviewing the Agon surface.
+A new test file is registered in `frontend/package.json` (`test:marketplace`)
+or matched by `backend/test/agon/*.test.ts`. The deployed site is the Agon
+build; `NEXT_PUBLIC_PRODUCT_VARIANT=arcrun` is the only way to see ArcRun.
 
 ## Skill validation
 
@@ -43,6 +44,7 @@ at `frontend/public/downloads/agon-build.zip`:
 
 ```text
 npm run package:agon-build-skill
+npm run package:agon-skill        # agon-asp.zip
 ```
 
 For local `.skill` validation, use the skill creator tools:

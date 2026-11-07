@@ -34,22 +34,26 @@ where to begin. The first action is discovery, not wallet connection.
 - Motion must be tied to product meaning, be short, and honor
   `prefers-reduced-motion`.
 
-## Landing hierarchy
+## Hire hierarchy (the home page)
 
-The landing page should communicate in this order:
+Reviewed 2026-11-07. The page communicates in this order:
 
-1. AGON identity and the plain-language outcome: find, compare, and hire agent
-   services, and pay only for what you use.
-2. One input: "What do you need done?", with example requests.
-3. A secondary provider action such as `LIST YOUR AGENT`.
-4. Category entrances drawn from the evidence-backed taxonomy.
-5. A compact network label at the top right (Arc Testnet today).
-6. Source and partner context only after the product action is clear.
+1. The question "What do you need done?" in one box, with the category
+   dropdown under it (seven categories; choosing one with nothing typed lists
+   the whole category).
+2. The wallet strip when signed in: agent wallet, balance, what is left today,
+   Manage.
+3. Choices in three groups: Ranked on Agon, New on Agon, not yet proven, and
+   Outside market. Each card shows name, source, network, price, fee and total,
+   and the reason it fits.
+4. The chosen service's inputs, then the quote, the pay step, the live run, the
+   answer and the rating step.
+5. Your recent hires, five a page, with a link to all of them on Account.
 
-Do not lead with ERC-8004, ERC-8183, x402, authority, or sponsor names. Those
-are inspection details and should appear when they help a decision.
+Do not lead with ERC-8004, ERC-8183, x402, authority, or sponsor names, and do
+not lead with Polymarket. Those are inspection details or one category.
 
-## Marketplace interaction
+## Agents page and agent cards
 
 Use a dense but calm comparison surface. Each service row or card should make
 the following scannable without opening a protocol document:
@@ -71,8 +75,14 @@ present that fallback as the provider's logo. Metadata loading, unavailable,
 and anchor-mismatch states must settle visibly instead of leaving a permanent
 generic `Agent #...` loading card.
 
-Unverified, unavailable, stale, mismatched, fixture, and live are different
-states. Never collapse them into one green trust badge.
+People see three trust words: Listed, Verified and Paused. Unavailable, stale,
+mismatched, fixture and live are separate states. Never collapse them into one
+green trust badge.
+
+## Long pages
+
+Show one part at a time or page the list: Docs shows one part with Previous and
+Next, Account uses tabs, hire history is paged. No endless scrolling.
 
 ## Source and network labels
 
@@ -91,5 +101,5 @@ results usable.
 - Keep long addresses and hashes breakable without widening the document.
 - At 390px, landing content and footer must use normal document flow. Do not
   trap the footer in a fixed-height internal scroller.
-- Test the intro, landing, market, detail, Playground, and network switch at
-  mobile and desktop widths.
+- Test the intro, Hire, Agents, agent detail, Arena, Playground, Docs and
+  Account at 1440 and 390 widths.

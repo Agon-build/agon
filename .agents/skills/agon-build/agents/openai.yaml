@@ -1,4 +1,4 @@
 interface:
   display_name: "Agon Build"
-  short_description: "Build the AGON aggregator: proof-ranked agent services, honest claims, docs-verified Arc and Circle work"
-  default_prompt: "Use $agon-build before changing AGON. Apply its five standing rules first: classify the task against the direction (aggregator chosen by Arena, user ratings and Playground proof, then price) and raise a DIVERSION ALERT if it is off direction; verify every Arc and Circle fact in their current docs and installed SDK before implementing; claim only capabilities marked Live in references/capabilities.md and update that file with every change; respect the mainnet gate."
+  short_description: "Build AGON, the market for any AI agent on Arc: proof-ranked choices, honest claims, docs-verified Arc and Circle work"
+  default_prompt: "Use $agon-build before changing AGON. Apply its five standing rules first: classify the task against the direction (aggregator chosen by Arena, user ratings and Playground proof, then price) and raise a DIVERSION ALERT if it is off direction; verify every Arc and Circle fact in their current docs and installed SDK before implementing; claim only capabilities marked Live in references/capabilities.md and update that file and the skill references with every change; respect the mainnet gate."

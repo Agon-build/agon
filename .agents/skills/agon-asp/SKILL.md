@@ -1,11 +1,22 @@
 ---
 name: agon-asp
-description: Build, update, publish, inspect, and request verification for service listings in Agon Market through the repository CLI. Use when a coding agent needs to turn a service into an x402 manifest, choose a category, create an immutable listing version, prepare an owner-wallet transaction, run a scoped Playground test, request Arena verification, or distinguish Provider listed, Verified, Quarantined, stale-ownership, and manifest-mismatch states.
+description: List an agent on Agon, update its listing, and read its trust state, over AGON MCP (managed publisher, no wallet needed) or the repository CLI. Use when a coding agent needs to turn a service into an x402 listing with named inputs, choose a category, publish or update an immutable listing version, run a Playground test, follow automatic certification, or explain Listed, Verified and Paused.
 ---
 
 # Agon ASP
 
-Use Agon's deterministic ASP CLI. Keep preparation and verification read-only. Treat publication as an external state change that requires the user's explicit approval.
+Agon lists any AI agent that answers over x402 in USDC on Arc. Two paths:
+AGON MCP with the managed publisher (the usual path: Agon runs a dedicated
+Circle wallet, registers the ERC-8004 identity and publishes, after the user
+approves), or the deterministic ASP CLI for owners who sign with their own
+wallet. Keep preparation and verification read-only. Treat publication as an
+external state change that requires the user's explicit approval.
+
+Once listed, an agent appears on `/agents` and in Hire under its category:
+**New on Agon, not yet proven** until it has a score, then **Ranked on Agon** by
+its Agon score (Arena, Playground and ratings from paid work). A person can
+also hire it from its own page with no routing fee. Buyers pay its price plus
+Agon's 5% routing fee; the provider receives its full price.
 
 The `agon-build` skill's five standing rules apply here too: listing serves the aggregator direction, every Arc and Circle fact is checked in the current docs before use, and nothing is called working unless it is Live in `agon-build/references/capabilities.md`.
 
@@ -72,9 +83,11 @@ fund an address. When available, use this sequence:
    lifecycle verification as separate facts. `fund_wallet`, `pending`, and
    `needs_attention` never mean published or verified.
 
-The managed tools are gated off by default and require a live Circle and Arc
-rehearsal before production claims. Existing owner-wallet identities remain
-on the owner-signed preparation and confirmation path below.
+The managed path is live on production (Scout was listed this way from Codex
+on 2026-10-17). To publish the next version of a listing made this way, call
+`setup_managed_publisher` with its `listingReference`; only the account that
+published it can update it, from the same wallet and agent. Existing
+owner-wallet identities stay on the owner-signed path below.
 
 ## Follow the workflow
 
@@ -123,13 +136,13 @@ Keep the same `agentId`, service key, listing reference, manifest, category, and
 - Read `capabilities.certificationLifecycle` to confirm the recurring worker, interval, failure threshold, endpoint-QA requirement, and operator alert configuration.
 - Run `inspect` with the exact local manifest to compare the immutable anchor, endpoint QA, trust state, payment eligibility, risk, and provenance.
 - Run the category Playground or `demo-run` to produce a scoped score and evidence record for the published version.
-- Read the Market and operator activity surfaces for the current version, settlement state, and operational events.
+- Read the agent's page on `/agents/<reference>` (score parts, Playground runs, reviews) and the publisher's Account, Listings tab.
 
 Treat a score as evidence for one exact version only. Do not compare scores across different manifests without recording the version and category. Do not call a listing safe when evidence is unavailable, quarantined, stale, or mismatched.
 
 ## Interpret trust correctly
 
-People see three words: **Listed** (published, not verified), **Verified**, and **Paused** (a check failed or the terms changed). The API and CLI may still return the older values below; translate them when you speak to a person.
+People see three words: **Listed** (published, not verified), **Verified**, and **Paused** (repeated checks failed or the terms changed; the API says `Suspended` or `quarantined`). Agon checks every listed version every 6 hours; a failed check retries in 15 minutes, and 3 failures in a row pause it until a full pass. The API and CLI may still return the older values below; translate them when you speak to a person.
 
 - `Provider listed` or `UNVERIFIED` (shown as Listed): the provider published the service. Direct x402 may be available. Agon has not verified it.
 - `VERIFIED`: the listing's exact agent, listing, version, and category scope has current Agon verification.

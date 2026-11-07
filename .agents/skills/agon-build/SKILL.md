@@ -5,13 +5,17 @@ description: Build, extend, review, or explain AGON, the Arc-native aggregator o
 
 # Agon build
 
-AGON is an aggregator of agent services on Arc. A person or an agent says what
-they need; AGON finds the best agent service for it across sources (its own
-listings first, then outside marketplaces, starting with Circle's Agent
-Marketplace), shows why it chose it, and pays per use in USDC on Arc inside
-spending limits the person controls. Providers list through AGON MCP or the web
-and keep ownership through their ERC-8004 identity. AGON is not the old ArcRun
-competition product; ArcRun names, routes and copy do not enter AGON work.
+AGON is a market for any AI agent, on Arc. A person or an agent picks a
+category or says what they need in plain words. AGON lists the agents that can
+do it in three groups: agents ranked on Agon by proof, new Agon agents not yet
+proven, and outside services (Circle's Agent Marketplace today, other markets
+later), which are never ranked. The person chooses one, sees the exact price,
+AGON's routing fee and the total, and pays per use in USDC on Arc from an agent
+wallet inside limits they control. The answer arrives on the page, in the bell,
+by email and in Telegram, and the buyer rates it. Providers list through AGON
+MCP or the web and keep ownership through their ERC-8004 identity. AGON is not
+the old ArcRun competition product; ArcRun names, routes and copy do not enter
+AGON work.
 
 This skill is public and safe to distribute. Private plans, wallet details,
 credentials, operator runbooks and internal research never go in it.
@@ -108,6 +112,13 @@ posts and submissions.
   feature.
 - Every change that adds, fixes or breaks a capability updates capabilities.md
   in the same change.
+- **Keep the skills current.** A change that adds a route, MCP tool, fee,
+  category, channel, network, listing step or trust word also updates the
+  reference that describes it (product.md, routes.md, network-matrix.md,
+  roadmap.md, ui.md, and agon-asp for listing), then rebuilds the public
+  downloads with `npm run package:agon-build-skill` and
+  `npm run package:agon-skill`. A skill that describes last month's Agon is a
+  false claim under this rule.
 
 ### Rule 5. Professional pace and the mainnet gate
 
@@ -167,8 +178,8 @@ The product is always AGON. The active network is a typed runtime context.
 ```text
 AGON
   Arc Testnet   AGON's own contracts, listings, tests, Arena and AGON hires
-  Arc mainnet   outside services (Circle) paid in real USDC, behind a switch;
-                no AGON contracts yet (Rule 5)
+  Arc mainnet   outside services (Circle) paid in real USDC from a separate
+                mainnet agent wallet; no AGON contracts yet (Rule 5)
   BNB           parked; code stays in bnb-market/ and is not advertised
 ```
 
@@ -197,12 +208,14 @@ recovery states, and shows nothing that Rule 4 does not allow.
 The buyer path that every feature serves:
 
 ```text
-describe the job
-  -> AGON reads it and picks: proven agents first, then price, with the reason
-  -> see the exact input, price, AGON fee and total, swap the pick if wanted
+pick a category or describe the job
+  -> AGON lists choices: ranked on Agon, new on Agon, outside market
+  -> the person chooses; AGON fills the service's inputs and asks for any missing one
+  -> see the exact input, price, AGON fee (5%) and total
   -> pay inside limits; larger payments approved in the browser
-  -> watch delivery and the receipt, with Arc transactions
-  -> rate the delivered job (user rating feeds the next pick)
+  -> watch delivery and the receipt, with Arc transactions; undelivered work is refunded
+  -> the answer reaches the page, bell, email and Telegram
+  -> rate the delivered job (ratings feed the Agon score once an agent has three)
 ```
 
 Do not add a source, category, partner, payment rail or chain until its loop is

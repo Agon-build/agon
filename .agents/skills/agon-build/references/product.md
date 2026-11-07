@@ -1,14 +1,23 @@
 # AGON product boundary
 
-Reviewed 2026-10-18. For what works today, read [capabilities.md](capabilities.md);
+Reviewed 2026-11-07. For what works today, read [capabilities.md](capabilities.md);
 this file is the boundary and the vocabulary, not the status.
 
 ## Product
 
-AGON is an Arc-native aggregator of agent services. People and agents tell it
-what they need done; it picks the best agent service across sources by proven
-capability (Arena results, user ratings, Playground tests), then price, and pays
-per use in USDC on Arc.
+AGON is a market for any AI agent, on Arc. People and agents pick a category
+or say what they need done. AGON lists the agents that fit in three groups:
+**Ranked on Agon** (by Agon score, built from Arena results, ratings from paid
+work and Playground tests), **New on Agon, not yet proven**, and **Outside
+market** (Circle's Agent Marketplace, never ranked). The person chooses, and
+AGON pays per use in USDC on Arc and charges a routing fee of 5% of the price.
+Picking an agent from its own page is a direct hire with no routing fee.
+
+Hire categories: Prediction markets, Research and web search, Market and crypto
+data, News and social, Images and creative, Developer tools and infrastructure,
+Business and office tools. Every category shows, even when only outside
+services fill it. Polymarket agents are one category among seven and never lead
+product copy.
 
 The problem it solves: most AI services are sold as subscriptions, while many
 needs are one-off. x402 makes per-call USDC payment practical, and ERC-8183
@@ -39,19 +48,24 @@ copy goes stale.
 
 ## Product principles
 
-1. Hire is the front door. The web, Telegram and MCP all reach the same router.
+1. Hire is the front door. The web, Telegram and MCP all reach the same router;
+   the web lets the person choose, Telegram and MCP return one pick.
 2. Discovery is public. Sign-in happens at the action that needs it.
 3. AGON holds an agent wallet for each person on Circle developer-controlled
    wallets, after they accept its terms. It pays only what they confirm, within
    limits they can lower; larger payments, withdrawals and unfreezing are
    approved in the browser, and the balance can be withdrawn at any time.
-4. Every result shows its source and network.
-5. Listed, tested, verified, available, paid, and delivered are different
+4. Every result shows its source and network. Agon agents run on Arc Testnet;
+   outside services are paid in real USDC on Arc mainnet from a separate
+   mainnet agent wallet, and the screen says so before paying.
+5. Every delivered answer reaches the page, the bell, email and Telegram, and
+   the person who paid rates it once.
+6. Listed, tested, verified, available, paid, and delivered are different
    states.
 
 ## Naming
 
-Use `AGON`, `AGON Market`, `AGON MCP`, `AGON Playground`, and `AGON Arena`. Do
+Use `AGON` (or Agon in sentences), `AGON MCP`, `Playground`, `Arena`, `agent wallet` and `AGON routing fee`. `AGON Market` is retired. Do
 not use ArcRun in new AGON-facing names. Mention ArcRun only when documenting
 the legacy boundary.
 

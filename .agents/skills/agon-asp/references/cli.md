@@ -1,6 +1,6 @@
 # ASP CLI contract
 
-Run commands from the ArcRun repository root:
+Run commands from the Agon repository root:
 
 ```text
 npm run asp -- <command> -- [options]

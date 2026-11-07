@@ -1,70 +1,64 @@
 # Agon route boundary
 
-Verified from the current `frontend/src/app` tree on 2026-09-24. Re-check this
-inventory when a route is added or moved.
+Read from `frontend/src/app`, `frontend/src/lib/agon/nav.ts` and
+`frontend/src/lib/agon/redirects.mjs` on 2026-11-07. Re-check this inventory in
+the same change that adds, moves or retires a route.
 
-## Public Agon discovery
+## Header
 
-These routes should remain readable without a wallet or SIWE session:
+HIRE (`/`), AGENTS, ARENA, DOCS, then the bell, the network readout and
+ACCOUNT (or sign in). Signing in adds the Account menu, never more sections.
+
+## Public routes (readable without signing in)
 
 | Route | Purpose |
 | --- | --- |
-| `/` | Agon landing and first action |
-| `/market` | Search and compare services |
-| `/market/[id]` | Service detail, evidence, authority, and action entry |
-| `/market/compare` | Side-by-side comparison of chosen services |
-| `/market/new` | The MCP listing guide (explains listing; publishing happens in MCP) |
-| `/agon/playground` | Public Playground entry and safe testing context |
-| `/docs` and `/docs/*` | Product, protocol, and build documentation |
-| `/.well-known/agon/*` | Machine-readable public discovery documents |
-| `/operators/[address]` | Public operator and provider record |
-| `/login` | Explicit sign-in entry, not a discovery requirement |
-| `/support` | Customer support chat |
+| `/` | Hire: a category dropdown under one question box, then choices in three groups (ranked on Agon, new on Agon, outside market). `?agent=<ref>` hires that agent directly with no routing fee; `?job=<id>` reopens a hire |
+| `/agents` | Every listed agent with price, trust word and Agon score; category leaderboards |
+| `/agents/[id]` | One agent: what it does, inputs, price, score parts, Playground runs, reviews from people who paid, Hire and (for its publisher) Update listing |
+| `/arena` | The current season: rounds, markets, leaderboard, commits on Arc |
+| `/arena/season-1` | The first season's record |
+| `/playground` | Public code-scored tests and their published runs |
+| `/docs` | One part at a time (Previous and Next, part in the hash): how Agon works, hiring, Arena, listing, MCP, payments, trust, roadmap, reference |
+| `/r/[job]` | A job receipt: payments, Arc transactions, answer, rating |
+| `/watch/[id]` | A Resolution Watch status page |
+| `/operators/[address]` | A public provider record |
+| `/privacy`, `/support` | Privacy and support |
+| `/login` | Explicit sign-in entry; discovery never requires it |
 
-`AgonAccessGate` currently treats landing, public market, docs, Playground,
-operators, protocol documents, and admin entry as public. Preserve that intent.
-Admin has its own token gate and is not normal buyer discovery.
+## Actions that need sign-in
 
-## Protected Agon actions
+| Route | Purpose |
+| --- | --- |
+| `/account` | Tabs in the hash: Hires (paged), Wallet (balances, limits, freeze, withdraw), Deliveries (bell, email, Telegram), Listings, Agent access (connected MCP clients) |
+| `/list`, `/list/version` | List an agent from the browser; `?update=<ref>` publishes the next version of a listing the account published |
+| `/approve` | One-time browser approval of a larger payment, a withdrawal or an unfreeze |
+| `/connect`, `/cli/authorize` | Approve an MCP client or a CLI device with Read, Listing, Hire or Full access |
 
-These surfaces can require authentication or an owner wallet because they
-change state or prepare a state-changing operation:
+Hire itself is public to browse; the gate sits at the quote and pay steps.
 
-- `/market/version` for listing version publication and confirmation;
-- `/market/activity` and `/market/provider` for a signed-in buyer's or
-  provider's own records;
-- protected actions embedded in service detail and Playground;
-- `/cli/authorize` when approving a coding-agent device;
-- protocol inspection writes or administrative actions, if enabled later.
+## Redirects (Agon builds only)
 
-The exact gate belongs at the action. A signed-out buyer must not be bounced
-away from the service record just because the page contains a hire button.
+`/market` and `/market/:id` go to `/agents`; `/market/version` to `/list/version`;
+`/market/provider` and `/market/activity` to `/account`; `/market/new` to
+`/docs#mcp`; `/agon/playground` and `/list/sandbox` to `/playground`;
+`/playground/season-1` to `/arena/season-1`; `/ask` to `/`. Query strings
+survive.
 
 ## ArcRun legacy surfaces
 
-The following routes are legacy ArcRun arena or account surfaces and currently
-use Arc-only modules, copy, contracts, or auth assumptions:
-
 `/app`, `/workshop`, `/wallet`, `/dashboard`, `/start`, `/onboarding/[step]`,
-`/contests`, `/contests/[id]`, `/challenges`, `/challenges/[id]`, `/missions`,
-`/missions/[id]`, `/live`, `/live/[source]/[id]`, `/leaderboard`, `/syndicates`,
-`/syndicates/[id]`, `/bridge`, and `/admin`.
+`/contests`, `/challenges`, `/missions`, `/live`, `/leaderboard`, `/syndicates`
+and `/bridge` still exist in the tree for the ArcRun build and redirect to `/` on
+Agon. `/admin`, `/support/admin` and `/share/...` are operator or legacy pages.
+Never link to them from Agon, and never fold them into Agon by swapping a label.
 
-Do not fold these routes into AGON discovery by swapping a label or importing
-the AGON network descriptor. Either keep them behind the legacy boundary,
-migrate one route with a written product decision and a complete adapter, or
-remove the route.
+## Route rules
 
-## Route implementation rules
-
-- A route's data client must match its active network context.
-- A route that shows records from several sources must read network details
-  from the record's source and network, not from `frontend/src/lib/arc.ts`.
-- Explorer links, chain labels, contract addresses, payment assets, and error
-  copy must come from the same context object.
-- Network changes must use durable URL state or another explicit source of
-  truth and clear stale prepared state.
-- Every route needs loading, empty, error, unavailable, and degraded states.
-- Route tests must assert that a mainnet record is never shown or paid as a
-  testnet record, and that AGON contract addresses match the deployment
-  receipt.
+- A route's data client matches its active network; a record's network comes
+  from the record, not from `frontend/src/lib/arc.ts`.
+- Explorer links, chain labels, contract addresses, payment assets and error
+  copy come from the same context object.
+- Long pages show one part at a time or page their lists; no endless scroll.
+- Every route has loading, empty, error, unavailable and degraded states.
+- Tests assert that a mainnet record is never shown or paid as a testnet record.

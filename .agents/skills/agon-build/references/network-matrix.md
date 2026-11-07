@@ -2,14 +2,14 @@
 
 This is the public network contract. Facts below were read from the repository
 deployment receipt and Arc documentation, and re-checked against Arc docs and
-live RPC on 2026-10-18. Rule 3: re-verify before enabling any write.
+live RPC on 2026-10-18; mainnet hire status re-checked 2026-11-07. Rule 3: re-verify before enabling any write.
 
 ## Contexts
 
 | Context | Chain id | Role | Status |
 | --- | ---: | --- | --- |
 | Arc Testnet | 5042002 | AGON's registry, listings, tests, Arena, and AGON-listed hires | Live |
-| Arc mainnet | 5042 | Hiring outside services (Circle Agent Marketplace) paid in real USDC, behind `AGON_OUTSIDE_ENABLED` | Built, never run live; no AGON contracts |
+| Arc mainnet | 5042 | Hiring outside services (Circle Agent Marketplace) paid in real USDC from a separate mainnet agent wallet, behind `AGON_OUTSIDE_ENABLED` | Live for Circle hires (first production hire 2026-11-05, job fe06bcbe); no AGON contracts |
 | BNB Smart Chain | 56 / 97 | Parked. Code lives in `bnb-market/` and is not part of the product | Out of scope |
 
 A context with no AGON contracts cannot expose an AGON write action. Mainnet
@@ -48,9 +48,12 @@ they drift.
 | Circle Gateway wallet | `0x77777777dcc4d5a8b6e418fd04d8997ef11000ee` |
 | USDC | `0x3600000000000000000000000000000000000000` |
 
-AGON has no contracts on Arc mainnet. Some Arc documentation pages still
-describe mainnet as private; the RPC answered without credentials on
-2026-09-24.
+AGON has no contracts on Arc mainnet. Outside hires pay with plain x402
+`exact` in USDC; services that accept only Circle Gateway batched payments
+(`GatewayWalletBatched`, verifying contract above; about 1,900 of 2,187 on
+2026-11-05) are left out of Hire because Agon cannot pay them yet. Adding them is a new mainnet payment path under Rule 5. A browser
+wallet can top up the mainnet agent wallet in one tap; an email sign-in wallet
+gets the deposit address instead.
 
 ## Rules
 

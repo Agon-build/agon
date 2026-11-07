@@ -28,43 +28,50 @@ Dated milestones (pitch, mainnet gate, agent releases) live in section 12 of
 ## Order of work
 
 Work top to bottom. Do not start a later phase while an earlier one has an open
-item, unless the owner confirms the exception (Rule 2).
+item, unless the owner confirms the exception (Rule 2). Reviewed 2026-11-07.
 
-### Phase A. Make every claim true
+### Done (see capabilities.md for dates and evidence)
 
-1. Fix or relabel every row under "Copy that is false today" in
-   capabilities.md (Arena status, docs Live list, intro cards, fee copy).
-2. Run each Built capability end to end on production (web hire, routed hire,
-   Telegram, MCP routing, browser listing, refunds) and move it to Live or
-   Broken with evidence.
-3. Fix MCP token refresh if a connected client is asked to sign in again early.
+- The false copy of 2026-10-18 is fixed: docs, intro cards, Hire, Arena and MCP
+  descriptions claim only what is Live.
+- The three proof sources run: Arena Season 2 commits rounds on Arc and scores
+  forecasts, ratings from paid work are saved and shown, Playground runs are
+  published, and the Agon score reads all three.
+- Hire by category or free text, with choices in three groups; the Lead
+  forecast hire on the web and in Telegram; Circle services paid in real USDC
+  on Arc mainnet; the 5% routing fee on a tab; refunds; deliveries to the bell,
+  email and Telegram.
 
-### Phase B. The three proof sources working
+### Phase A. Prove what is Built
 
-1. **Arena**: rounds run on schedule, markets resolve, forecasts score, and the
-   score feeds ratings. Resolution and round health are monitored and alert
-   the owner when they stop.
-2. **User ratings**: the person who paid rates a delivered job once; ratings
-   show after a minimum count and feed the Agon score.
-3. **Playground**: real public use, not only AGON's own checks; per-category
-   tasks that measure the claimed capability.
+1. A routed hire of a listed Agon agent other than the Lead, on production
+   (Scout, Pitch, Rules Check), so "Routing to listed Agon agents" leaves Broken.
+2. Telegram routing and an MCP hire end to end.
+3. List from the browser and update a published listing, each once on production.
+4. Agon's own checks stay clear of rate limits for a day (Rules Check returns
+   from Suspended), and the operations alert worker delivers its queue.
+5. The fee tab's first transfer at 0.10 USDC seen on Arc.
 
-### Phase C. The aggregator end to end
+### Phase B. Stronger proof
 
-1. Ranking uses the combined proof (Arena, user ratings, Playground), then
-   price, with the reason shown.
-2. Circle Agent Marketplace source live, with its refresh status visible.
-3. A routed hire proven on Arc Testnet, then the mainnet outside check (one
-   Circle service, smallest price), with fee economics decided.
+1. Ratings reach three per agent, so the paid part counts in the score.
+2. Playground tasks for each Hire category that measure the claimed capability.
+3. Arena seasons on schedule with alerts when a round or resolution stops.
+
+### Phase C. Wider outside market
+
+1. Circle Gateway batched payments, so the roughly 1,900 Gateway-only Circle
+   services become payable (a new mainnet path: own design, Rule 5).
+2. Arc ERC-8004 agents as a source, then other marketplaces.
 
 ### Phase D. Breadth, only after A to C
 
-Simpler listing, Arc ERC-8004 agents as a source, more categories, escrow
-hiring for larger jobs, more channels, open Arena campaigns that anyone can
-launch, card and bank payments with crypto-free onboarding, and business agents
-that connect to a person's tools. Each needs its full loop before it is shown.
+Escrow hiring for larger jobs, more channels, open Arena campaigns that anyone
+can launch, card and bank payments with crypto-free onboarding, and business
+agents that connect to a person's tools. Each needs its full loop before it is
+shown.
 
-### Phase E. Mainnet
+### Phase E. Mainnet for Agon's own contracts
 
 Only after the Rule 5 gate in SKILL.md.
 
