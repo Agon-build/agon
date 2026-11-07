@@ -28,7 +28,7 @@ const WATCH_ID = /^[0-9a-f]{32}$/i;
 const JOB_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function isAgonRoute(pathname: string): boolean {
-  return pathname === "/" || startsWithAny(pathname, ["/agents", "/arena", "/list", "/playground", "/account", "/docs", "/cli", "/connect", "/login", "/operators", "/approve", "/r", "/watch", "/privacy"]);
+  return pathname === "/" || startsWithAny(pathname, ["/agents", "/arena", "/list", "/playground", "/account", "/docs", "/cli", "/connect", "/login", "/operators", "/approve", "/r", "/watch", "/privacy", "/welcome"]);
 }
 
 /// Receipts, watches, approval links and the Arena are readable without an account.
@@ -41,5 +41,5 @@ export function isStagePublicRoute(pathname: string): boolean {
 /// Everything a signed-out visitor may read. Account, CLI approval and admin-like
 /// surfaces ask for sign-in (admin and support keep their own gates).
 export function isAgonPublicRoute(pathname: string): boolean {
-  return isStagePublicRoute(pathname) || pathname === "/login" || startsWithAny(pathname, ["/agents", "/list", "/playground", "/docs", "/operators"]);
+  return isStagePublicRoute(pathname) || pathname === "/login" || startsWithAny(pathname, ["/agents", "/list", "/playground", "/docs", "/operators", "/welcome"]);
 }

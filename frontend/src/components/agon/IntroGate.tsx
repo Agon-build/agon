@@ -1,10 +1,11 @@
 "use client";
 
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { AgonIntro } from "@/components/agon/AgonIntro";
 import { introStartPhase } from "@/lib/agon/intro-cards";
+import { introDestination } from "@/lib/agon/landing";
 
 const STARTUP_HOLD_MS = 3000;
 const STARTUP_EXIT_MS = 680;
@@ -16,6 +17,7 @@ let shownThisLoad = false;
 /// The intro opens every visit to agon.surf over Hire. Enter leaves it at any time.
 export function IntroGate({ children }: { children: ReactNode }) {
   const params = useSearchParams();
+  const router = useRouter();
   const forced = params?.get("intro") === "1";
   const resumingJob = Boolean(params?.get("job"));
   // "pending" paints nothing over Hire; the decision runs once, before the first paint,
@@ -40,7 +42,9 @@ export function IntroGate({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(timer);
   }, [phase, ready]);
 
+  // Enter opens the welcome story; Hire stays one click away from there.
   function enter() {
+    router.push(introDestination());
     setPhase("exiting");
     window.setTimeout(() => setPhase("hidden"), STARTUP_EXIT_MS);
   }

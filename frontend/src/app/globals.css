@@ -601,3 +601,8 @@ html.stage-mode { font-size: 125%; }
   .stage-print { animation: none; }
   .stage-connector::after { transition: none; }
 }
+
+/* Welcome story: the hero lines rise once. Reduced motion shows them at rest. */
+@keyframes agon-rise { from { opacity: 0; transform: translateY(24px); filter: blur(8px); } to { opacity: 1; transform: none; filter: none; } }
+.agon-rise { animation: agon-rise 900ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+@media (prefers-reduced-motion: reduce) { .agon-rise { animation: none; } }

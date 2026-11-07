@@ -32,3 +32,8 @@ test("the privacy page is an Agon page anyone can read", () => {
   assert.equal(isAgonRoute("/privacy"), true);
   assert.equal(isAgonPublicRoute("/privacy"), true);
 });
+
+test("the welcome story is an Agon page anyone can read", () => {
+  assert.equal(isAgonRoute("/welcome"), true);
+  assert.equal(isAgonPublicRoute("/welcome"), true);
+});
