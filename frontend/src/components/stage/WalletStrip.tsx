@@ -1,11 +1,12 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 import { TagButton } from "@/components/redesign/TagButton";
 import { AddFunds } from "@/components/stage/AddFunds";
 import { freezeWallet, requestUnfreeze, requestWithdraw, StageApiError } from "@/lib/agon/stage";
 import type { StageWallet } from "@/lib/agon/stage-types";
+import { moneyLine } from "@/lib/agon/hire-layout";
 import { cents, shortHash } from "@/lib/agon/stage-view";
 
 const path = (url: string) => { try { const u = new URL(url); return `${u.pathname}${u.search}`; } catch { return url; } };
@@ -18,21 +19,32 @@ export function WalletStrip({ wallet, onChanged }: { wallet: StageWallet; onChan
   const [copied, setCopied] = useState(false);
 
   return (
-    <section aria-label="Your agent wallet" className="border-y border-[color:var(--hairline-strong)]">
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 py-3 font-mono text-[12px] tabular-nums text-ink-2">
-        <span className="text-[10px] uppercase tracking-[0.14em] text-ink-3">Agent wallet</span>
-        <button type="button" className="min-h-11 text-ink underline decoration-[color:var(--hairline-strong)] underline-offset-4 hover:text-accent" onClick={() => { void navigator.clipboard?.writeText(wallet.address); setCopied(true); window.setTimeout(() => setCopied(false), 1500); }}>
-          {copied ? "Copied" : shortHash(wallet.address)}<span className="sr-only">, copy the full address</span>
-        </button>
-        <span title={wallet.balance ? `${wallet.balance} USDC` : undefined}><span className="text-sm text-ink">{cents(wallet.balance)}</span> USDC</span>
-        <span>{wallet.leftToday} of {wallet.daily} left today</span>
-        {wallet.frozen ? <span className="text-[10px] uppercase tracking-[0.14em] text-[color:var(--err)]">Frozen</span> : null}
-        <span className="ml-auto">
-          <TagButton size="sm" variant="ghost" arrow={false} onClick={() => setOpen("add")}>Manage</TagButton>
+    <section aria-label="Your agent wallet" className="border border-[color:var(--hairline-strong)] bg-canvas-2">
+      <div className="flex flex-wrap items-end gap-x-8 gap-y-3 px-4 py-3 sm:px-5">
+        <Fact label="Agent wallet">
+          <button type="button" className="min-h-11 text-ink underline decoration-[color:var(--hairline-strong)] underline-offset-4 hover:text-accent sm:min-h-0" onClick={() => { void navigator.clipboard?.writeText(wallet.address); setCopied(true); window.setTimeout(() => setCopied(false), 1500); }}>
+            {copied ? "Copied" : shortHash(wallet.address)}<span className="sr-only">, copy the full address</span>
+          </button>
+        </Fact>
+        <Fact label="Balance"><span title={wallet.balance ? `${wallet.balance} USDC` : undefined}>{cents(wallet.balance)} USDC</span></Fact>
+        <Fact label="Left today">{wallet.leftToday} of {wallet.daily}</Fact>
+        <Fact label="Network">{moneyLine(wallet.networkId) ?? moneyLine(wallet.network) ?? wallet.network}</Fact>
+        {wallet.frozen ? <span className="pb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--err)]">Frozen</span> : null}
+        <span className="ml-auto self-center">
+          <TagButton size="sm" variant="ghost" onClick={() => setOpen("add")}>Manage</TagButton>
         </span>
       </div>
       {open ? <ManageSheet wallet={wallet} tab={open} onTab={setOpen} onClose={() => setOpen(null)} onChanged={onChanged} /> : null}
     </section>
+  );
+}
+
+function Fact({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">{label}</p>
+      <div className="mt-1 break-all font-mono text-[13px] tabular-nums text-ink">{children}</div>
+    </div>
   );
 }
 

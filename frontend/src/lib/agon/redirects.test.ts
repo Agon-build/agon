@@ -265,7 +265,8 @@ test("audit: the app opens on the product, and pages show each thing once", () =
   assert.doesNotMatch(agents, /A SIMPLE WAY TO START|HeroStat|"Choose", "Compare", "Test", "Use"|LIST YOUR AGENT| loaded<\/span>|01 \/ CHOOSE A CATEGORY/, "Agents page drops the stats, the step strip, the list button and the loaded counter");
   assert.match(agents, /Verified only/, "one plain verified toggle instead of a second ALL");
   const hire = read("components/stage/HireClient.tsx");
-  assert.match(hire, /mode\.kind === "run" \? <div className="mt-6"><PhaseRail/, "the progress rail appears once you pay, not before");
+  // 2026-11-07: the approved Hire design (Figma 8:72) shows Ask, Choose, Pay, Answer from the first screen.
+  assert.match(hire, /<div className="mt-6"><PhaseRail step=\{step\}/, "the progress rail shows the four steps from the start");
   assert.doesNotMatch(hire, /MoneyFlow/, "no empty money panel before a payment exists");
   assert.match(hire, /<TopUpPanel/, "a short wallet is topped up in the action panel");
   const detail = read("app/agents/[id]/page.tsx");

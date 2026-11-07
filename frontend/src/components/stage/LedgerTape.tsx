@@ -4,7 +4,7 @@ import { KindMark } from "./StatusMark";
 
 export function LedgerTape({ rows, working }: { rows: LedgerRow[]; working: boolean }) {
   return (
-    <section aria-labelledby="ledger-heading" className="mt-10">
+    <section aria-labelledby="ledger-heading" className="border border-[color:var(--hairline-strong)] bg-canvas-2 p-5 sm:p-6">
       <div className="flex items-baseline justify-between border-b border-[color:var(--hairline-strong)] pb-3">
         <h3 id="ledger-heading" className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">What the agents did</h3>
         <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">{rows.length} {rows.length === 1 ? "step" : "steps"}</span>

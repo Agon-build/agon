@@ -44,7 +44,7 @@ export function RatePanel({ jobId, agent, initialStars = 0 }: { jobId: string; a
   if (!status.canRate) {
     if (status.rating) {
       return (
-        <section ref={ref} id="rate" aria-labelledby="rate-heading" className="mt-12 scroll-mt-24 border-t border-[color:var(--hairline-strong)] pt-6">
+        <section ref={ref} id="rate" aria-labelledby="rate-heading" className="mt-6 scroll-mt-24 border border-[color:var(--hairline-strong)] bg-canvas-2 p-5 sm:p-6">
           <h2 id="rate-heading" className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Your rating</h2>
           <p className="mt-3 font-mono text-[13px] text-ink">{ratedLine(status.rating.stars, status.rating.createdAt)}</p>
           {status.rating.comment ? <p className="mt-2 max-w-[60ch] text-sm leading-6 text-ink-2">{status.rating.comment}</p> : null}
@@ -56,7 +56,7 @@ export function RatePanel({ jobId, agent, initialStars = 0 }: { jobId: string; a
   }
 
   return (
-    <section ref={ref} id="rate" aria-labelledby="rate-heading" className="mt-12 scroll-mt-24 border-t border-[color:var(--hairline-strong)] pt-6">
+    <section ref={ref} id="rate" aria-labelledby="rate-heading" className="mt-6 scroll-mt-24 border border-[color:var(--hairline-strong)] bg-canvas-2 p-5 sm:p-6">
       <h2 id="rate-heading" className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Rate this job</h2>
       <p className="mt-3 text-sm text-ink-2">How well did {agent ?? "the agent"} do the job?</p>
       <div role="radiogroup" aria-label="Stars" className="mt-4 flex flex-wrap gap-2">

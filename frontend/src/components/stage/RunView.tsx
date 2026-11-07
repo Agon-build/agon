@@ -9,9 +9,9 @@ import { ProbabilityDuel } from "./ProbabilityDuel";
 
 function Notice({ eyebrow, title, body }: { eyebrow: string; title: string; body: string }) {
   return (
-    <section className="stage-print border-y border-[color:var(--hairline-strong)] py-8">
+    <section className="stage-print border border-[color:var(--hairline-strong)] bg-canvas-2 p-5 sm:p-7">
       <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">{eyebrow}</p>
-      <h2 className="mt-3 max-w-[18ch] break-words font-display text-3xl uppercase leading-[.95] tracking-[-.03em] text-ink sm:text-4xl">{title}</h2>
+      <h2 className="mt-3 max-w-[18ch] break-words text-3xl font-medium leading-tight tracking-[-.03em] text-ink sm:text-4xl">{title}</h2>
       <p className="mt-4 max-w-[52ch] text-sm leading-6 text-ink-2">{body}</p>
     </section>
   );
@@ -19,9 +19,9 @@ function Notice({ eyebrow, title, body }: { eyebrow: string; title: string; body
 
 function RulesAnswer({ view }: { view: RulesAnswerView }) {
   return (
-    <section aria-labelledby="answer-heading" className="stage-print border-y border-[color:var(--hairline-strong)] py-8">
-      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Delivered</p>
-      <h2 id="answer-heading" className="mt-3 font-display text-3xl uppercase leading-[.95] tracking-[-.03em] text-ink sm:text-4xl">The rules</h2>
+    <section aria-labelledby="answer-heading" className="stage-print border border-[color:var(--hairline-strong)] bg-canvas-2 p-5 sm:p-7">
+      <p className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-ink"><span aria-hidden className="inline-block size-2 bg-[color:var(--ok)]" />Delivered</p>
+      <h2 id="answer-heading" className="mt-3 text-3xl font-medium leading-tight tracking-[-.03em] text-ink sm:text-4xl">The rules</h2>
       {view.marketQuestion ? (
         <p className="mt-4 break-words text-sm leading-6 text-ink-2">
           {view.marketUrl ? <a href={view.marketUrl} target="_blank" rel="noreferrer" className="underline decoration-[color:var(--hairline-strong)] underline-offset-4 hover:text-ink">{view.marketQuestion}</a> : view.marketQuestion}
@@ -61,9 +61,9 @@ function RulesAnswer({ view }: { view: RulesAnswerView }) {
 
 function WatchAnswer({ view }: { view: WatchAnswerView }) {
   return (
-    <section aria-labelledby="answer-heading" className="stage-print border-y border-[color:var(--hairline-strong)] py-8">
+    <section aria-labelledby="answer-heading" className="stage-print border border-[color:var(--hairline-strong)] bg-canvas-2 p-5 sm:p-7">
       <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Watching</p>
-      <h2 id="answer-heading" className="mt-3 font-display text-3xl uppercase leading-[.95] tracking-[-.03em] text-ink sm:text-4xl">Settlement alerts are on</h2>
+      <h2 id="answer-heading" className="mt-3 text-3xl font-medium leading-tight tracking-[-.03em] text-ink sm:text-4xl">Settlement alerts are on</h2>
       <p className="mt-4 text-sm leading-6 text-ink-2">Alerts arrive in your bell, and in Telegram if it is linked, when settlement starts, is challenged, settles, or the rules change. The watch runs until every market settles, or {view.until}.</p>
       <ul className="mt-5 divide-y divide-[color:var(--hairline)] border-y border-[color:var(--hairline)]">
         {view.markets.map((m) => (
@@ -81,9 +81,9 @@ function RoutedAnswer({ view }: { view: AnswerView }) {
   if (view.kind === "rules") return <RulesAnswer view={view} />;
   if (view.kind === "watch") return <WatchAnswer view={view} />;
   return (
-    <section aria-labelledby="answer-heading" className="stage-print border-y border-[color:var(--hairline-strong)] py-8">
-      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Delivered</p>
-      <h2 id="answer-heading" className="mt-3 font-display text-3xl uppercase leading-[.95] tracking-[-.03em] text-ink sm:text-4xl">The answer</h2>
+    <section aria-labelledby="answer-heading" className="stage-print border border-[color:var(--hairline-strong)] bg-canvas-2 p-5 sm:p-7">
+      <p className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-ink"><span aria-hidden className="inline-block size-2 bg-[color:var(--ok)]" />Delivered</p>
+      <h2 id="answer-heading" className="mt-3 text-3xl font-medium leading-tight tracking-[-.03em] text-ink sm:text-4xl">The answer</h2>
       {view.kind === "text" ? (
         <pre className="mt-5 max-h-[28rem] overflow-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-6 text-ink">{view.text}</pre>
       ) : (
@@ -106,8 +106,8 @@ export function RunView({ live }: { live: LiveView }) {
   const forecaster = live.receipt?.children[0]?.label ?? live.answer?.forecaster.name ?? "Forecaster";
   const routed = !live.answer && live.phase === "answered" ? answerView(live.result) : null;
   return (
-    <div className="grid gap-12 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-16">
-      <div className="min-w-0">
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:gap-6">
+      <div className="grid min-w-0 content-start gap-6">
         {live.answer ? <ProbabilityDuel answer={live.answer} /> : null}
         {routed ? <RoutedAnswer view={routed} /> : null}
         {live.phase === "refunded" ? <Notice eyebrow="Refunded" title="No forecast this time" body={`${failureText(live.failure)} Your payment was refunded; the refund transaction is in the money flow.`} /> : null}
@@ -118,7 +118,7 @@ export function RunView({ live }: { live: LiveView }) {
         ) : null}
         {live.haggle.length > 0 ? <HaggleTape steps={live.haggle} seller={forecaster} /> : null}
       </div>
-      <div className="min-w-0">
+      <div className="grid min-w-0 content-start gap-6">
         <MoneyFlow flow={flow} />
         {/* A job with no steps to show (a direct hire) does not need an empty steps panel once it is done. */}
         {live.events.length > 0 || !isTerminal(live.phase) ? <LedgerTape rows={ledgerRows(live.events, live.startedAt)} working={!isTerminal(live.phase)} /> : null}

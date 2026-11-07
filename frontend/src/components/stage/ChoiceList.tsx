@@ -1,109 +1,129 @@
 "use client";
 import { useState } from "react";
 
-import { TagButton } from "@/components/redesign/TagButton";
-import { groupHeading, networkWords, proofLines } from "@/lib/agon/choice-view";
+import { groupHeading, proofLines } from "@/lib/agon/choice-view";
+import { moneyLine } from "@/lib/agon/hire-layout";
 import { CHOICES_COPY } from "@/lib/agon/stage-copy";
 import type { ChoiceGroup, ChoiceGroups, HireCategory, HireCategoryId, RoutePick, RouteSourceStatus } from "@/lib/agon/stage-types";
 
 const SHOWN = 3;
+const GROUP_NOTE: Record<ChoiceGroup, string> = {
+  ranked: "scored by Arena, Playground and ratings",
+  new: "hireable, no score yet",
+  outside: "from Circle's Agent Marketplace, not ranked",
+};
 
 /// The person's choices for one request: Agon agents ranked by proof, new Agon agents,
 /// then outside services, which Agon never ranks. Choosing one goes on to its exact price.
-export function ChoiceList({ category, categories, groups, sources, busy, onChoose, onCategory, onCancel }: {
+export function ChoiceList({ category, categories, groups, sources, busy, selected = null, onChoose, onCategory, onCancel }: {
   category: HireCategoryId;
   categories: HireCategory[];
   groups: ChoiceGroups;
   sources: RouteSourceStatus[];
   busy: boolean;
+  selected?: string | null;
   onChoose: (p: RoutePick) => void;
   onCategory: (id: HireCategoryId) => void;
   onCancel: () => void;
 }) {
   const circleDown = sources.some((s) => s.id === "circle" && s.status === "unavailable");
   const empty = groups.ranked.length + groups.fresh.length + groups.outside.length === 0;
-  const label = categories.find((c) => c.id === category)?.label ?? null;
   return (
-    <section aria-labelledby="choices-heading" className="stage-print">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[color:var(--hairline-strong)] pb-4">
-        <h2 id="choices-heading" className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">{label ?? "Choices"}</h2>
+    <section aria-label="Choices" className="stage-print">
+      <div className="flex flex-wrap items-center justify-end gap-2">
         {categories.length > 0 ? (
-          <label className="flex min-h-11 items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">
-            <span>{CHOICES_COPY.change}</span>
+          <label className="flex items-center gap-2">
+            <span className="sr-only">{CHOICES_COPY.change}</span>
             <select
               value={category} disabled={busy} onChange={(e) => onCategory(e.target.value as HireCategoryId)}
-              className="min-h-11 max-w-[14rem] border border-[color:var(--hairline-strong)] bg-canvas px-2 font-mono text-[11px] normal-case tracking-normal text-ink focus:border-accent focus:outline-none"
+              className="min-h-11 max-w-[14rem] border border-[color:var(--hairline-strong)] bg-canvas-2 px-3 text-sm text-ink-2 focus:border-accent focus:outline-none"
             >
               {categories.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
             </select>
           </label>
         ) : null}
+        <button type="button" onClick={onCancel} disabled={busy} className="min-h-11 border border-[color:var(--hairline-strong)] px-4 font-mono text-[10px] uppercase tracking-[0.14em] text-ink hover:border-accent hover:text-accent disabled:opacity-60">
+          Edit question
+        </button>
       </div>
 
       {empty ? (
-        <div className="border-b border-[color:var(--hairline)] py-8">
+        <div className="mt-6 border border-[color:var(--hairline-strong)] bg-canvas-2 p-6">
           <p className="text-base leading-7 text-ink">{CHOICES_COPY.empty}</p>
           {circleDown ? <p className="mt-2 text-sm text-ink-2">{CHOICES_COPY.circleDown}</p> : null}
           <a href="/docs#mcp" className="mt-4 inline-flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.14em] text-ink underline underline-offset-4 hover:text-accent">{CHOICES_COPY.listOne}</a>
         </div>
       ) : (
-        <>
-          <Group group="ranked" items={groups.ranked} busy={busy} onChoose={onChoose} />
-          <Group group="new" items={groups.fresh} busy={busy} onChoose={onChoose} note={CHOICES_COPY.newNote} />
-          <Group group="outside" items={groups.outside} busy={busy} onChoose={onChoose} note={CHOICES_COPY.outsideNote} down={circleDown} />
-        </>
+        <div role="radiogroup" aria-label="Pick an agent">
+          <Group group="ranked" items={groups.ranked} busy={busy} selected={selected} onChoose={onChoose} />
+          <Group group="new" items={groups.fresh} busy={busy} selected={selected} onChoose={onChoose} />
+          <Group group="outside" items={groups.outside} busy={busy} selected={selected} onChoose={onChoose} down={circleDown} />
+        </div>
       )}
-      <div className="mt-6"><TagButton variant="ghost" onClick={onCancel} disabled={busy}>Start again</TagButton></div>
     </section>
   );
 }
 
-function Group({ group, items, busy, onChoose, note, down }: { group: ChoiceGroup; items: RoutePick[]; busy: boolean; onChoose: (p: RoutePick) => void; note?: string; down?: boolean }) {
+function Group({ group, items, busy, selected, onChoose, down }: { group: ChoiceGroup; items: RoutePick[]; busy: boolean; selected: string | null; onChoose: (p: RoutePick) => void; down?: boolean }) {
   const [all, setAll] = useState(false);
   if (items.length === 0 && !down) return null;
-  const shown = all ? items : items.slice(0, SHOWN);
+  // The chosen card stays in view even when it sits past the first three.
+  const shown = all ? items : items.filter((p, i) => i < SHOWN || p.reference === selected);
   return (
-    <div className="mt-8">
-      <h3 className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-2">{groupHeading(group)}</h3>
-      {note && items.length > 0 ? <p className="mt-1 text-xs leading-5 text-ink-3">{note}</p> : null}
+    <div className="mt-6">
+      <h3 className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <span aria-hidden className={`inline-block size-2 ${group === "ranked" ? "bg-accent" : "bg-ink-3"}`} />
+        <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink">{groupHeading(group)}</span>
+        <span className="font-mono text-[10px] text-ink-3">{GROUP_NOTE[group]}</span>
+      </h3>
       {down && items.length === 0 ? <p className="mt-2 text-sm text-ink-2">{CHOICES_COPY.circleDown}</p> : null}
-      <ul className="mt-3 grid gap-3">
-        {shown.map((p) => <ChoiceCard key={p.reference} pick={p} busy={busy} onChoose={onChoose} />)}
+      <ul className="mt-3 grid gap-2">
+        {shown.map((p) => <ChoiceCard key={p.reference} pick={p} busy={busy} checked={p.reference === selected} onChoose={onChoose} />)}
       </ul>
-      {items.length > SHOWN && !all ? (
-        <button type="button" onClick={() => setAll(true)} className="mt-3 min-h-11 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 underline underline-offset-4 hover:text-accent">
-          Show {items.length - SHOWN} more
+      {items.length > shown.length && !all ? (
+        <button type="button" onClick={() => setAll(true)} className="mt-2 min-h-11 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 underline underline-offset-4 hover:text-accent">
+          Show {items.length - shown.length} more
         </button>
       ) : null}
     </div>
   );
 }
 
-function ChoiceCard({ pick, busy, onChoose }: { pick: RoutePick; busy: boolean; onChoose: (p: RoutePick) => void }) {
-  const lines = proofLines(pick);
-  const outside = pick.group === "outside";
+function badge(pick: RoutePick): string {
+  if (pick.group === "outside" || pick.source === "circle") return pick.provider || "Circle";
+  return pick.rating.tier === "listed" || pick.rating.tier === "unrated" ? "Listed on Agon" : "Verified on Agon";
+}
+
+function under(pick: RoutePick): string {
+  if (pick.group === "outside" || pick.source === "circle") return moneyLine(pick.network) ?? "";
+  const score = pick.rating.proof?.score ?? null;
+  return score !== null ? `Agon score ${Math.round(score * 10) / 10}` : "Not scored yet";
+}
+
+function ChoiceCard({ pick, busy, checked, onChoose }: { pick: RoutePick; busy: boolean; checked: boolean; onChoose: (p: RoutePick) => void }) {
+  const lines = pick.group === "ranked" ? proofLines(pick).filter((l) => !l.startsWith("Agon score")) : [];
   return (
-    <li className="border border-[color:var(--hairline-strong)] bg-canvas-2 p-4 sm:p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="break-words text-base leading-6 text-ink">{pick.name}</p>
-          <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3">{outside ? pick.provider : "Agon"}</p>
-        </div>
-        <p className="font-mono text-sm tabular-nums text-ink">{pick.total} USDC</p>
-      </div>
-      {pick.description ? <p className="mt-3 line-clamp-2 text-sm leading-6 text-ink-2">{pick.description}</p> : null}
-      {lines.length > 0 ? (
-        <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[11px] tabular-nums text-ink-2">
-          {lines.map((l) => <li key={l}>{l}</li>)}
-        </ul>
-      ) : null}
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-2">
-          {outside ? <span className="border border-[color:var(--hairline-strong)] px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2">Outside market</span> : null}
-          <span className="border border-[color:var(--hairline)] px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">{networkWords(pick)}</span>
-        </div>
-        <TagButton onClick={() => onChoose(pick)} disabled={busy}>Choose</TagButton>
-      </div>
+    <li>
+      <button
+        type="button" role="radio" aria-checked={checked} disabled={busy} onClick={() => onChoose(pick)}
+        className={`grid w-full grid-cols-[1.25rem_minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1 border p-4 text-left transition-colors duration-150 disabled:opacity-60 motion-reduce:transition-none ${checked ? "border-accent bg-canvas-3" : "border-[color:var(--hairline-strong)] bg-canvas-2 hover:border-ink-3"}`}
+      >
+        <span aria-hidden className={`mt-1.5 inline-flex size-3.5 items-center justify-center rounded-full border ${checked ? "border-accent" : "border-ink-3"}`}>
+          {checked ? <span className="size-2 rounded-full bg-accent" /> : null}
+        </span>
+        <span className="min-w-0">
+          <span className="flex flex-wrap items-baseline gap-x-2">
+            <span className="break-words text-base font-medium leading-6 text-ink">{pick.name}</span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3">{badge(pick)}</span>
+          </span>
+          {pick.description ? <span className="mt-1 line-clamp-2 block text-sm leading-6 text-ink-2">{pick.description}</span> : null}
+          {lines.length > 0 ? <span className="mt-1 block font-mono text-[10px] tabular-nums text-ink-3">{lines.join(" · ")}</span> : null}
+        </span>
+        <span className="text-right">
+          <span className="block font-mono text-sm tabular-nums text-ink">{pick.price} USDC</span>
+          <span className="mt-1 block font-mono text-[10px] text-ink-3">{under(pick)}</span>
+        </span>
+      </button>
     </li>
   );
 }

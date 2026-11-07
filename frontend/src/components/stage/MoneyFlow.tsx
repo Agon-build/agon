@@ -11,7 +11,7 @@ function FlowRow({ node, nested }: { node: FlowNode; nested: boolean }) {
     <li className={`stage-print grid gap-3 py-4 2xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.6fr)] 2xl:items-center 2xl:gap-6 ${nested ? "pl-5 sm:pl-6" : ""}`}>
       <div className="min-w-0">
         <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">{ROLE[node.role]}</p>
-        <p className="mt-1 break-words font-display text-lg uppercase leading-tight tracking-[-.01em] text-ink">{node.label}</p>
+        <p className="mt-1 break-words text-base font-medium leading-tight text-ink">{node.label}</p>
         <p className="text-xs text-ink-2">{node.sublabel}</p>
       </div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
@@ -26,7 +26,7 @@ function FlowRow({ node, nested }: { node: FlowNode; nested: boolean }) {
 
 export function MoneyFlow({ flow }: { flow: FlowModel }) {
   return (
-    <section aria-labelledby="flow-heading">
+    <section aria-labelledby="flow-heading" className="border border-[color:var(--hairline-strong)] bg-canvas-2 p-5 sm:p-6">
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[color:var(--hairline-strong)] pb-3">
         <h3 id="flow-heading" className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">{flow.sellers.length > 0 ? "Where the money went" : "Payment"}</h3>
         {flow.lead && flow.sellers.length > 0 ? <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">Agents paid out <span className="text-ink">{flow.agentSpend} USDC</span></span> : null}

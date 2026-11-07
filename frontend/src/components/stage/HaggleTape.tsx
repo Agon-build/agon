@@ -6,7 +6,7 @@ export function HaggleTape({ steps, seller }: { steps: BargainStep[]; seller: st
   const rows = haggleRows(steps, seller);
   const summary = haggleSummary(steps);
   return (
-    <section aria-labelledby="haggle-heading" className="mt-10">
+    <section aria-labelledby="haggle-heading" className="border border-[color:var(--hairline-strong)] bg-canvas-2 p-5 sm:p-6">
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[color:var(--hairline-strong)] pb-3">
         <h3 id="haggle-heading" className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">The price talk</h3>
         {summary ? <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink">{summary.percentOff}% under the ask</span> : null}

@@ -4,9 +4,9 @@ import { compareProbability } from "@/lib/agon/stage-view";
 export function ProbabilityDuel({ answer }: { answer: StageAnswer }) {
   const c = compareProbability(answer);
   return (
-    <section aria-labelledby="answer-heading" className="stage-print">
+    <section aria-labelledby="answer-heading" className="stage-print border border-[color:var(--hairline-strong)] bg-canvas-2 p-5 sm:p-6">
       <h2 id="answer-heading" className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">The forecast</h2>
-      <p className="mt-3 font-display text-3xl uppercase leading-[.95] tracking-[-.03em] text-ink sm:text-4xl">{c.verdict}</p>
+      <p className="mt-3 text-4xl font-medium leading-none tracking-[-.04em] text-ink sm:text-6xl">{c.verdict}</p>
       <p className="mt-3 max-w-[60ch] text-base leading-7 text-ink">{c.sentence}</p>
       {answer.marketQuestion ? <p className="mt-3 max-w-[60ch] text-sm leading-6 text-ink-2">Polymarket market: {answer.marketQuestion}</p> : null}
       <div className="mt-5 grid grid-cols-2 border-y border-[color:var(--hairline-strong)]">

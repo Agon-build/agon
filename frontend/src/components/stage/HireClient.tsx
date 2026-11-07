@@ -8,6 +8,7 @@ import { Composer } from "@/components/stage/Composer";
 import { PhaseRail } from "@/components/stage/PhaseRail";
 import { RatePanel } from "@/components/stage/RatePanel";
 import { Pager } from "@/components/redesign/Pager";
+import { TagButton } from "@/components/redesign/TagButton";
 import { QuoteCard } from "@/components/stage/QuoteCard";
 import { RouteCard } from "@/components/stage/RouteCard";
 import { RunView } from "@/components/stage/RunView";
@@ -19,14 +20,14 @@ import { useLiveJob } from "@/components/stage/useLiveJob";
 import { useNow } from "@/components/stage/useNow";
 import { LoginButton } from "@/components/pengu/LoginButton";
 import { useAuth } from "@/hooks/useAuth";
-import { confirmHire, getCategories, getHistory, getLeaderboard, getStageConfig, getWallet, quoteRoute, routeDirect, routeRequest, StageApiError } from "@/lib/agon/stage";
+import { confirmHire, getCategories, getHistory, getStageConfig, getWallet, quoteRoute, routeDirect, routeRequest, StageApiError } from "@/lib/agon/stage";
 import { presentListing } from "@/lib/agon/catalog";
 import { getListing, inspectManifest } from "@/lib/agon/client";
 import { canAfford } from "@/lib/agon/hire-panel";
-import { mainnetInView, mergeAnswers, sourcesNote } from "@/lib/agon/route-view";
+import { hasFee, mainnetInView, mergeAnswers, sourcesNote } from "@/lib/agon/route-view";
 import { askRefusalText, CHOICES_COPY, confirmFailureText, hireHeading, showConfirmError } from "@/lib/agon/stage-copy";
-import type { AskResponse, ChoiceGroups, HireCategory, HireCategoryId, HistoryItem, LeaderboardRow, RoutePick, RouteSourceStatus, StageConfig, StageWallet } from "@/lib/agon/stage-types";
-import { beatsMarketText, hireLabel, hireStateText, phaseStep } from "@/lib/agon/stage-view";
+import type { AskResponse, ChoiceGroups, HireCategory, HireCategoryId, HistoryItem, RoutePick, RouteSourceStatus, StageConfig, StageWallet } from "@/lib/agon/stage-types";
+import { hireLabel, hireStateText, phaseStep } from "@/lib/agon/stage-view";
 
 type Quote = Extract<AskResponse, { ok: true }>;
 /// Agon's pick for a request, before the exact price is asked for.
@@ -60,7 +61,6 @@ export function HireClient() {
   const [historyMore, setHistoryMore] = useState(false);
   const [categories, setCategories] = useState<HireCategory[]>([]);
   useEffect(() => { getCategories().then(setCategories).catch(() => setCategories([])); }, []);
-  const [best, setBest] = useState<LeaderboardRow | null>(null);
   const [mode, setMode] = useState<Mode>(resumeJob ? { kind: "run", jobId: resumeJob, question: null, paying: false, confirmError: null, mainnet: false } : { kind: "idle" });
   // The page follows the address: a job link opens that job, and HIRE in the nav (no job)
   // leaves a finished job for a fresh start. A payment in flight is never left this way.
@@ -81,7 +81,6 @@ export function HireClient() {
 
   useEffect(() => {
     getStageConfig().then(setConfig).catch(() => setConfig(null));
-    getLeaderboard().then((b) => setBest(b.rows.find((r) => r.ranked && !r.displayName.includes("market copy")) ?? null)).catch(() => setBest(null));
   }, []);
   useEffect(() => { refreshWallet(); }, [refreshWallet]);
   useEffect(() => {
@@ -225,7 +224,8 @@ export function HireClient() {
   const shown = live && mode.kind === "run" && mode.paying && live.phase === "quoted" ? { ...live, phase: "paying" as const } : live;
   const question = mode.kind === "idle" ? null : mode.kind === "run" ? (mode.question ?? live?.question ?? null) : mode.question;
   const heading = hireHeading(question, live?.receipt?.label ?? agentName ?? null);
-  const step = mode.kind === "idle" ? 0 : mode.kind === "run" ? phaseStep(shown?.phase ?? "paying") : 1;
+  // Ask, Choose, Pay, Answer: the price and any top-up or terms are the Pay step.
+  const step = mode.kind === "idle" || mode.kind === "quoting" ? 0 : mode.kind === "run" ? phaseStep(shown?.phase ?? "paying") : mode.kind === "quote" || (mode.kind === "refused" && (mode.code === "terms_required" || Boolean(shortOf))) ? 2 : 1;
   // The mainnet wallet strip shows while a mainnet service is on screen.
   const onMainnet = mainnetInView({
     kind: mode.kind,
@@ -236,125 +236,148 @@ export function HireClient() {
   });
   const working = mode.kind === "run" && (shown ? shown.phase === "paying" || shown.phase === "working" : true);
 
+  const direct = Boolean(agentRef);
+  const backLabel = mode.kind === "routed" && mode.choices ? "Back to choices" : "Cancel";
+  const listed = mode.kind === "choices" ? mode : mode.kind === "routed" ? mode.choices ?? null : null;
+  const selected = mode.kind === "routed" ? mode.pick.reference : null;
+  const start = mode.kind === "idle" || mode.kind === "quoting";
+  const hasPanel = mode.kind === "routed" || mode.kind === "quote" || (mode.kind === "refused" && (mode.code === "terms_required" || Boolean(shortOf)));
+
   return (
     <StageShell network={config?.network ?? null} preview={config?.preview}>
-      <div className="mx-auto max-w-[1536px] px-4 pb-24 pt-6 sm:px-6 sm:pt-8">
+      <div className="mx-auto max-w-[1280px] px-4 pb-24 pt-6 sm:px-6 sm:pt-8">
         {canAct && wallet && !onMainnet ? <WalletStrip wallet={wallet} onChanged={refreshWallet} /> : null}
         {canAct && mainnetWallet && onMainnet ? <WalletStrip wallet={mainnetWallet} onChanged={refreshMainnet} /> : null}
-        {mode.kind === "run" ? <div className="mt-6"><PhaseRail step={step} working={working} /></div> : null}
+        <div className="mt-6"><PhaseRail step={step} working={working} /></div>
 
-        <div className="mt-10 grid gap-12 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-16">
-          <div className="min-w-0">
+        {start ? (
+          <div className="mx-auto mt-16 max-w-[800px] text-center sm:mt-20">
             <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Hire{onMainnet ? " · Arc mainnet" : config ? ` · ${config.network}` : ""}</p>
-            <h1 className={`mt-4 text-balance font-display uppercase tracking-[-.04em] text-ink ${heading.title ? "text-[clamp(1.6rem,2.8vw,2.5rem)] leading-[1.05]" : "text-[clamp(2.4rem,5vw,4.5rem)] leading-[.9]"}`}>
-              {heading.title ?? (agentRef ? `Hire ${agentName ?? "this agent"}` : "What do you need done?")}
+            <h1 className="mt-5 text-balance text-[clamp(2.4rem,5.4vw,4.25rem)] font-medium leading-[1] tracking-[-.045em] text-ink">
+              {agentRef ? `Hire ${agentName ?? "this agent"}` : "What do you need done?"}
             </h1>
-            {heading.lines && shown?.phase !== "answered" ? (
-              <ul className="mt-4 space-y-1 break-all font-mono text-[13px] leading-6 text-ink-2">
+            <div className="mt-6 text-left">
+              <Composer disabled={mode.kind === "quoting"} signedIn={canAct} categories={agentRef ? [] : categories} onSubmit={(q, max, cat) => void ask(q, max, cat)} agentName={agentRef ? (agentName ?? "this agent") : null} />
+            </div>
+            {mode.kind === "quoting" ? <p role="status" className="mt-4 text-sm text-ink-2">{CHOICES_COPY.loading}</p> : null}
+            {agentRef ? (
+              <aside aria-labelledby="chosen-heading" className="mt-8 border border-[color:var(--hairline-strong)] bg-canvas-2 p-5 text-left">
+                <h2 id="chosen-heading" className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">You chose {agentName ?? "this agent"}</h2>
+                <p className="mt-3 text-sm leading-6 text-ink-2">You pay its price and no Agon routing fee. You see the price before anything is paid.</p>
+                <a href={`/agents/${encodeURIComponent(agentRef)}`} className="mt-2 inline-flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 underline underline-offset-4 hover:text-accent">Back to the agent</a>
+              </aside>
+            ) : null}
+          </div>
+        ) : null}
+        {start && !agentRef ? <CategorySelect categories={categories} disabled={mode.kind === "quoting" || !canAct} onPick={(id) => browse(id)} /> : null}
+
+        {!start && mode.kind !== "run" ? (
+          <div className="mt-10">
+            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3">You asked</p>
+            <h1 className="mt-2 break-words text-balance text-[clamp(1.5rem,2.6vw,2rem)] font-medium leading-tight tracking-[-.02em] text-ink">
+              {heading.title ?? question ?? "Your hire"}
+            </h1>
+            {heading.lines ? (
+              <ul className="mt-3 space-y-1 break-all font-mono text-[13px] leading-6 text-ink-2">
                 {heading.lines.map((line, i) => <li key={i}>{line}</li>)}
               </ul>
             ) : null}
-            {mode.kind === "idle" || mode.kind === "quoting" ? (
-              <div className="mt-10"><Composer disabled={mode.kind === "quoting"} signedIn={canAct} onSubmit={(q, max) => void ask(q, max)} agentName={agentRef ? (agentName ?? "this agent") : null} /></div>
-            ) : null}
-            {(mode.kind === "idle" || mode.kind === "quoting") && !agentRef ? <CategorySelect categories={categories} disabled={mode.kind === "quoting" || !canAct} onPick={(id) => browse(id)} /> : null}
-            {mode.kind === "refused" && !shortOf && mode.code !== "terms_required" ? (
-              <div role="alert" className="stage-print mt-8 border-y border-[color:var(--hairline-strong)] py-6">
-                <p className="text-base leading-7 text-ink">{askRefusalText(mode.code, mode.amount)}</p>
-                {mode.note ? <p className="mt-2 text-sm leading-6 text-ink-2">{mode.note}</p> : null}
-                {mode.code === "unauthorized" && !me ? <div className="mt-4"><LoginButton /></div> : null}
-                <button type="button" onClick={reset} className="mt-4 min-h-11 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 underline underline-offset-4 hover:text-accent">Describe something else</button>
-              </div>
-            ) : null}
-            {mode.kind === "run" && showConfirmError(mode.confirmError, shown?.phase) ? (
-              <p role="alert" className="mt-6 border-l-2 border-[color:var(--err)] pl-3 text-sm leading-6 text-ink">{confirmFailureText(mode.confirmError!)}</p>
-            ) : null}
-          </div>
-
-          <div className="min-w-0">
-            {(mode.kind === "idle" || mode.kind === "quoting") && agentRef ? (
-              <aside aria-labelledby="chosen-heading" className="border-y border-[color:var(--hairline-strong)] py-6">
-                <h2 id="chosen-heading" className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">You chose {agentName ?? "this agent"}</h2>
-                <p className="mt-4 text-sm leading-6 text-ink-2">You pay its price and no Agon routing fee. You see the price before anything is paid.</p>
-                <a href={`/agents/${encodeURIComponent(agentRef)}`} className="mt-4 inline-flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 underline underline-offset-4 hover:text-accent">Back to the agent</a>
-              </aside>
-            ) : null}
-            {(mode.kind === "idle" || mode.kind === "quoting") && !agentRef ? (
-              <aside aria-labelledby="how-heading" className="border-y border-[color:var(--hairline-strong)] py-6">
-                <h2 id="how-heading" className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">How it works</h2>
-                <ol className="mt-4 divide-y divide-[color:var(--hairline)]">
-                  {[
-                    ["01", "Describe the job, or pick an agent yourself on the Agents page."],
-                    ["02", "See the full price, Agon's fee included, before anything is paid."],
-                    ["03", "Watch the agent work, with every payment on Arc. The result reaches your bell and Telegram."],
-                  ].map(([n, text]) => <li key={n} className="grid grid-cols-[2.5rem_1fr] py-3 text-sm leading-6 text-ink-2"><span className="font-mono text-[11px] text-accent">{n}</span>{text}</li>)}
-                </ol>
-                {best ? (
-                  <a href="/arena/season-1" className="group mt-6 block border border-[color:var(--hairline)] p-4 hover:border-accent">
-                    <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">Top of Season 1 right now</p>
-                    <p className="mt-2 font-display text-2xl uppercase leading-tight text-ink">{best.displayName}</p>
-                    <p className="mt-1 text-sm text-ink-2">{beatsMarketText(best)}</p>
-                    <span className="mt-3 inline-flex font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3 group-hover:text-accent">See the leaderboard →</span>
-                  </a>
+            <div className={`mt-6 grid gap-6 ${hasPanel ? "lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]" : ""}`}>
+              <div className="min-w-0">
+                {listed ? (
+                  <ChoiceList
+                    category={listed.category} categories={categories} groups={listed.groups} sources={listed.sources} busy={listed.busy || (mode.kind === "routed" && mode.busy)} selected={selected}
+                    onChoose={(p) => choose(listed, p)} onCategory={(id) => browse(id, listed.typed)} onCancel={reset}
+                  />
                 ) : null}
-              </aside>
-            ) : null}
-            {mode.kind === "quoting" && !agentRef ? <p role="status" className="border-y border-[color:var(--hairline-strong)] py-6 text-sm text-ink-2">{CHOICES_COPY.loading}</p> : null}
-            {mode.kind === "choices" ? (
-              <ChoiceList
-                category={mode.category} categories={categories} groups={mode.groups} sources={mode.sources} busy={mode.busy}
-                onChoose={(p) => choose(mode, p)} onCategory={(id) => browse(id, mode.typed)} onCancel={reset}
-              />
-            ) : null}
-            {mode.kind === "routed" ? (
-              <RouteCard
-                pick={mode.pick} alternatives={mode.alternatives} question={mode.prompt} missing={mode.missing} busy={mode.busy} note={mode.note}
-                onSwap={(p) => swap(mode, p)} onQuote={(answers) => void quoteRouted(mode, answers)}
-                onCancel={() => (mode.choices ? setMode(mode.choices) : reset())}
-                {...(mode.choices ? { heading: "Your choice", cancelLabel: "Back to choices" } : {})}
-              />
-            ) : null}
-            {mode.kind === "quote" ? <QuoteCard quote={mode.quote} nowMs={now} paying={false} onPay={() => void pay(mode.quote, mode.question)} onCancel={reset} /> : null}
-            {mode.kind === "refused" && mode.code === "terms_required" ? <TermsPanel onAccepted={() => retry(mode)} onCancel={reset} /> : null}
-            {shortOf ? <TopUpPanel wallet={shortWallet} price={shortOf} onFunded={shortMainnet ? refreshMainnet : refreshWallet} onCancel={reset} /> : null}
+                {mode.kind === "refused" && !shortOf && mode.code !== "terms_required" ? (
+                  <div role="alert" className="stage-print border border-[color:var(--hairline-strong)] bg-canvas-2 p-5 sm:p-6">
+                    <p className="text-base leading-7 text-ink">{askRefusalText(mode.code, mode.amount)}</p>
+                    {mode.note ? <p className="mt-2 text-sm leading-6 text-ink-2">{mode.note}</p> : null}
+                    {mode.code === "unauthorized" && !me ? <div className="mt-4"><LoginButton /></div> : null}
+                    <button type="button" onClick={reset} className="mt-4 min-h-11 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 underline underline-offset-4 hover:text-accent">Describe something else</button>
+                  </div>
+                ) : null}
+                {!listed && hasPanel ? (
+                  <button type="button" onClick={reset} className="min-h-11 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 underline underline-offset-4 hover:text-accent">Describe something else</button>
+                ) : null}
+              </div>
+              {hasPanel ? (
+                <div className="min-w-0 lg:sticky lg:top-6 lg:self-start">
+                  {mode.kind === "routed" ? (
+                    <RouteCard
+                      pick={mode.pick} alternatives={mode.alternatives} question={mode.prompt} missing={mode.missing} busy={mode.busy} note={mode.note}
+                      direct={direct && !hasFee(mode.pick.fee)}
+                      onSwap={(p) => swap(mode, p)} onQuote={(answers) => void quoteRouted(mode, answers)}
+                      onCancel={() => (mode.choices ? setMode(mode.choices) : reset())}
+                      cancelLabel={backLabel}
+                    />
+                  ) : null}
+                  {mode.kind === "quote" ? <QuoteCard quote={mode.quote} nowMs={now} paying={false} direct={direct} onPay={() => void pay(mode.quote, mode.question)} onCancel={reset} /> : null}
+                  {mode.kind === "refused" && mode.code === "terms_required" ? <TermsPanel onAccepted={() => retry(mode)} onCancel={reset} /> : null}
+                  {shortOf ? <TopUpPanel wallet={shortWallet} price={shortOf} onFunded={shortMainnet ? refreshMainnet : refreshWallet} onCancel={reset} /> : null}
+                </div>
+              ) : null}
+            </div>
           </div>
-        </div>
+        ) : null}
 
         {mode.kind === "run" ? (
-          <div className="mt-14">
-            {shown ? <RunView live={shown} /> : <p className="text-sm text-ink-3">{liveError ? "Agon could not load this job." : "Loading the job."}</p>}
+          <div className="mt-10">
+            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3">{shown?.phase === "answered" ? "Answer" : "Your hire"}</p>
+            <h1 className="mt-2 break-words text-balance text-[clamp(1.5rem,2.6vw,2rem)] font-medium leading-tight tracking-[-.02em] text-ink">
+              {heading.title ?? question ?? "Your hire"}
+            </h1>
+            {heading.lines && shown?.phase !== "answered" ? (
+              <ul className="mt-3 space-y-1 break-all font-mono text-[13px] leading-6 text-ink-2">
+                {heading.lines.map((line, i) => <li key={i}>{line}</li>)}
+              </ul>
+            ) : null}
+            {showConfirmError(mode.confirmError, shown?.phase) ? (
+              <p role="alert" className="mt-6 border-l-2 border-[color:var(--err)] pl-3 text-sm leading-6 text-ink">{confirmFailureText(mode.confirmError!)}</p>
+            ) : null}
+            <div className="mt-6">
+              {shown ? <RunView live={shown} /> : <p className="text-sm text-ink-3">{liveError ? "Agon could not load this job." : "Loading the job."}</p>}
+            </div>
             {live && live.phase === "answered" && !live.preview ? <RatePanel jobId={live.jobId} agent={live.receipt?.label ?? null} /> : null}
             {live ? (
-              <div className="mt-12 flex flex-wrap gap-4 border-t border-[color:var(--hairline-strong)] pt-6">
-                <a href={`/r/${live.jobId}`} className="inline-flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.14em] text-ink hover:text-accent">Open the receipt →</a>
-                {live.answer ? <a href="/arena" className="inline-flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 hover:text-accent">Arena leaderboard →</a> : null}
-                <button type="button" onClick={reset} className="inline-flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 hover:text-accent">Hire again</button>
+              <div className="mt-6 flex flex-wrap items-center gap-3">
+                <TagButton onClick={reset}>Ask something else</TagButton>
+                <TagButton variant="ghost" href={`/r/${live.jobId}`}>Full receipt</TagButton>
+                {live.answer ? <a href="/arena" className="inline-flex min-h-11 items-center px-2 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 hover:text-accent">Arena leaderboard →</a> : null}
               </div>
             ) : null}
           </div>
         ) : null}
 
-        {canAct && history.length > 0 && mode.kind !== "run" ? (
-          <section aria-labelledby="history-heading" className="mt-20">
-            <h2 id="history-heading" className="border-b border-[color:var(--hairline-strong)] pb-3 font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Your recent hires</h2>
+        {canAct && history.length > 0 && start ? (
+          <section aria-labelledby="history-heading" className="mt-14">
+            <div className="flex items-baseline justify-between gap-4 border-b border-[color:var(--hairline-strong)] pb-3">
+              <h2 id="history-heading" className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Your recent hires</h2>
+              <a href="/account#hires" className="inline-flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 hover:text-accent">All your hires →</a>
+            </div>
             <ul className="divide-y divide-[color:var(--hairline)]">
               {history.map((h) => (
                 <li key={h.jobId}>
-                  <a href={`/r/${h.jobId}`} className="grid min-h-11 gap-1 py-3 sm:grid-cols-[1fr_auto_auto] sm:items-center sm:gap-6 hover:text-accent">
-                    <span className="text-sm text-ink">{hireLabel(h)}</span>
-                    <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-ink-3">{hireStateText(h.state)}</span>
-                    <span className="font-mono text-[12px] tabular-nums text-ink-2">{h.price} USDC</span>
+                  <a href={`/r/${h.jobId}`} className="grid min-h-11 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-6 gap-y-1 py-4 hover:text-accent">
+                    <span className="min-w-0 break-words text-sm text-ink">{hireLabel(h)}</span>
+                    <span className="flex items-center gap-4 justify-self-end">
+                      <span className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3">
+                        <span aria-hidden className={`inline-block size-2 ${STATE_DOT[h.state] ?? "border border-[color:var(--ink-3)]"}`} />
+                        {hireStateText(h.state)}
+                      </span>
+                      <span className="font-mono text-[13px] tabular-nums text-ink">{h.price} USDC</span>
+                    </span>
                   </a>
                 </li>
               ))}
             </ul>
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <Pager page={historyPage} hasMore={historyMore} onPage={setHistoryPage} label="Recent hire pages" />
-              <a href="/account#hires" className="mt-4 inline-flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 hover:text-accent">All your hires →</a>
-            </div>
+            <Pager page={historyPage} hasMore={historyMore} onPage={setHistoryPage} label="Recent hire pages" />
           </section>
         ) : null}
       </div>
     </StageShell>
   );
 }
+
+const STATE_DOT: Record<string, string> = { delivered: "bg-[color:var(--ok)]", refunded: "bg-[color:var(--warn)]", failed: "bg-[color:var(--err)]" };
