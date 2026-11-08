@@ -11,6 +11,7 @@ import { ArcChainChip } from "@/components/redesign/ArcChainChip";
 import { WalletBalanceChip } from "@/components/redesign/WalletBalanceChip";
 import { ArcRunMark } from "@/components/redesign/ArcRunMark";
 import { AgonMark } from "@/components/redesign/AgonMark";
+import { logoDestination } from "@/lib/agon/landing";
 import { NotificationBell } from "@/components/redesign/NotificationBell";
 import { LiveMissionBanner } from "@/components/redesign/LiveMissionBanner";
 import { ThemeToggle } from "@/components/redesign/ThemeToggle";
@@ -75,7 +76,7 @@ export function TopNav({ hideSignOut = false }: { hideSignOut?: boolean } = {}) 
     <>
     <header className="sticky top-0 z-20 border-b border-[color:var(--hairline)] bg-canvas" onKeyDown={(event) => { if (event.key === "Escape" && open) { setOpen(false); event.currentTarget.querySelector<HTMLButtonElement>('[aria-controls="agon-mobile-menu"]')?.focus(); } }}>
       <div className="mx-auto flex h-16 max-w-[1600px] items-center justify-between gap-2 px-3 sm:gap-3 sm:px-6">
-        <Link href="/" className="inline-flex min-w-0 shrink-0 items-center text-ink" aria-label="Agon home">
+        <Link href={logoDestination(isAgon)} className="inline-flex min-w-0 shrink-0 items-center text-ink" aria-label="Agon home">
           {isAgon ? <AgonMark /> : <ArcRunMark />}
         </Link>
 

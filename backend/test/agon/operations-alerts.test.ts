@@ -178,6 +178,25 @@ test("a recovery after a suspension still says so, once per recovery", async () 
   assert.equal(recovered[0]!.title, "Agon service recovered");
 });
 
+// 2026-11-08: a listing that flaps after a suspension posted "recovered" every ten minutes,
+// because the open critical alert was never closed, so each warning folded into it.
+test("a listing that flaps after a suspension announces its recovery once", async () => {
+  const listingReference = `5042002:0x${"24".repeat(20)}:5`;
+  const send = (status: "warning" | "suspended" | "recovered") => alertAgonCertificationOperator({
+    operator: OPERATOR, listingReference, listingVersion: "3", status,
+    reasons: status === "recovered" ? [] : ["provider_timeout"], consecutiveFailures: status === "recovered" ? 0 : 1,
+  }, repository);
+  await send("suspended");
+  await send("recovered");
+  await send("warning");
+  await send("recovered");
+  await send("warning");
+  await send("recovered");
+  const matching = (await repository.list()).filter((alert) => alert.fingerprint.includes(`${listingReference}@3`));
+  assert.equal(matching.filter((alert) => alert.fingerprint.endsWith(":recovered")).length, 1);
+  assert.equal(matching.filter((alert) => alert.status === "open").length, 0, "the suspension closes when the service recovers");
+});
+
 test("Telegram delivery retries from the durable outbox without changing incident state", async () => {
   const delivery: AgonAlertDelivery = {
     delivery_id: "00000000-0000-4000-8000-000000000902",

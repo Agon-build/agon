@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { introDestination, landingFacts, landingMotion } from "./landing.ts";
+import { readFileSync } from "node:fs";
+
+import { introDestination, landingFacts, landingMotion, logoDestination } from "./landing.ts";
 import type { Board } from "./scores-api.ts";
 import type { HireCategory, SeasonInfo } from "./stage-types.ts";
 import type { AgonListing } from "./types.ts";
@@ -44,3 +46,28 @@ test("reduced motion gets the static story", () => {
 });
 
 test("Enter Agon opens the welcome story", () => assert.equal(introDestination(), "/welcome"));
+
+// 2026-11-08: the owner asked for the AGON mark to lead back to the welcome story.
+test("the AGON mark in the header opens the welcome story", () => {
+  assert.equal(logoDestination(true), "/welcome");
+  assert.equal(logoDestination(false), "/");
+  const nav = readFileSync(new URL("../../components/redesign/TopNav.tsx", import.meta.url), "utf8");
+  assert.match(nav, /<Link href=\{logoDestination\(isAgon\)\}/);
+});
+
+// 2026-11-08: Enter showed Hire for a moment before the welcome story loaded.
+test("Enter keeps the intro up until the welcome story replaces it", () => {
+  const gate = readFileSync(new URL("../../components/agon/IntroGate.tsx", import.meta.url), "utf8");
+  const enter = gate.slice(gate.indexOf("function enter()"));
+  assert.doesNotMatch(enter.slice(0, enter.indexOf("}") + 1), /setPhase\("hidden"\)/, "Hire must not show while /welcome loads");
+  assert.match(gate, /router\.prefetch\(introDestination\(\)\)/);
+});
+
+// 2026-11-08: reveal groups painted, vanished when GSAP loaded, then faded back in.
+test("welcome reveal groups start hidden from CSS, not after GSAP loads", () => {
+  const story = readFileSync(new URL("../../components/landing/WelcomeStory.tsx", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
+  assert.doesNotMatch(story, /gsap\.from\(group\.children/);
+  assert.match(css, /\[data-motion="on"\] \[data-reveal\]:not\(\[data-shown\]\) > \*/);
+  assert.match(css, /prefers-reduced-motion: reduce[^}]*\[data-reveal\]/);
+});

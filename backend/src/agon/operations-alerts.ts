@@ -57,7 +57,7 @@ export type UpsertAgonAlertSubscription = Omit<AgonAlertSubscription, "subscript
 
 export type AgonOperationsAlertSink = {
   raise(input: RaiseAgonOperationsAlert): Promise<AgonOperationsAlert>;
-  resolve(operator: string, fingerprint: string): Promise<boolean>;
+  resolve(operator: string, fingerprint: string, options?: { critical?: boolean }): Promise<boolean>;
 };
 
 export type AgonOperationsAlertDeliveryRepository = {
@@ -316,11 +316,13 @@ export class PostgresAgonOperationsAlertRepository {
     }
   }
 
-  async resolve(operator: string, fingerprint: string): Promise<boolean> {
+  /// Closes an open alert. Critical alerts stay open unless `critical` is set, which only
+  /// the condition clearing itself does (a suspended service that passes again).
+  async resolve(operator: string, fingerprint: string, options: { critical?: boolean } = {}): Promise<boolean> {
     const result = await this.pool.query(
       `update agon_operations_alerts
           set status = 'resolved', resolved_at = now(), updated_at = now()
-        where operator = $1 and fingerprint = $2 and status = 'open' and severity <> 'critical'`,
+        where operator = $1 and fingerprint = $2 and status = 'open' and ${options.critical ? "severity = 'critical'" : "severity <> 'critical'"}`,
       [normalizeOperator(operator), fingerprint],
     );
     return (result.rowCount ?? 0) > 0;

@@ -50,6 +50,20 @@ async function listAll(): Promise<AgonListing[]> {
   return out;
 }
 
+/// Reveal groups start hidden in CSS (globals.css) and are marked shown as they scroll in,
+/// so nothing paints, vanishes and fades back while GSAP loads.
+function useReveal(root: React.RefObject<HTMLDivElement | null>) {
+  useEffect(() => {
+    const groups = Array.from(root.current?.querySelectorAll<HTMLElement>("[data-reveal]") ?? []);
+    if (typeof IntersectionObserver === "undefined") { groups.forEach((g) => g.setAttribute("data-shown", "")); return; }
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) if (e.isIntersecting) { e.target.setAttribute("data-shown", ""); io.unobserve(e.target); }
+    }, { rootMargin: "0px 0px -15% 0px" });
+    groups.forEach((g) => io.observe(g));
+    return () => io.disconnect();
+  }, [root]);
+}
+
 /// Scroll scenes run only when motion is allowed; GSAP is loaded on this page alone.
 function useStoryMotion(root: React.RefObject<HTMLDivElement | null>) {
   useEffect(() => {
@@ -71,9 +85,6 @@ function useStoryMotion(root: React.RefObject<HTMLDivElement | null>) {
           tl.to("[data-hero]", { opacity: 0.15, filter: "blur(6px)", scale: 0.96, ease: "none" }, 0)
             .fromTo("[data-card]", { y: () => window.innerHeight, scale: 0.86 }, { y: 0, scale: 1, ease: "none" }, 0);
         }
-        gsap.utils.toArray<HTMLElement>("[data-reveal]").forEach((group) => {
-          gsap.from(group.children, { y: 24, opacity: 0, duration: 0.3, ease: "power2.out", stagger: 0.12, scrollTrigger: { trigger: group, start: "top 85%", once: true } });
-        });
         gsap.fromTo("[data-final]", { scale: 0.9 }, { scale: 1, ease: "none", scrollTrigger: { trigger: "[data-final]", start: "top bottom", end: "top 40%", scrub: true } });
       }, el);
       const card = el.querySelector<HTMLElement>("[data-tilt]");
@@ -101,10 +112,11 @@ export function WelcomeStory() {
   const root = useRef<HTMLDivElement>(null);
   const facts = useLandingFacts();
   useStoryMotion(root);
+  useReveal(root);
   const top = facts?.topAgent ?? null;
 
   return (
-    <div ref={root} className="min-h-screen overflow-x-clip bg-canvas text-ink">
+    <div ref={root} data-motion="on" className="min-h-screen overflow-x-clip bg-canvas text-ink">
       <AppHeader />
       <main>
         <section data-pin className="relative">

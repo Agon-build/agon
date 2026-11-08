@@ -8,7 +8,6 @@ import { introStartPhase } from "@/lib/agon/intro-cards";
 import { introDestination } from "@/lib/agon/landing";
 
 const STARTUP_HOLD_MS = 3000;
-const STARTUP_EXIT_MS = 680;
 
 /// Lives for one page load: a new visit to agon.surf starts it at false again,
 /// while moving back to Hire inside the app keeps it.
@@ -42,11 +41,15 @@ export function IntroGate({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(timer);
   }, [phase, ready]);
 
-  // Enter opens the welcome story; Hire stays one click away from there.
+  // The welcome story is fetched while the intro plays, so Enter swaps straight to it.
+  useLayoutEffect(() => {
+    if (phase === "visible") router.prefetch(introDestination());
+  }, [phase, router]);
+
+  // Enter opens the welcome story; Hire stays one click away from there. The intro
+  // stays up until the story replaces this page, so Hire never shows in between.
   function enter() {
     router.push(introDestination());
-    setPhase("exiting");
-    window.setTimeout(() => setPhase("hidden"), STARTUP_EXIT_MS);
   }
 
   return (

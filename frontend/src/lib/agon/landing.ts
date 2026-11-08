@@ -67,3 +67,8 @@ export function landingMotion(motionAllowed: boolean): "scroll" | "static" {
 export function introDestination(): "/welcome" {
   return "/welcome";
 }
+
+/// Where the mark in the header goes: the welcome story on Agon, home elsewhere.
+export function logoDestination(isAgon: boolean): "/welcome" | "/" {
+  return isAgon ? "/welcome" : "/";
+}
