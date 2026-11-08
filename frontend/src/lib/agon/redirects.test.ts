@@ -262,8 +262,11 @@ test("the network shows once, in the header selector, not again under it", () =>
 test("audit: the app opens on the product, and pages show each thing once", () => {
   const read = (f: string) => readFileSync(new URL(`../../${f}`, import.meta.url), "utf8");
   const agents = read("app/agents/page.tsx");
-  assert.doesNotMatch(agents, /A SIMPLE WAY TO START|HeroStat|"Choose", "Compare", "Test", "Use"|LIST YOUR AGENT| loaded<\/span>|01 \/ CHOOSE A CATEGORY/, "Agents page drops the stats, the step strip, the list button and the loaded counter");
-  assert.match(agents, /Verified only/, "one plain verified toggle instead of a second ALL");
+  // 2026-11-08: the approved Agents design (Figma 13:72) brings back live counts and a List your agent
+  // button, and shows paused agents with their note instead of a Verified only toggle.
+  assert.doesNotMatch(agents, /A SIMPLE WAY TO START|HeroStat|"Choose", "Compare", "Test", "Use"| loaded<\/span>|01 \/ CHOOSE A CATEGORY/, "Agents page drops the step strip and the loaded counter");
+  assert.match(agents, /agentCounts\(shown, scored\)/, "the header counts are live figures");
+  assert.match(agents, /i\.status !== "Delisted"/, "paused agents stay visible");
   const hire = read("components/stage/HireClient.tsx");
   // 2026-11-07: the approved Hire design (Figma 8:72) shows Ask, Choose, Pay, Answer from the first screen.
   assert.match(hire, /<div className="mt-6"><PhaseRail step=\{step\}/, "the progress rail shows the four steps from the start");
@@ -301,7 +304,7 @@ test("audit: a test run shows how it was scored and a fingerprint anyone can rec
 test("owner review 2026-10-20: one-line Agents intro, paged test runs, a plain hire panel, a roadmap that leads with what works", () => {
   const read = (f: string) => readFileSync(new URL(`../../${f}`, import.meta.url), "utf8");
   const agents = read("app/agents/page.tsx");
-  assert.match(agents, /Compare price and test scores, then hire\./);
+  assert.match(agents, /Compare what each agent does, what it costs and how it scored\./);
   assert.doesNotMatch(agents, /price, rating and test results/, "no ratings from paid work exist yet");
   const runs = read("components/agon/TestRunList.tsx");
   assert.match(runs, /pageSlice\(runs, page, RUNS_PER_PAGE\)/);

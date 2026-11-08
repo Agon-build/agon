@@ -4,11 +4,13 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { AgentLogo } from "@/components/agon/ListingCard";
+import { TagButton } from "@/components/redesign/TagButton";
+import { boardFootnote, isPaused, partBar } from "@/lib/agon/agents-layout";
 import { AGON_CATEGORIES, presentListing } from "@/lib/agon/catalog";
 import { listListings } from "@/lib/agon/client";
 import { networkHref } from "@/lib/agon/network";
-import { WINDOW_CHOICES, changeLabel, evidenceLine, partStatusLabel } from "@/lib/agon/rating-view";
-import { getBoard, type Board, type ScoreSort, type ScoreWindow } from "@/lib/agon/scores-api";
+import { WINDOW_CHOICES, categoryLabel, changeLabel, evidenceLine, partStatusLabel } from "@/lib/agon/rating-view";
+import { getBoard, type Board, type ScoreRow, type ScoreSort, type ScoreWindow } from "@/lib/agon/scores-api";
 import type { AgonListing } from "@/lib/agon/types";
 import { useAgonNetwork } from "@/hooks/useAgonNetwork";
 
@@ -121,5 +123,87 @@ export function CategoryLeaderboard() {
               )}
       </div>
     </div>
+  );
+}
+
+const BOARD_WINDOWS = WINDOW_CHOICES.filter((w) => w.id !== "24h").slice().reverse();
+
+function Bar({ part }: { part: ScoreRow["parts"]["arena"] }) {
+  const bar = partBar(part);
+  if (bar.width === null) return <span className="font-mono text-[10px] text-ink-3">{bar.label}</span>;
+  return (
+    <span className="flex items-center gap-3">
+      <span aria-hidden className="h-1 w-full max-w-[140px] bg-canvas-3"><span className="block h-full bg-accent" style={{ width: `${bar.width}%` }} /></span>
+      <span className="w-10 shrink-0 text-right font-mono text-[11px] tabular-nums text-ink-2">{bar.label}</span>
+    </span>
+  );
+}
+
+/// The Agents page leaderboard: one category at a time, ranked by Agon score.
+export function AgentsBoard({ category, listings }: { category: string; listings: AgonListing[] }) {
+  const { networkKey } = useAgonNetwork();
+  const [range, setRange] = useState<ScoreWindow>("all");
+  const [board, setBoard] = useState<Board | null | undefined>(undefined);
+
+  useEffect(() => {
+    let active = true;
+    setBoard(undefined);
+    void getBoard(category, range, "score").then((b) => { if (active) setBoard(b); }).catch(() => { if (active) setBoard(null); });
+    return () => { active = false; };
+  }, [category, range]);
+
+  const byAgent = useMemo(() => new Map(listings.map((l) => [l.agentId, l])), [listings]);
+  const rows = board?.rows.filter((r) => r.score !== null) ?? [];
+  const cols = "lg:grid-cols-[2.5rem_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)_6rem_6.5rem_6.5rem]";
+
+  return (
+    <section aria-labelledby="board-heading" className="border border-[color:var(--hairline-strong)] bg-canvas-2">
+      <div className="flex flex-wrap items-start justify-between gap-4 p-5 sm:p-6">
+        <div>
+          <h2 id="board-heading" className="text-lg font-medium tracking-[-.01em] text-ink">{categoryLabel(category)} leaderboard</h2>
+          <p className="mt-1 text-sm text-ink-2">Ranked by Agon score: Arena, Playground and ratings from paid work.</p>
+        </div>
+        <div role="group" aria-label="Time window" className="flex flex-wrap gap-1">
+          {BOARD_WINDOWS.map((w) => (
+            <button key={w.id} type="button" aria-pressed={range === w.id} onClick={() => setRange(w.id)} className={`min-h-11 px-3 font-mono text-[10px] uppercase tracking-[0.12em] ${range === w.id ? "border border-[color:var(--hairline-strong)] text-ink" : "text-ink-3 hover:text-ink"}`}>{w.label}</button>
+          ))}
+        </div>
+      </div>
+      {board === undefined ? <p className="border-t border-[color:var(--hairline)] p-6 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-3">Loading the board</p>
+        : board === null ? <p className="border-t border-[color:var(--hairline)] p-6 text-sm text-ink-2">The leaderboard is unavailable right now. Try again in a moment.</p>
+          : rows.length === 0 ? <p className="border-t border-[color:var(--hairline)] p-6 text-sm text-ink-2">No agent in {categoryLabel(category)} has a score in this period yet.</p>
+            : (
+              <ol className="border-t border-[color:var(--hairline)]">
+                <li aria-hidden className={`hidden gap-4 border-b border-[color:var(--hairline)] px-6 py-3 font-mono text-[9px] uppercase tracking-[0.14em] text-ink-3 lg:grid ${cols}`}>
+                  <span>#</span><span>Agent</span><span>Arena</span><span>Playground</span><span>Agon score</span><span>Price</span><span />
+                </li>
+                {rows.map((r) => {
+                  const listing = byAgent.get(r.agentId);
+                  const p = listing ? presentListing(listing) : null;
+                  const name = p?.name ?? `Agent #${r.agentId}`;
+                  const hireable = listing ? listing.status === "Listed" && !isPaused(listing) && !listing.risk.quarantineReason : false;
+                  return (
+                    <li key={r.agentId} className={`grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 border-b border-[color:var(--hairline)] px-5 py-4 last:border-b-0 sm:px-6 ${cols}`}>
+                      <span className={`font-mono text-[13px] tabular-nums ${r.rank === 1 ? "text-accent" : "text-ink-3"}`}>{r.rank ?? "–"}</span>
+                      <div className="min-w-0">
+                        <Link href={networkHref(`/agents/${encodeURIComponent(r.listingReference)}`, networkKey)} className="font-medium text-ink hover:text-accent">{name}</Link>
+                        <span className="ml-2 font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3">{r.firstParty ? "Built by Agon" : "Listed on Agon"}</span>
+                        {p ? <p className="mt-0.5 truncate text-[13px] text-ink-2">{p.description}</p> : null}
+                      </div>
+                      <span className="font-mono text-[17px] tabular-nums text-ink lg:hidden">{r.score!.toFixed(1)}</span>
+                      <div className="col-start-2 col-end-4 grid grid-cols-2 gap-4 lg:contents">
+                        <div className="min-w-0"><span className="mb-1 block font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3 lg:hidden">Arena</span><Bar part={r.parts.arena} /></div>
+                        <div className="min-w-0"><span className="mb-1 block font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3 lg:hidden">Playground</span><Bar part={r.parts.playground} /></div>
+                      </div>
+                      <span className="hidden font-mono text-[17px] tabular-nums text-ink lg:block">{r.score!.toFixed(1)}</span>
+                      <span className="hidden font-mono text-[12px] tabular-nums text-ink-2 lg:block">{p?.amountUSDC ? `${p.amountUSDC} USDC` : "–"}</span>
+                      <span className="hidden lg:block">{hireable && listing ? <TagButton variant="ghost" size="sm" href={`/?agent=${encodeURIComponent(listing.id)}`}>Hire</TagButton> : null}</span>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+      {board && rows.length > 0 ? <p className="border-t border-[color:var(--hairline)] px-6 py-3 font-mono text-[10px] text-ink-3">{boardFootnote(board.rows)}</p> : null}
+    </section>
   );
 }

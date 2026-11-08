@@ -3,28 +3,45 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-import { BracketedCell } from "@/components/redesign/BracketedCell";
+import { TagButton } from "@/components/redesign/TagButton";
+import { inputNames, isPaused } from "@/lib/agon/agents-layout";
+import { networkHref } from "@/lib/agon/network";
+import { categoryLabel } from "@/lib/agon/rating-view";
+import { hasNamedInputs } from "@/lib/agon/route-view";
 import { inspectManifest } from "@/lib/agon/client";
-import { cardFacts, type AgentActivity, type CardBadge } from "@/lib/agon/card-facts";
+import { cardFacts, type AgentActivity } from "@/lib/agon/card-facts";
 import type { AgonListing } from "@/lib/agon/types";
 import { useAgonNetwork } from "@/hooks/useAgonNetwork";
 
-const BADGE_TONE: Record<CardBadge, string> = {
-  "Built by Agon": "bg-accent text-accent-ink",
-  Verified: "border border-[color:var(--ok)] text-ink",
-  Listed: "border border-[color:var(--hairline-strong)] text-ink-3",
-};
+const PAUSED_NOTE = "Hires are paused while its checks are failing. It comes back on its own after a full pass.";
 
-export function ListingCard({ listing, rating = null, activity = null, searchMatchTerms = [] }: { listing: AgonListing; rating?: { agentId: string; text: string } | null; activity?: AgentActivity | null; searchMatchTerms?: string[] }) {
+function TrustChip({ tone, label }: { tone: "ok" | "warn" | "err" | "none"; label: string }) {
+  const square = tone === "ok" ? "bg-[color:var(--ok)]" : tone === "warn" ? "bg-[color:var(--warn)]" : tone === "err" ? "bg-[color:var(--err)]" : "border border-[color:var(--ink-3)]";
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1.5 border border-[color:var(--hairline-strong)] px-2 py-1 font-mono text-[9px] uppercase tracking-[0.12em] text-ink-2">
+      <span aria-hidden className={`inline-block size-1.5 ${square}`} />{label}
+    </span>
+  );
+}
+
+/// One agent on the Agents page: what it does, its proof and price, and the way to hire it.
+/// `score` is undefined while scores load, null when the agent has none yet.
+export function ListingCard({ listing, score, activity = null, searchMatchTerms = [] }: { listing: AgonListing; score?: number | null; rating?: { agentId: string; text: string } | null; activity?: AgentActivity | null; searchMatchTerms?: string[] }) {
   const { networkKey } = useAgonNetwork();
   const [manifestBody, setManifestBody] = useState(listing.manifest.body);
   const [metadataState, setMetadataState] = useState<"idle" | "loading" | "ready" | "mismatch" | "error">(listing.manifest.body === undefined ? "idle" : "ready");
   const hydratedListing = useMemo(() => ({ ...listing, manifest: { ...listing.manifest, body: manifestBody } }), [listing, manifestBody]);
-  const facts = cardFacts(hydratedListing, rating, activity);
+  const facts = cardFacts(hydratedListing, null, activity);
   const quarantined = Boolean(listing.risk.quarantineReason);
+  const paused = isPaused(listing);
   const metadataBlocked = metadataState === "mismatch" || metadataState === "error";
-  const unavailable = listing.status !== "Listed" || quarantined || metadataBlocked;
-
+  const hireable = listing.status === "Listed" && !paused && !quarantined && !metadataBlocked && hasNamedInputs(manifestBody);
+  const takes = inputNames(manifestBody);
+  const chip = quarantined ? { tone: "err" as const, label: "Held" }
+    : paused ? { tone: "warn" as const, label: "Paused" }
+      : listing.verification.status === "Verified" ? { tone: "ok" as const, label: "Verified" }
+        : { tone: "none" as const, label: "Listed" };
+  const href = networkHref(`/agents/${encodeURIComponent(listing.id)}`, networkKey);
   useEffect(() => {
     setManifestBody(listing.manifest.body);
     if (listing.manifest.body !== undefined) {
@@ -56,41 +73,32 @@ export function ListingCard({ listing, rating = null, activity = null, searchMat
   }, [listing.id, listing.manifest.body, listing.manifest.hash, listing.manifest.uri, networkKey]);
 
   return (
-    <article className="min-w-0">
-      <Link href={`/agents/${encodeURIComponent(listing.id)}`} aria-label={`Open ${facts.name}`} className="group block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas">
-        <BracketedCell hover className="flex h-full flex-col" pad="md">
-          <div className="flex min-w-0 items-start gap-4">
-            <CardLogo logoUrl={facts.logoUrl} initials={facts.initials} name={facts.name} cacheKey={`${listing.version}-${listing.manifest.hash}`} />
-            <div className="min-w-0 flex-1">
-              <div className="flex min-w-0 items-start justify-between gap-3">
-                <h2 className="min-w-0 truncate font-sans text-[18px] font-semibold leading-tight tracking-[-0.02em] text-ink">{facts.name}</h2>
-                <span className="flex shrink-0 flex-wrap justify-end gap-1">{quarantined
-                  ? <span className="border border-[color:var(--err)] px-2 py-1 font-mono text-[9px] uppercase tracking-[0.12em] text-[color:var(--err)]">Held</span>
-                  : facts.badges.map((badge) => <span key={badge} className={`px-2 py-1 font-mono text-[9px] uppercase tracking-[0.12em] ${BADGE_TONE[badge]}`}>{badge}</span>)}</span>
-              </div>
-              <p className="mt-1.5 line-clamp-2 font-sans text-[13px] leading-[1.45] text-ink-2">{facts.line}</p>
-            </div>
-          </div>
+    <article className={`flex h-full min-w-0 flex-col border border-[color:var(--hairline-strong)] bg-canvas-2 p-5 ${paused || quarantined ? "opacity-90" : ""}`}>
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <h2 className="min-w-0 text-[17px] font-medium leading-tight tracking-[-0.01em] text-ink"><Link href={href} className="text-ink hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{facts.name}</Link></h2>
+        <TrustChip {...chip} />
+      </div>
+      <p className="mt-1.5 font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3">{listing.firstParty ? "Built by Agon" : "Listed on Agon"} · {categoryLabel(listing.category)}</p>
+      <p className="mt-3 line-clamp-2 text-[13px] leading-[1.5] text-ink-2">{facts.line}</p>
+      {searchMatchTerms.length > 0 ? <p className="mt-2 font-mono text-[9px] uppercase tracking-[0.11em] text-accent">Matches: {searchMatchTerms.join(" / ")}</p> : null}
 
-          {facts.rating ? <p className="mt-3 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.12em] text-ink"><span aria-hidden className="text-accent">■</span>{facts.rating}</p> : null}
+      <dl className="mt-4 grid grid-cols-3 gap-3">
+        <div><dt className="font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3">Agon score</dt><dd className="mt-1 font-mono text-[17px] tabular-nums text-ink">{score === undefined ? "–" : score === null ? <span className="text-[11px] text-ink-3">Not yet</span> : score.toFixed(1)}</dd></div>
+        <div><dt className="font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3">Price</dt><dd className="mt-1 font-mono text-[12px] tabular-nums text-ink">{facts.price ?? "–"}</dd></div>
+        <div className="min-w-0"><dt className="font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3">Takes</dt><dd className="mt-1 truncate font-mono text-[12px] text-ink" title={takes ?? undefined}>{takes ?? "–"}</dd></div>
+      </dl>
 
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {facts.chips.map((chip) => <span key={chip} className="bg-canvas-3 px-2 py-1 font-mono text-[9px] uppercase tracking-[0.1em] text-ink-2">{chip}</span>)}
-          </div>
+      {paused ? <p className="mt-4 border border-[color:var(--hairline)] bg-canvas px-3 py-2 text-[12px] leading-5 text-ink-2">{PAUSED_NOTE}</p> : null}
+      {facts.activity && !paused ? <div className="mt-3"><ActivityLine text={facts.activity} /></div> : null}
+      {metadataState === "loading" ? <p className="mt-3 font-mono text-[9px] uppercase tracking-[0.1em] text-ink-3">Loading service details</p> : null}
+      {metadataState === "mismatch" ? <p className="mt-3 font-mono text-[9px] uppercase tracking-[0.1em] text-[color:var(--err)]">Service file changed · new version required</p> : null}
+      {metadataState === "error" ? <p className="mt-3 font-mono text-[9px] uppercase tracking-[0.1em] text-[color:var(--err)]">Service details unavailable</p> : null}
 
-          {searchMatchTerms.length > 0 ? <p className="mt-3 font-mono text-[9px] uppercase tracking-[0.11em] text-accent">MATCHES: {searchMatchTerms.join(" / ")}</p> : null}
-
-          <div aria-hidden className="min-h-4 flex-1" />
-          <div className="flex items-end justify-between gap-4 border-t border-[color:var(--hairline)] pt-3">
-            <ActivityLine text={unavailable ? "Check required" : facts.activity} />
-            {facts.price ? <span className="font-mono text-[13px] text-ink">{facts.price}</span> : null}
-          </div>
-
-          {metadataState === "loading" ? <p className="mt-2 font-mono text-[9px] uppercase tracking-[0.1em] text-ink-3">Loading service details</p> : null}
-          {metadataState === "mismatch" ? <p className="mt-2 font-mono text-[9px] uppercase tracking-[0.1em] text-[color:var(--err)]">Service file changed · new version required</p> : null}
-          {metadataState === "error" ? <p className="mt-2 font-mono text-[9px] uppercase tracking-[0.1em] text-[color:var(--err)]">Service details unavailable</p> : null}
-        </BracketedCell>
-      </Link>
+      <div aria-hidden className="min-h-4 flex-1" />
+      <div className="flex flex-wrap gap-2">
+        {hireable ? <TagButton size="sm" href={`/?agent=${encodeURIComponent(listing.id)}`}>Hire</TagButton> : null}
+        <TagButton size="sm" variant="ghost" href={href}>View agent</TagButton>
+      </div>
     </article>
   );
 }
@@ -103,16 +111,6 @@ function ActivityLine({ text }: { text: string | null }) {
       {tone ? <span aria-hidden className={`h-1.5 w-1.5 shrink-0 ${tone}`} /> : null}
       <span className="truncate">{text}</span>
     </span>
-  );
-}
-
-function CardLogo({ logoUrl, initials, name, cacheKey }: { logoUrl: string | null; initials: string; name: string; cacheKey: string }) {
-  const [failed, setFailed] = useState(false);
-  const src = logoUrl ? `${logoUrl}${logoUrl.includes("?") ? "&" : "?"}v=${encodeURIComponent(cacheKey)}` : null;
-  return (
-    <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden border border-[color:var(--hairline-strong)] bg-accent font-stencil text-[18px] text-accent-ink" role="img" aria-label={src && !failed ? `${name} logo` : `${name} initials`}>
-      {src && !failed ? <img src={src} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setFailed(true)} /> : initials}
-    </div>
   );
 }
 
