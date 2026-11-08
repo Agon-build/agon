@@ -314,7 +314,7 @@ test("owner review 2026-10-20: one-line Agents intro, paged test runs, a plain h
   assert.doesNotMatch(detail, /Service record \{listing\.listingId\}/);
   assert.match(detail, /moneyLine\(network\.key\)/, "the hire panel names test or real money");
   const docs = read("app/docs/page.tsx");
-  assert.match(docs, /<RoadmapLater items=\{ROADMAP\.later\} \/>/, "Later shows titles only");
+  assert.match(docs, /<RoadmapLater items=\{ROADMAP\.later\} \/>/, "Later has its own grey-marked table");
 });
 
 test("owner review 2026-10-20: headings and intro lines run full width and balance when they wrap; the Arena season card reads the season from the API", () => {

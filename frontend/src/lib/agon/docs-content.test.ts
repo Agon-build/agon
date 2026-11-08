@@ -34,6 +34,7 @@ test("overview, hire note and arena status say what is true", () => {
   assert.doesNotMatch(HIRE_NOTE, /come with Agon's move/);
   assert.match(ARENA_STATUS, /Season 2/);
   assert.match(LEADERBOARD_NOTE, /24 hours, 7 days and 30 days/);
+  assert.doesNotMatch(LEADERBOARD_NOTE, /Until Arena scores arrive/, "Arena feeds the Agon score today");
 });
 
 test("Paused reads as a warning, not a failure", () => {
@@ -227,4 +228,14 @@ test("the Hiring docs say outside services are listed but not ranked", () => {
   assert.match(body, /Outside market/);
   assert.match(body, /does not rank/);
   assert.match(body, /seven categories/);
+});
+
+test("hiring docs name the money per group and the MCP hire tools that exist, with their real status", async () => {
+  const { HIRE_MONEY, HIRE_MCP, MCP_TOOL_GROUPS } = await import("./docs-content.ts");
+  assert.deepEqual(HIRE_MONEY.map((m) => m.title), ["Test USDC on Arc Testnet", "Real USDC on Arc mainnet"]);
+  const hireTools = MCP_TOOL_GROUPS.find((g) => g.title === "Find and hire")!.tools;
+  for (const t of HIRE_MCP.tools) assert.ok(hireTools.includes(t.name), t.name);
+  assert.match(HIRE_MCP.status, /waits for its first live check/, "paying over MCP is not Live yet");
+  const { ROADMAP } = await import("./docs-content.ts");
+  assert.doesNotMatch(ROADMAP.live[0]!.body, /over MCP/, "hiring over MCP has not run on production yet");
 });

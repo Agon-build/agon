@@ -1,63 +1,63 @@
 "use client";
+import { useRef } from "react";
 
-import { useEffect, useState } from "react";
-import { StatusChip } from "@/components/redesign";
-import { useAgonNetwork } from "@/hooks/useAgonNetwork";
+import { DOCS_SECTIONS, type DocsSectionId } from "@/lib/agon/docs-content";
+import { DOCS_GROUPS, partPosition } from "@/lib/agon/docs-nav";
 
-/// The docs table of contents with scrollspy: as the reader scrolls, the section
-/// currently in view is highlighted in the accent color so they always see where
-/// they are. Uses an IntersectionObserver over the section ids; the active band
-/// sits near the top of the viewport.
-export function DocsToc({ items }: { items: { id: string; label: string }[] }) {
-  const [active, setActive] = useState<string>(items[0]?.id ?? "");
-  const { network } = useAgonNetwork();
+const label = (id: DocsSectionId) => DOCS_SECTIONS.find((s) => s.id === id)?.label ?? id;
 
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        // Among the sections currently crossing the active band, pick the one
-        // highest on screen. If none are in the band, keep the last active so
-        // the highlight never blanks out between headings.
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-        if (visible[0]) setActive(visible[0].target.id);
-      },
-      // Active zone: a thin band ~18% from the top of the viewport.
-      { rootMargin: "-18% 0px -72% 0px", threshold: 0 },
-    );
-
-    const els = items
-      .map((i) => document.getElementById(i.id))
-      .filter((el): el is HTMLElement => el !== null);
-    els.forEach((el) => observer.observe(el));
-    return () => observer.disconnect();
-  }, [items]);
-
+function Groups({ active, onPick }: { active: DocsSectionId; onPick?: () => void }) {
   return (
-    <nav className="sticky top-24">
-      <div className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-3">ON THIS PAGE</div>
-      <ul className="mt-4 flex flex-col gap-2.5 border-l border-[color:var(--hairline)] pl-4">
-        {items.map((t) => {
-          const isActive = active === t.id;
-          return (
-            <li key={t.id}>
-              <a
-                href={`#${t.id}`}
-                aria-current={isActive ? "true" : undefined}
-                className={`font-mono text-[12px] uppercase tracking-[0.10em] transition-colors hover:text-accent ${
-                  isActive ? "text-accent" : "text-ink-2"
-                }`}
-              >
-                {t.label}
-              </a>
-            </li>
-          );
-        })}
-      </ul>
-      <div className="mt-6">
-        <StatusChip tone={network.readiness === "configured" ? "ok" : "warn"}>{network.brand} {network.environment}</StatusChip>
-      </div>
+    <div className="grid gap-7">
+      {DOCS_GROUPS.map((g) => (
+        <div key={g.title}>
+          <p className="font-mono text-[9px] uppercase tracking-[0.16em] text-ink-3">{g.title}</p>
+          <ul className="mt-2 grid">
+            {g.ids.map((id) => {
+              const on = id === active;
+              return (
+                <li key={id}>
+                  <a href={`#${id}`} onClick={onPick} aria-current={on ? "true" : undefined}
+                    className={`flex min-h-11 items-center gap-3 border-l-2 px-3 text-[13px] transition-colors duration-150 ${on ? "border-accent bg-canvas-2 text-ink" : "border-transparent text-ink-2 hover:text-ink"}`}>
+                    <span className={`font-mono text-[10px] tabular-nums ${on ? "text-accent" : "text-ink-3"}`}>{String(partPosition(id).index).padStart(2, "0")}</span>
+                    {label(id)}
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/// The Docs map: grouped parts in a sidebar on wide screens.
+export function DocsToc({ active }: { active: DocsSectionId }) {
+  return (
+    <nav aria-label="Docs parts" className="sticky top-24">
+      <p className="mb-6 font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Docs</p>
+      <Groups active={active} />
+    </nav>
+  );
+}
+
+/// On small screens the same map is a part picker above the article.
+export function DocsPicker({ active }: { active: DocsSectionId }) {
+  const box = useRef<HTMLDetailsElement>(null);
+  const pos = partPosition(active);
+  return (
+    <nav aria-label="Docs parts" className="lg:hidden">
+      <details ref={box} className="border border-[color:var(--hairline-strong)] bg-canvas-2">
+        <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-3 px-4 py-3">
+          <span className="min-w-0">
+            <span className="block font-mono text-[9px] uppercase tracking-[0.16em] text-accent">{`Part ${pos.index} of ${pos.total}`}</span>
+            <span className="mt-1 block truncate text-[14px] text-ink">{label(active)}</span>
+          </span>
+          <span aria-hidden className="font-mono text-[11px] text-ink-3">↓</span>
+        </summary>
+        <div className="border-t border-[color:var(--hairline)] px-2 py-4"><Groups active={active} onPick={() => { if (box.current) box.current.open = false; }} /></div>
+      </details>
     </nav>
   );
 }

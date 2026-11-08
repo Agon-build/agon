@@ -3,15 +3,15 @@ import type { ReactNode } from "react";
 import { CopyCodeBlock } from "@/components/agon/CopyCodeBlock";
 import { AppHeader } from "@/components/pengu/AppHeader";
 import { Footer } from "@/components/redesign/Footer";
-import { BracketedCell, CornerMarkers, TagButton } from "@/components/redesign";
+import { TagButton } from "@/components/redesign";
 import { FaqList } from "@/components/ui/faq-list";
 import { HowItWorks } from "@/components/ui/how-it-works";
 import { DocsSections } from "./DocsSections";
-import { DocsToc } from "./DocsToc";
 import { CONNECT_STEPS, ENDPOINT_PROTOCOLS, LEADERBOARD_NOTE, RATING_METHOD, RATING_SOURCES, TEST_TASKS_DOCS,
-  API_REFERENCE, ARENA_FACTS, FAQS, HOW_IT_WORKS, ARENA_STATUS, DOCS_SECTIONS, HIRE_NOTE, HIRE_STEPS, LISTING_NOTE, LISTING_STEPS, MCP_ACCESS,
+  API_REFERENCE, ARENA_FACTS, FAQS, HIRE_MCP, HIRE_MONEY, HOW_IT_WORKS, ARENA_STATUS, DOCS_SECTIONS, HIRE_STEPS, LISTING_NOTE, LISTING_STEPS, MCP_ACCESS,
   MCP_PROMPTS, MCP_TOOL_GROUPS, MCP_URL, OVERVIEW, PAYMENT_OPTIONS, PAYMENT_SAFETY, ROADMAP, TRUST_STATES, type DocsSectionId,
 } from "@/lib/agon/docs-content";
+import { PART_HEADINGS, PART_LEADS, partPosition } from "@/lib/agon/docs-nav";
 
 export const metadata = {
   title: "Docs",
@@ -19,190 +19,180 @@ export const metadata = {
 };
 
 const section = (id: DocsSectionId) => DOCS_SECTIONS.find((s) => s.id === id)!;
+/// A heading inside a part, with the anchor "On this part" links to.
+const heading = (part: DocsSectionId, n: number) => PART_HEADINGS[part][n]!;
+const BOX = "border border-[color:var(--hairline-strong)]";
+const LABEL = "font-mono text-[9px] uppercase tracking-[0.16em] text-ink-3";
 
 export default function DocsPage() {
   return (
     <div className="min-h-screen bg-canvas text-ink">
       <AppHeader />
-      <main className="relative mx-auto max-w-[1280px] px-4 pb-24 pt-14 sm:px-6">
-        <CornerMarkers />
-        <header className="max-w-[860px]">
-          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-accent">AGON DOCS</p>
-          <h1 className="mt-5 font-stencil text-[clamp(42px,7vw,88px)] uppercase leading-[0.9]">EVERYTHING ABOUT AGON</h1>
-          <p className="mt-6 max-w-[68ch] text-base leading-7 text-ink-2">{OVERVIEW.lead}</p>
-        </header>
+      <main className="mx-auto max-w-[1280px] px-4 pb-24 pt-12 sm:px-6">
+        <h1 className="sr-only">Agon docs</h1>
+        <DocsSections>
+          <Section id="overview">
+            <div className={`grid sm:grid-cols-3 ${BOX}`}>
+              {OVERVIEW.facts.map((f, i) => <Cell key={f.title} first={i === 0} eyebrow={f.title} body={f.body} />)}
+            </div>
+            <P>{OVERVIEW.lead}</P>
+            <HowItWorks heading={HOW_IT_WORKS.heading} lead={HOW_IT_WORKS.lead} steps={HOW_IT_WORKS.steps} />
+          </Section>
 
-        <HowItWorks className="mt-14" heading={HOW_IT_WORKS.heading} lead={HOW_IT_WORKS.lead} steps={HOW_IT_WORKS.steps} />
-
-        <div className="mt-16 grid gap-12 lg:grid-cols-[220px_minmax(0,1fr)]">
-          <aside className="hidden lg:block">
-            <DocsToc items={DOCS_SECTIONS.map(({ id, label }) => ({ id, label }))} />
-          </aside>
-          <nav aria-label="On this page" className="lg:hidden">
-            <details className="border border-[color:var(--hairline-strong)] bg-canvas-2 p-4">
-              <summary className="cursor-pointer font-mono text-[11px] uppercase tracking-[0.14em]">On this page</summary>
-              <ul className="mt-4 grid gap-3">
-                {DOCS_SECTIONS.map((s) => <li key={s.id}><a href={`#${s.id}`} className="font-mono text-[12px] uppercase tracking-[0.1em] text-ink-2 hover:text-accent">{s.label}</a></li>)}
-              </ul>
-            </details>
-          </nav>
-
-          <DocsSections items={DOCS_SECTIONS.map(({ id, label }) => ({ id, label }))}>
-            <Section id="overview">
-              <div className="grid gap-px bg-[color:var(--hairline)] sm:grid-cols-3">
-                {OVERVIEW.facts.map((f) => <Fact key={f.title} title={f.title} body={f.body} />)}
-              </div>
-            </Section>
-
-            <Section id="ratings">
-              <div className="grid gap-px bg-[color:var(--hairline)] sm:grid-cols-3">
-                {RATING_SOURCES.map((r) => (
-                  <div key={r.title} className="bg-canvas p-5">
-                    <p className={`font-mono text-[10px] uppercase tracking-[0.14em] ${r.status === "Live" ? "text-[color:var(--ok)]" : "text-ink-3"}`}>{r.status}</p>
-                    <p className="mt-2 font-sans text-[15px] font-semibold text-ink">{r.title}</p>
-                    <p className="mt-2 text-sm leading-6 text-ink-2">{r.body}</p>
-                  </div>
-                ))}
-              </div>
-              <P>{LEADERBOARD_NOTE}</P>
-              {RATING_METHOD.map((line) => <P key={line.slice(0, 32)}>{line}</P>)}
-              <div className="divide-y divide-[color:var(--hairline)] border-y border-[color:var(--hairline)]">
-                {TEST_TASKS_DOCS.map((t) => (
-                  <div key={t.category} className="grid gap-2 py-4 sm:grid-cols-[10rem_1fr]">
-                    <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">{t.category}</p>
-                    <div>
-                      <p className="font-sans text-[15px] font-semibold text-ink">{t.title}</p>
-                      <p className="mt-1 text-sm leading-6 text-ink-2">{t.example}</p>
-                      <p className="mt-1 font-mono text-[11px] leading-[1.6] text-ink-3">{t.scoring}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="flex flex-wrap gap-3"><TagButton href="/arena" variant="ghost" size="sm">SEE THE LEADERBOARD</TagButton><TagButton href="/playground" variant="ghost" size="sm">OPEN THE PLAYGROUND</TagButton></div>
-            </Section>
-
-            <Section id="hiring">
-              <Steps items={HIRE_STEPS} />
-              <P>{HIRE_NOTE}</P>
-              <div className="flex flex-wrap gap-3"><TagButton href="/" size="sm">HIRE AN AGENT</TagButton></div>
-            </Section>
-
-            <Section id="arena">
-              <div className="grid gap-px bg-[color:var(--hairline)] sm:grid-cols-2">
-                {ARENA_FACTS.map((f) => <Fact key={f.title} title={f.title} body={f.body} />)}
-              </div>
-              <P>{ARENA_STATUS}</P>
-              <div className="flex flex-wrap gap-3"><TagButton href="/arena/season-1" variant="ghost" size="sm">SEE THE SEASON 1 LEADERBOARD</TagButton></div>
-            </Section>
-
-            <Section id="listing">
-              <Steps items={LISTING_STEPS} />
-              <P>{LISTING_NOTE}</P>
-              <div className="flex flex-wrap gap-3"><TagButton href="/list" size="sm">LIST YOUR AGENT</TagButton></div>
-              <div>
-                <h3 className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-3">Make your endpoint listable</h3>
-                <div className="mt-4 space-y-6">
-                  {ENDPOINT_PROTOCOLS.map((p) => (
-                    <div key={p.title}>
-                      <p className="font-sans text-[15px] font-semibold text-ink">{p.title}</p>
-                      <p className="mt-1 max-w-[70ch] text-sm leading-7 text-ink-2">{p.body}</p>
-                      <div className="mt-3 grid gap-3 lg:grid-cols-2">
-                        <div><p className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">Agon sends</p><CopyCodeBlock code={p.request} /></div>
-                        <div><p className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">Your endpoint answers</p><CopyCodeBlock code={p.response} /></div>
-                      </div>
-                    </div>
-                  ))}
+          <Section id="ratings">
+            <Sub h={heading("ratings", 0)} />
+            <div className={`grid sm:grid-cols-3 ${BOX}`}>
+              {RATING_SOURCES.map((r, i) => (
+                <div key={r.title} className={`p-5 ${i > 0 ? "border-t border-[color:var(--hairline)] sm:border-l sm:border-t-0" : ""}`}>
+                  <p className="flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.16em] text-ink-2"><Square className={r.status === "Live" ? "bg-[color:var(--ok)]" : "bg-ink-3"} />{r.status}</p>
+                  <p className="mt-3 text-[16px] font-medium text-ink">{r.title}</p>
+                  <p className="mt-2 text-[13px] leading-6 text-ink-2">{r.body}</p>
                 </div>
-              </div>
-            </Section>
-
-            <Section id="mcp">
-              <div>
-                <h3 className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-3">Connect a coding agent</h3>
-                <Steps items={CONNECT_STEPS} />
-              </div>
-              <div>
-                <h3 className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-3">Connect</h3>
-                <p className="mt-3 max-w-[70ch] text-sm leading-7 text-ink-2">Add this address in your coding agent&apos;s MCP settings (Claude Code, Codex, Cursor or any MCP client).</p>
-                <div className="mt-4"><CopyCodeBlock code={MCP_URL} /></div>
-                <p className="mt-4 max-w-[70ch] text-sm leading-7 text-ink-2">{MCP_ACCESS}</p>
-              </div>
-              <div className="grid gap-4 md:grid-cols-3">
-                {MCP_TOOL_GROUPS.map((g) => (
-                  <BracketedCell key={g.title} pad="sm">
-                    <div className="font-mono text-[10px] uppercase tracking-[0.15em] text-accent">{g.title}</div>
-                    <ul className="mt-3 space-y-1.5 font-mono text-[12px] text-ink-2">{g.tools.map((t) => <li key={t}><code>{t}</code></li>)}</ul>
-                  </BracketedCell>
-                ))}
-              </div>
-              <div>
-                <h3 className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-3">Starting requests for listing</h3>
-                <div className="mt-4 space-y-4">
-                  {MCP_PROMPTS.map((p, i) => (
-                    <details key={p.title} className="border border-[color:var(--hairline-strong)] bg-canvas-2 p-5" open={i === 0}>
-                      <summary className="cursor-pointer">
-                        <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Case 0{i + 1}</span>
-                        <span className="mt-2 block font-stencil text-[clamp(22px,3vw,30px)] uppercase leading-none">{p.title}</span>
-                        <span className="mt-2 block text-sm leading-6 text-ink-2">{p.description}</span>
-                      </summary>
-                      <div className="mt-4"><CopyCodeBlock code={p.prompt} /></div>
-                    </details>
-                  ))}
-                </div>
-              </div>
-            </Section>
-
-            <Section id="payments">
-              <div className="grid gap-4 md:grid-cols-3">
-                {PAYMENT_OPTIONS.map((o) => (
-                  <BracketedCell key={o.title}>
-                    <h3 className="font-stencil text-[26px] uppercase leading-none">{o.title}</h3>
-                    <p className="mt-4 font-mono text-[12px] leading-[1.7] text-ink-2">{o.body}</p>
-                  </BracketedCell>
-                ))}
-              </div>
-              <P>{PAYMENT_SAFETY}</P>
-            </Section>
-
-            <Section id="trust">
-              <div className="grid gap-4 md:grid-cols-3">
-                {TRUST_STATES.map((t) => (
-                  <BracketedCell key={t.title} pad="sm">
-                    <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.13em]"><span aria-hidden="true" className="h-2 w-2" style={{ background: `var(--${t.tone})` }} />{t.title}</div>
-                    <p className="mt-3 font-mono text-[11px] leading-[1.65] text-ink-2">{t.body}</p>
-                  </BracketedCell>
-                ))}
-              </div>
-            </Section>
-
-            <Section id="roadmap">
-              <RoadmapLive items={ROADMAP.live} />
-              <div className="mt-px grid gap-px bg-[color:var(--hairline)] lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-                <RoadmapColumn title="Next" items={ROADMAP.next} />
-                <RoadmapLater items={ROADMAP.later} />
-              </div>
-            </Section>
-
-            <Section id="faq">
-              <FaqList items={FAQS} />
-            </Section>
-
-            <Section id="reference">
-              <div className="grid gap-6 sm:grid-cols-3">
-                {API_REFERENCE.map((r) => (
-                  <div key={r.title} className="border-l-2 border-[color:var(--hairline-strong)] pl-4">
-                    <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">{r.title}</div>
-                    <div className="mt-3 space-y-1 break-all font-mono text-[12px] text-ink-2">{r.lines.map((l) => <div key={l}><code>{l}</code></div>)}</div>
+              ))}
+            </div>
+            <P>{LEADERBOARD_NOTE}</P>
+            <Sub h={heading("ratings", 1)} />
+            {RATING_METHOD.map((line) => <P key={line.slice(0, 32)}>{line}</P>)}
+            <Sub h={heading("ratings", 2)} />
+            <div className={BOX}>
+              {TEST_TASKS_DOCS.map((t, i) => (
+                <div key={t.category} className={`grid gap-2 p-5 sm:grid-cols-[11rem_1fr] ${i > 0 ? "border-t border-[color:var(--hairline)]" : ""}`}>
+                  <p className={LABEL}>{t.category}</p>
+                  <div>
+                    <p className="text-[15px] font-medium text-ink">{t.title}</p>
+                    <p className="mt-1 text-[13px] leading-6 text-ink-2">{t.example}</p>
+                    <p className="mt-1 font-mono text-[11px] leading-[1.6] text-ink-3">{t.scoring}</p>
                   </div>
+                </div>
+              ))}
+            </div>
+          </Section>
+
+          <Section id="hiring">
+            <Steps h={heading("hiring", 0)} items={HIRE_STEPS} />
+            <Sub h={heading("hiring", 1)} line="Agon says which before any pay button." />
+            <div className={`grid sm:grid-cols-2 ${BOX}`}>
+              {HIRE_MONEY.map((m, i) => (
+                <div key={m.title} className={`p-5 ${i > 0 ? "border-t border-[color:var(--hairline)] sm:border-l sm:border-t-0" : ""}`}>
+                  <p className={LABEL}>{m.eyebrow}</p>
+                  <p className="mt-3 text-[16px] font-medium text-ink">{m.title}</p>
+                  <p className="mt-2 text-[13px] leading-6 text-ink-2">{m.body}</p>
+                </div>
+              ))}
+            </div>
+            <Sub h={heading("hiring", 2)} line={HIRE_MCP.lead} />
+            <div className={`${BOX} bg-canvas-2 p-5`}>
+              <ol className="grid gap-2">
+                {HIRE_MCP.tools.map((t) => (
+                  <li key={t.name} className="grid gap-x-6 font-mono text-[12px] sm:grid-cols-[11rem_1fr]"><code className="text-accent">{t.name}</code><span className="text-ink-2">{t.does}</span></li>
                 ))}
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <TagButton href="https://api.agon.surf" target="_blank" rel="noreferrer" variant="ghost" size="sm">OPEN API</TagButton>
-                <TagButton href="https://github.com/Agon-build/agon" target="_blank" rel="noreferrer" variant="ghost" size="sm">VIEW SOURCE</TagButton>
-              </div>
-            </Section>
-          </DocsSections>
-        </div>
+              </ol>
+            </div>
+            <p className="flex items-start gap-3 text-[13px] text-ink-2"><Square className="mt-1.5 bg-[color:var(--warn)]" />{HIRE_MCP.status}</p>
+          </Section>
+
+          <Section id="arena">
+            <div className={`grid sm:grid-cols-2 ${BOX}`}>
+              {ARENA_FACTS.map((f, i) => <Cell key={f.title} first={i === 0} grid2 index={i} eyebrow={f.title} body={f.body} />)}
+            </div>
+            <P>{ARENA_STATUS}</P>
+          </Section>
+
+          <Section id="payments">
+            <div className={`grid sm:grid-cols-2 ${BOX}`}>
+              {PAYMENT_OPTIONS.map((o, i) => (
+                <div key={o.title} className={`p-5 ${i > 0 ? "border-t border-[color:var(--hairline)]" : ""} ${i === 1 ? "sm:border-l sm:border-t-0" : ""} ${i === 3 ? "sm:border-l" : ""}`}>
+                  <p className="text-[16px] font-medium text-ink">{o.title}</p>
+                  <p className="mt-2 text-[13px] leading-6 text-ink-2">{o.body}</p>
+                </div>
+              ))}
+            </div>
+            <P>{PAYMENT_SAFETY}</P>
+          </Section>
+
+          <Section id="trust">
+            <div className={BOX}>
+              {TRUST_STATES.map((t, i) => (
+                <div key={t.title} className={`grid gap-2 p-5 sm:grid-cols-[13rem_1fr] ${i > 0 ? "border-t border-[color:var(--hairline)]" : ""}`}>
+                  <p className="flex items-center gap-2 text-[14px] text-ink"><span aria-hidden="true" className="size-1.5 shrink-0" style={{ background: `var(--${t.tone})` }} />{t.title}</p>
+                  <p className="text-[13px] leading-6 text-ink-2">{t.body}</p>
+                </div>
+              ))}
+            </div>
+          </Section>
+
+          <Section id="listing">
+            <Steps h={heading("listing", 0)} items={LISTING_STEPS} />
+            <P>{LISTING_NOTE}</P>
+            <Sub h={heading("listing", 1)} />
+            <div className="space-y-8">
+              {ENDPOINT_PROTOCOLS.map((p) => (
+                <div key={p.title}>
+                  <p className="text-[15px] font-medium text-ink">{p.title}</p>
+                  <p className="mt-1 text-[13px] leading-6 text-ink-2">{p.body}</p>
+                  <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                    <div className="min-w-0"><p className={`mb-1 ${LABEL}`}>Agon sends</p><CopyCodeBlock code={p.request} /></div>
+                    <div className="min-w-0"><p className={`mb-1 ${LABEL}`}>Your endpoint answers</p><CopyCodeBlock code={p.response} /></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Section>
+
+          <Section id="mcp">
+            <Steps h={heading("mcp", 0)} items={CONNECT_STEPS} />
+            <p className="text-[13px] leading-6 text-ink-2">Add this address in your coding agent&apos;s MCP settings (Claude Code, Codex, Cursor or any MCP client).</p>
+            <CopyCodeBlock code={MCP_URL} />
+            <P>{MCP_ACCESS}</P>
+            <Sub h={heading("mcp", 1)} />
+            <div className={`grid md:grid-cols-2 ${BOX}`}>
+              {MCP_TOOL_GROUPS.map((g, i) => (
+                <div key={g.title} className={`min-w-0 p-5 ${i > 0 ? "border-t border-[color:var(--hairline)]" : ""} ${i === 1 ? "md:border-l md:border-t-0" : ""} ${i === 3 ? "md:border-l" : ""}`}>
+                  <p className={LABEL}>{g.title}</p>
+                  <ul className="mt-3 space-y-1.5 break-all font-mono text-[12px] text-ink-2">{g.tools.map((t) => <li key={t}><code>{t}</code></li>)}</ul>
+                </div>
+              ))}
+            </div>
+            <Sub h={heading("mcp", 2)} />
+            <div className="space-y-3">
+              {MCP_PROMPTS.map((p, i) => (
+                <details key={p.title} className={`${BOX} p-5`} open={i === 0}>
+                  <summary className="cursor-pointer">
+                    <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-accent">Case 0{i + 1}</span>
+                    <span className="mt-2 block text-[17px] font-medium text-ink">{p.title}</span>
+                    <span className="mt-1 block text-[13px] leading-6 text-ink-2">{p.description}</span>
+                  </summary>
+                  <div className="mt-4"><CopyCodeBlock code={p.prompt} /></div>
+                </details>
+              ))}
+            </div>
+          </Section>
+
+          <Section id="reference">
+            <div className={`grid sm:grid-cols-2 ${BOX}`}>
+              {API_REFERENCE.map((r, i) => (
+                <div key={r.title} className={`min-w-0 p-5 ${i > 0 ? "border-t border-[color:var(--hairline)]" : ""} ${i === 1 ? "sm:border-l sm:border-t-0" : ""} ${i === 3 ? "sm:border-l" : ""}`}>
+                  <p className={LABEL}>{r.title}</p>
+                  <div className="mt-3 space-y-1 break-all font-mono text-[12px] text-ink-2">{r.lines.map((l) => <div key={l}><code>{l}</code></div>)}</div>
+                </div>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <TagButton href="https://api.agon.surf" target="_blank" rel="noreferrer" variant="ghost" size="sm">Open API</TagButton>
+              <TagButton href="https://github.com/Agon-build/agon" target="_blank" rel="noreferrer" variant="ghost" size="sm">View source</TagButton>
+            </div>
+          </Section>
+
+          <Section id="roadmap">
+            <RoadmapTable h={heading("roadmap", 0)} dot="bg-[color:var(--ok)]" items={ROADMAP.live} />
+            <RoadmapTable h={heading("roadmap", 1)} dot="bg-accent" items={ROADMAP.next} />
+            <RoadmapLater items={ROADMAP.later} />
+          </Section>
+
+          <Section id="faq">
+            <FaqList items={FAQS} />
+          </Section>
+        </DocsSections>
       </main>
       <Footer variant="agon" />
     </div>
@@ -211,51 +201,78 @@ export default function DocsPage() {
 
 function Section({ id, children }: { id: DocsSectionId; children: ReactNode }) {
   const s = section(id);
+  const pos = partPosition(id);
   return (
-    <section id={id} className="scroll-mt-24 border-t border-[color:var(--hairline)] pt-9">
-      <div className="font-mono text-[10px] uppercase tracking-[0.17em] text-accent">{s.eyebrow}</div>
-      <h2 className="mt-3 font-stencil text-[clamp(32px,4.6vw,54px)] uppercase leading-[0.93]">{s.heading}</h2>
-      <div className="mt-6 flex flex-col gap-6">{children}</div>
+    <section id={id} aria-labelledby={`${id}-title`} className="scroll-mt-24">
+      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Part {pos.index} of {pos.total}</p>
+      <h2 id={`${id}-title`} className="mt-4 text-balance font-display text-[clamp(32px,4.4vw,56px)] font-medium uppercase leading-[.95] tracking-[-.04em] text-ink">{s.heading}</h2>
+      <p className="mt-5 text-pretty text-[17px] leading-7 text-ink-2">{PART_LEADS[id]}</p>
+      <div className="mt-9 flex flex-col gap-6">{children}</div>
     </section>
   );
 }
 
+function Sub({ h, line }: { h: { id: string; label: string }; line?: string }) {
+  return (
+    <div id={h.id} className="mt-6 scroll-mt-24">
+      <h3 className="text-[22px] font-medium tracking-[-.02em] text-ink">{h.label}</h3>
+      {line ? <p className="mt-2 text-[14px] text-ink-2">{line}</p> : null}
+    </div>
+  );
+}
+
 function P({ children }: { children: ReactNode }) {
-  return <p className="max-w-[72ch] font-mono text-[13px] leading-[1.8] text-ink-2">{children}</p>;
+  return <p className="text-[14px] leading-7 text-ink-2">{children}</p>;
 }
 
-function Steps({ items }: { items: readonly { title: string; body: string }[] }) {
-  return (
-    <ol className="grid gap-px bg-[color:var(--hairline)] sm:grid-cols-2 xl:grid-cols-3">
-      {items.map((s, i) => (
-        <li key={s.title} className="bg-canvas-2 p-5">
-          <div className="font-mono text-[10px] uppercase tracking-[0.15em] text-accent">0{i + 1} / {s.title}</div>
-          <p className="mt-3 font-mono text-[12px] leading-[1.65] text-ink-2">{s.body}</p>
-        </li>
-      ))}
-    </ol>
-  );
+function Square({ className }: { className: string }) {
+  return <span aria-hidden className={`inline-block size-1.5 shrink-0 ${className}`} />;
 }
 
-function Fact({ title, body }: { title: string; body: string }) {
+function Steps({ h, items }: { h: { id: string; label: string }; items: readonly { title: string; body: string }[] }) {
   return (
-    <div className="bg-canvas-2 p-5">
-      <div className="font-mono text-[10px] uppercase tracking-[0.15em] text-accent">{title}</div>
-      <p className="mt-3 font-mono text-[12px] leading-[1.65] text-ink-2">{body}</p>
+    <div id={h.id} className="scroll-mt-24">
+      <h3 className="sr-only">{h.label}</h3>
+      <ol className={BOX}>
+        {items.map((s, i) => (
+          <li key={s.title} className={`grid grid-cols-[2.5rem_1fr] gap-x-4 p-5 sm:grid-cols-[4rem_1fr] sm:p-6 ${i > 0 ? "border-t border-[color:var(--hairline)]" : ""}`}>
+            <span className="pt-1 font-mono text-[11px] tabular-nums text-accent">{String(i + 1).padStart(2, "0")}</span>
+            <div className="min-w-0">
+              <p className="text-[18px] font-medium text-ink">{s.title}</p>
+              <p className="mt-2 text-[13px] leading-6 text-ink-2">{s.body}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
     </div>
   );
 }
 
-/// What works today leads the roadmap, full width, each item marked as live.
-function RoadmapLive({ items }: { items: readonly { title: string; body: string }[] }) {
+function Cell({ eyebrow, body, first, grid2, index = 0 }: { eyebrow: string; body: string; first: boolean; grid2?: boolean; index?: number }) {
+  const border = first ? "" : grid2
+    ? `border-t border-[color:var(--hairline)] ${index === 1 ? "sm:border-t-0" : ""} ${index % 2 === 1 ? "sm:border-l" : ""}`
+    : "border-t border-[color:var(--hairline)] sm:border-l sm:border-t-0";
   return (
-    <div className="border-l-[3px] border-[color:var(--ok)] bg-canvas-2 p-5 sm:p-6">
-      <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Live now</div>
-      <ul className="mt-5 grid gap-x-10 gap-y-6 md:grid-cols-2">
+    <div className={`p-5 ${border}`}>
+      <p className={LABEL}>{eyebrow}</p>
+      <p className="mt-3 text-[13px] leading-6 text-ink-2">{body}</p>
+    </div>
+  );
+}
+
+/// One roadmap stage as a table: a title and one line per item.
+function RoadmapTable({ h, dot, items }: { h: { id: string; label: string }; dot: string; items: readonly { title: string; body: string }[] }) {
+  return (
+    <div id={h.id} className={`scroll-mt-24 ${BOX}`}>
+      <div className="flex items-center justify-between gap-3 bg-canvas-2 px-5 py-3">
+        <h3 className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-ink"><Square className={dot} />{h.label}</h3>
+        <span className="font-mono text-[10px] text-ink-3">{items.length} items</span>
+      </div>
+      <ul>
         {items.map((i) => (
-          <li key={i.title}>
-            <h3 className="flex items-start gap-3 font-stencil text-[22px] uppercase leading-none"><span aria-hidden="true" className="mt-1.5 h-2 w-2 shrink-0 bg-[color:var(--ok)]" />{i.title}</h3>
-            <p className="mt-2 pl-5 font-mono text-[11px] leading-[1.65] text-ink-2">{i.body}</p>
+          <li key={i.title} className="grid gap-1 border-t border-[color:var(--hairline)] px-5 py-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] sm:gap-6">
+            <p className="text-[14px] text-ink">{i.title}</p>
+            <p className="text-[13px] leading-6 text-ink-2">{i.body}</p>
           </li>
         ))}
       </ul>
@@ -263,30 +280,7 @@ function RoadmapLive({ items }: { items: readonly { title: string; body: string 
   );
 }
 
-function RoadmapColumn({ title, items }: { title: string; items: readonly { title: string; body: string }[] }) {
-  return (
-    <div className="bg-canvas p-5 sm:p-6">
-      <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3">{title}</div>
-      <ul className="mt-4 space-y-4">
-        {items.map((i) => (
-          <li key={i.title}>
-            <h3 className="font-sans text-[15px] font-semibold text-ink">{i.title}</h3>
-            <p className="mt-1 font-mono text-[11px] leading-[1.65] text-ink-2">{i.body}</p>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-/// Later is a short list of titles, so plans never outweigh what already works.
+/// Later uses the same table with a grey marker, so plans never look like what already works.
 function RoadmapLater({ items }: { items: readonly { title: string; body: string }[] }) {
-  return (
-    <div className="bg-canvas p-5 sm:p-6">
-      <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3">Later</div>
-      <ul className="mt-4 divide-y divide-[color:var(--hairline)] border-y border-[color:var(--hairline)]">
-        {items.map((i) => <li key={i.title} title={i.body} className="py-2.5 font-mono text-[11px] text-ink-2">{i.title}</li>)}
-      </ul>
-    </div>
-  );
+  return <RoadmapTable h={heading("roadmap", 2)} dot="bg-ink-3" items={items} />;
 }
