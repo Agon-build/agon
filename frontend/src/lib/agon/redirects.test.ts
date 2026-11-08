@@ -211,21 +211,15 @@ test("the page root clips sideways overflow without breaking the sticky header",
   for (const b of blocks) if (/overflow-x:\s*hidden/.test(b)) assert.match(b, /overflow-x:\s*hidden;[\s\S]*overflow-x:\s*clip/, "hidden on html/body breaks position: sticky unless clip overrides it");
 });
 
-test("the Arena page opens on per-category leaderboards with time windows, and keeps Seasons as a tab", () => {
+test("the Arena page is the season: strip, scoring steps, standings by category, rounds on Arc", () => {
   const read = (f: string) => readFileSync(new URL(`../../${f}`, import.meta.url), "utf8");
-  const page = read("app/arena/page.tsx");
-  assert.match(page, /ArenaTabs/);
-  const tabs = read("app/arena/ArenaTabs.tsx");
-  assert.match(tabs, /Leaderboard/);
-  assert.match(tabs, /Seasons/);
-  assert.match(tabs, /CategoryLeaderboard/);
-  const board = read("components/agon/CategoryLeaderboard.tsx");
-  assert.match(board, /WINDOW_CHOICES/);
-  assert.match(board, /AGON_CATEGORIES/);
-  assert.match(board, /useState\("3"\)/, "opens on Analysis");
-  assert.doesNotMatch(board, /All categories|ALL CATEGORIES/, "boards are per category only");
-  assert.match(board, /Too few results in this period/);
-  assert.match(board, /Rated from Playground tests\. <Link/, "only Playground tests rate agents today");
+  assert.match(read("app/arena/page.tsx"), /<ArenaClient \/>/);
+  const arena = read("app/arena/ArenaClient.tsx");
+  for (const fn of ["seasonProgress(", "seasonStatus(", "marketNote(", "skillBarWidth(", "agentPageHrefs(", "SEASON_CATEGORY_TABS", "getRounds(AGON_SEASON_ID, 3)"]) assert.ok(arena.includes(fn), `Arena uses ${fn}`);
+  assert.match(arena, /Coming next/, "entering an outside agent is not Live yet");
+  assert.match(arena, /season=\$\{e\.id\}/, "earlier seasons stay linked");
+  // Playground leaderboards per category live on Agents (AgentsBoard).
+  assert.match(read("components/agon/CategoryLeaderboard.tsx"), /export function AgentsBoard/);
 });
 
 test("the Playground offers a public test of any listed agent and a feed of recent tests, and keeps the builder check", () => {
@@ -325,20 +319,17 @@ test("owner review 2026-10-20: one-line Agents intro, paged test runs, a plain h
 
 test("owner review 2026-10-20: headings and intro lines run full width and balance when they wrap; the Arena season card reads the season from the API", () => {
   const read = (f: string) => readFileSync(new URL(`../../${f}`, import.meta.url), "utf8");
-  for (const f of ["app/arena/page.tsx", "app/list/page.tsx", "app/arena/season-1/SeasonClient.tsx", "components/redesign/SectionHeader.tsx", "components/stage/HireClient.tsx"]) {
+  for (const f of ["app/arena/ArenaClient.tsx", "app/list/page.tsx", "app/arena/season-1/SeasonClient.tsx", "components/redesign/SectionHeader.tsx", "components/stage/HireClient.tsx"]) {
     const src = read(f);
     assert.doesNotMatch(src, /<h1 className="[^"]*max-w-\[1[0-9]ch\]/, `${f}: a heading is held to a few words a line`);
     assert.match(src, /text-balance/, `${f}: a wrapping heading balances its lines`);
   }
-  const arena = read("app/arena/page.tsx");
+  const arena = read("app/arena/ArenaClient.tsx");
   assert.doesNotMatch(arena, /max-w-\[64ch\]/);
-  assert.doesNotMatch(arena, />LIVE</, "the testnet dry run ended on 15 October");
-  // The season card is worded from the season's own dates (seasonStatus), so it cannot go stale.
-  assert.match(arena, /<SeasonCard \/>/);
-  const card = read("app/arena/SeasonCard.tsx");
-  assert.match(card, /seasonStatus\(/);
-  assert.match(card, /season=\$\{e\.id\}/, "earlier seasons stay linked");
-  assert.doesNotMatch(card + arena, /being repaired|NOT SCORING/);
+  // The Live chip and the strip are worded from the season's own dates (seasonStatus), so they cannot go stale.
+  assert.doesNotMatch(arena, />LIVE</);
+  assert.match(arena, /seasonStatus\(/);
+  assert.doesNotMatch(arena, /being repaired|NOT SCORING/);
   assert.doesNotMatch(arena, /Arena seasons and paid work/);
   assert.doesNotMatch(read("app/list/page.tsx"), /max-w-\[64ch\]/);
   assert.match(read("components/agon/CategoryLeaderboard.tsx"), /whitespace-nowrap[^>]*>How it works/);

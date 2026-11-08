@@ -217,12 +217,12 @@ const SEASON = { seasonId: "9002", network: "Arc Testnet", commitsAddress: "0x",
 test("a season reads as starting, running with its round, or ended, from its own dates", () => {
   const before = seasonStatus(SEASON, Date.parse("2026-10-21T08:00:00Z"));
   assert.deepEqual([before.state, before.label], ["upcoming", "Starts 21 October, 12:00 UTC"]);
-  assert.match(before.sentence, /Dry run 2 on Arc Testnet starts 21 October and runs to 18 November\./);
+  assert.match(before.sentence, /Season 2 on Arc Testnet starts 21 October and runs to 18 November\./);
   const during = seasonStatus({ ...SEASON, currentRound: "3" }, Date.parse("2026-10-22T07:00:00Z"));
   assert.deepEqual([during.state, during.label], ["running", "Running · Round 4"]);
   assert.match(during.sentence, /runs from 21 October to 18 November/);
   const after = seasonStatus({ ...SEASON, seasonId: "9001", startsAt: "2026-10-12T00:00:45.000Z", endsAt: "2026-10-15T00:00:45.000Z" }, Date.parse("2026-10-20T00:00:00Z"));
-  assert.deepEqual([after.state, after.label, after.name], ["ended", "Ended", "Dry run 1"]);
+  assert.deepEqual([after.state, after.label, after.name], ["ended", "Ended", "Season 1"]);
   assert.match(after.sentence, /ran from 12 October to 15 October, and its forecasts are scored as the markets resolve\./);
 });
 

@@ -235,8 +235,8 @@ export function categoryHref(search: string, key: string): string {
   return `/arena/season-1${query ? `?${query}` : ""}`;
 }
 
-/// Testnet dry runs are numbered from 9001 so Season 1 stays free for the mainnet start.
-const SEASON_NAMES: Record<string, string> = { "9001": "Dry run 1", "9002": "Dry run 2" };
+/// Arc Testnet seasons keep their ids (9001, 9002); the names match the Docs and the Arena page.
+const SEASON_NAMES: Record<string, string> = { "9001": "Season 1", "9002": "Season 2" };
 export const seasonName = (seasonId: string) => SEASON_NAMES[seasonId] ?? `Season ${seasonId}`;
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", timeZone: "UTC" });
 const clock = (iso: string) => new Date(iso).toISOString().slice(11, 16);
