@@ -4,34 +4,33 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 
-import { ServiceProof } from "@/components/agon/ServiceProof";
-import { AgentLogo } from "@/components/agon/ListingCard";
-import { UnverifiedWarning } from "@/components/agon/UnverifiedWarning";
-import { VerificationBadge } from "@/components/agon/VerificationBadge";
 import { AgonJobEscrowPanel } from "@/components/agon/AgonJobEscrowPanel";
 import { AgentRating } from "@/components/agon/AgentRating";
+import { ServiceProof } from "@/components/agon/ServiceProof";
+import { UnverifiedWarning } from "@/components/agon/UnverifiedWarning";
 import { AppHeader } from "@/components/pengu/AppHeader";
-import { BracketedCell } from "@/components/redesign/BracketedCell";
-import { CornerMarkers } from "@/components/redesign/CornerMarkers";
 import { Footer } from "@/components/redesign/Footer";
-import { SectionHeader } from "@/components/redesign/SectionHeader";
 import { TagButton } from "@/components/redesign/TagButton";
+import { schemaFields } from "@/lib/agon/agent-layout";
+import { collectPages, servicesForAgent } from "@/lib/agon/agent-services";
+import { isPaused } from "@/lib/agon/agents-layout";
+import { getListingDraft } from "@/lib/agon/builder-api";
 import { presentListing } from "@/lib/agon/catalog";
 import { assessX402Readiness } from "@/lib/agon/call-intent";
-import { hasNamedInputs } from "@/lib/agon/route-view";
 import { getListing, inspectManifest, listListings } from "@/lib/agon/client";
-import { collectPages, servicesForAgent } from "@/lib/agon/agent-services";
-import { cardBadges } from "@/lib/agon/card-facts";
+import { feeLine, moneyLine } from "@/lib/agon/hire-layout";
 import { networkHref } from "@/lib/agon/network";
+import { hasNamedInputs } from "@/lib/agon/route-view";
 import type { AgonListing } from "@/lib/agon/types";
 import { assessListingAssurance, canUseEscrow, verifyManifestAnchor } from "@/lib/agon/verify";
 import { useAgonNetwork } from "@/hooks/useAgonNetwork";
 import { useAuth } from "@/hooks/useAuth";
 
-export default function ListingDetailPage() {
-  return <ArcListingDetailPage />;
-}
-function ArcListingDetailPage() {
+const short = (h: string) => (h.length > 14 ? `${h.slice(0, 6)}…${h.slice(-4)}` : h);
+const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+const box = "border border-[color:var(--hairline-strong)] bg-canvas-2";
+
+export default function AgentPage() {
   const params = useParams<{ id: string }>();
   const reference = useMemo(() => {
     try { return decodeURIComponent(params.id); } catch { return params.id; }
@@ -43,17 +42,7 @@ function ArcListingDetailPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [manifestBody, setManifestBody] = useState<unknown | undefined>(undefined);
   const [agentListings, setAgentListings] = useState<AgonListing[]>([]);
-
-  useEffect(() => {
-    if (!listing) return;
-    let live = true;
-    setAgentListings([]);
-    // The agent's other services are extra; the current one always shows.
-    collectPages((cursor) => listListings({ agentId: listing.agentId, network: networkKey, limit: 50, ...(cursor ? { cursor } : {}) }))
-      .then((items) => { if (live) setAgentListings(items); })
-      .catch(() => {});
-    return () => { live = false; };
-  }, [listing, networkKey]);
+  const [publisher, setPublisher] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -66,212 +55,212 @@ function ArcListingDetailPage() {
         setManifestBody(value.manifest.body);
         if (value.manifest.body !== undefined) return;
         void inspectManifest(value.manifest.uri).then((inspection) => {
-          if (!live || !inspection.validation.ok) return;
-          // Keep readable provider metadata visible while still treating an
-          // immutable anchor mismatch as unsafe for hiring.
-          setManifestBody(inspection.body);
-        }).catch(() => { /* The anchor-only view remains safe and usable. */ });
+          // Readable provider details stay visible; an anchor mismatch still blocks hiring.
+          if (live && inspection.validation.ok) setManifestBody(inspection.body);
+        }).catch(() => {});
       })
       .catch((failure) => {
         if (!live) return;
         setListing(null);
-        setError(failure instanceof Error ? failure.message : "Could not read this service.");
+        setError(failure instanceof Error ? failure.message : "Could not read this agent.");
       });
     return () => { live = false; };
   }, [networkKey, reference, reloadKey]);
 
-  const hydratedListing = listing ? { ...listing, manifest: { ...listing.manifest, body: manifestBody } } : null;
-  const service = hydratedListing ? presentListing(hydratedListing) : null;
-  const proof = hydratedListing ? verifyManifestAnchor(hydratedListing.manifest.hash, hydratedListing.manifest.body ?? undefined) : null;
+  useEffect(() => {
+    if (!listing) return;
+    let live = true;
+    setAgentListings([]);
+    // The agent's other services are extra; this one always shows.
+    collectPages((cursor) => listListings({ agentId: listing.agentId, network: networkKey, limit: 50, ...(cursor ? { cursor } : {}) }))
+      .then((items) => { if (live) setAgentListings(items); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [listing, networkKey]);
+
+  // Update listing shows only to the account that published it: the draft answers for that account alone.
+  useEffect(() => {
+    setPublisher(false);
+    if (!me || !listing) return;
+    let live = true;
+    void getListingDraft(listing.id).then(() => { if (live) setPublisher(true); }).catch(() => {});
+    return () => { live = false; };
+  }, [me, listing]);
+
+  const hydrated = listing ? { ...listing, manifest: { ...listing.manifest, body: manifestBody } } : null;
+  const service = hydrated ? presentListing(hydrated) : null;
+  const proof = hydrated ? verifyManifestAnchor(hydrated.manifest.hash, hydrated.manifest.body ?? undefined) : null;
   const assurance = listing && proof ? assessListingAssurance(listing, proof) : null;
-  const escrowEligible = listing && proof ? canUseEscrow(listing, proof) : false;
   const quarantined = Boolean(listing?.risk.quarantineReason);
+  const paused = listing ? isPaused(listing) : false;
+  const takes = schemaFields(manifestBody, "request");
+  const gives = schemaFields(manifestBody, "response");
+  const readiness = listing ? assessX402Readiness(listing) : null;
+  const hireable = Boolean(listing && listing.payment.rail === "X402" && !paused && !quarantined && hasNamedInputs(manifestBody) && readiness?.eligible);
+  const price = service?.amountUSDC ?? null;
+  const services = hydrated ? servicesForAgent(agentListings, hydrated) : [];
+  const chip = quarantined ? { tone: "bg-[color:var(--err)]", label: "Held" } : paused ? { tone: "bg-[color:var(--warn)]", label: "Paused" }
+    : listing?.verification.status === "Verified" ? { tone: "bg-[color:var(--ok)]", label: "Verified" } : { tone: "border border-[color:var(--ink-3)]", label: "Listed" };
+  const lastCheck = listing?.endpointQa.checkedAt ? `${listing.endpointQa.status === "passed" ? "Passed" : listing.endpointQa.status === "failed" ? "Failed" : "Not checked"}, ${day(listing.endpointQa.checkedAt)}` : "Not checked yet";
+  const initials = (service?.name ?? "A").replace(/[^A-Za-z0-9 ]/g, " ").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!).join("").toUpperCase() || "A";
 
   return (
     <div className="min-h-screen bg-canvas text-ink">
       <AppHeader />
-      <main>
-        <section className="relative mx-auto max-w-[1400px] px-4 pt-14 sm:px-6 sm:pt-16">
-          <CornerMarkers />
-          {/* The name gets the full width so it stays on one line; the description and actions share the row below. */}
-          <SectionHeader
-            eyebrow={service?.category.label ?? `AGON MARKET / ${network.brand} SERVICE`}
-            heading={service?.name ?? "SERVICE DETAILS"}
-          />
-          <div className="mt-4 flex flex-wrap items-end justify-between gap-6">
-            <p className="min-w-0 max-w-[120ch] flex-1 text-pretty font-mono text-sm leading-[1.55] text-ink-2">{service?.description ?? "Reading this service from the Agon catalog."}</p>
-            <div className="flex flex-wrap items-center gap-3"><TagButton variant="ghost" href="/agents">BACK TO AGENTS</TagButton>{me && listing ? <TagButton variant="ghost" href={`/list?update=${encodeURIComponent(listing.id)}`}>UPDATE LISTING</TagButton> : null}{listing?.verification.status !== "Verified" && listing ? <TagButton href={`/playground?listing=${encodeURIComponent(listing.id)}`}>TEST IN THE PLAYGROUND</TagButton> : null}</div>
+      <main className="mx-auto max-w-[1280px] px-4 pb-24 pt-8 sm:px-6">
+        <nav aria-label="Breadcrumb" className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">
+          <Link href={networkHref("/agents", networkKey)} className="text-ink-3 hover:text-accent">Agents</Link>
+          <span aria-hidden className="mx-3">/</span>
+          <span className="text-ink-2">{service?.name ?? "Agent"}</span>
+        </nav>
+
+        {listing === undefined ? <p className="mt-10 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-3">Loading the agent</p> : null}
+        {error ? (
+          <div role="alert" className={`mt-10 p-6 ${box}`}>
+            <p className="text-sm text-ink">This agent could not be loaded. {error}</p>
+            <TagButton variant="ghost" size="sm" className="mt-4" onClick={() => setReloadKey((v) => v + 1)}>Try again</TagButton>
           </div>
-        </section>
+        ) : null}
 
-        <section className="mx-auto max-w-[1400px] px-4 py-10 pb-20 sm:px-6">
-          {listing === undefined ? <DetailLoading /> : null}
-          {error ? (
-            <BracketedCell tone="cream">
-              <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--err)]">SERVICE UNAVAILABLE</div>
-              <p className="mt-3 font-mono text-sm text-ink-2">{error}</p>
-              <button onClick={() => setReloadKey((value) => value + 1)} className="mt-5 font-mono text-[11px] uppercase tracking-[0.14em] text-ink underline decoration-accent underline-offset-4">RETRY</button>
-            </BracketedCell>
-          ) : null}
+        {listing && service && proof && assurance ? (
+          <>
+            {quarantined ? <div className="mt-8"><UnverifiedWarning message={listing.risk.warning} quarantineReason={listing.risk.quarantineReason} /></div> : null}
 
-          {listing && service && proof && assurance ? (
-            <div className="space-y-6">
-              {quarantined ? (
-                <UnverifiedWarning message={listing.risk.warning} quarantineReason={listing.risk.quarantineReason} />
-              ) : listing.risk.unverified ? null : (
-                <div className="border-l-[3px] border-[color:var(--ok)] bg-canvas-2 px-5 py-4">
-                  <div className="flex flex-wrap items-center gap-3"><VerificationBadge status={listing.verification.status} /></div>
-                  <p className="mt-3 max-w-[90ch] text-sm leading-6 text-ink-2">Agon tested this agent and it passed. If the agent changes, Agon tests it again before anyone can hire it.</p>
-                </div>
-              )}
+            <div className="mt-8 grid grid-cols-1 items-start gap-10 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+              <section aria-labelledby="agent-heading" className="min-w-0">
+                <div aria-hidden className="grid size-16 place-items-center border border-[color:var(--hairline-strong)] bg-canvas-2 font-mono text-[18px] text-accent">{initials}</div>
+                <h1 id="agent-heading" className="mt-6 break-words text-[clamp(2.2rem,4.6vw,3.6rem)] font-medium leading-[1] tracking-[-.04em] text-ink">{service.name}</h1>
+                <ul className="mt-5 flex flex-wrap gap-2 font-mono text-[9px] uppercase tracking-[0.12em] text-ink-2">
+                  <li className="inline-flex items-center gap-1.5 border border-[color:var(--hairline-strong)] px-2 py-1"><span aria-hidden className={`inline-block size-1.5 ${chip.tone}`} />{chip.label}</li>
+                  <li className="border border-[color:var(--hairline-strong)] px-2 py-1">{listing.firstParty ? "Built by Agon" : "Independent agent"}</li>
+                  <li className="border border-[color:var(--hairline-strong)] px-2 py-1">{service.category.label}</li>
+                  <li className="border border-[color:var(--hairline-strong)] px-2 py-1">{network.name}</li>
+                </ul>
+                <p className="mt-6 max-w-[64ch] text-[16px] leading-7 text-ink-2">{service.description}</p>
+                <dl className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <Fact label="Price" value={price ? `${price} USDC per call` : "Not published"} />
+                  <Fact label="Takes" value={takes.length ? takes.map((f) => f.name).join(", ") : "Not published"} />
+                  <Fact label="Answers in" value={service.timeoutMs ? `Up to ${Math.round(service.timeoutMs / 1000)} s` : "Set by its provider"} />
+                  <Fact label="Last check" value={lastCheck} />
+                </dl>
+                {paused ? <p className="mt-5 border-l-2 border-[color:var(--warn)] pl-3 text-sm leading-6 text-ink-2">Hires are paused while its checks are failing. It comes back on its own after a full pass.</p> : null}
+              </section>
 
-              <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
-                <div className="space-y-5">
-                  <BracketedCell pad="lg">
-                    <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[color:var(--hairline)] pb-5">
-                      <div className="flex items-center gap-4">
-                        <AgentLogo logoUrl={service.logoUrl} name={service.name} cacheKey={listing.version} />
-                        <div className="flex flex-wrap items-center gap-3 font-mono text-[10px] uppercase tracking-[0.16em]">{cardBadges(listing).map((badge) => <span key={badge} className={badge === "Built by Agon" ? "bg-accent px-2 py-1 text-accent-ink" : badge === "Verified" ? "border border-[color:var(--ok)] px-2 py-1 text-ink" : "border border-[color:var(--hairline-strong)] px-2 py-1 text-ink-2"}>{badge === "Listed" ? "Being checked" : badge}</span>)}</div>
-                      </div>
-                    </div>
-
-                    <dl className="mt-7 grid gap-px bg-[color:var(--hairline)] sm:grid-cols-3">
-                      <OverviewFact label="CATEGORY" value={service.category.label} note={service.category.description} />
-                      <OverviewFact label="MADE BY" value={listing.firstParty ? "Agon" : "An independent provider"} note={listing.firstParty ? "Agon builds and runs this agent." : "Its provider builds and runs it."} />
-                      <OverviewFact label="ANSWERS IN" value={service.timeoutMs ? `Up to ${Math.round(service.timeoutMs / 1000)} seconds` : "Set by the provider"} note="The longest a job takes." />
+              <aside id="use" aria-labelledby="hire-heading" className={`scroll-mt-24 p-6 lg:sticky lg:top-24 ${box}`}>
+                <h2 id="hire-heading" className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Hire this agent</h2>
+                {listing.payment.rail === "Escrow" ? (
+                  <div className="mt-4"><AgonJobEscrowPanel listing={listing} defaultAmountUSDC={price} eligible={canUseEscrow(listing, proof)} /></div>
+                ) : (
+                  <>
+                    <dl className="mt-5 space-y-3 text-sm">
+                      <div className="flex items-baseline justify-between gap-4"><dt className="text-ink-2">Price</dt><dd className="font-mono tabular-nums text-ink">{price ? `${price} USDC` : "–"}</dd></div>
+                      <div className="flex items-baseline justify-between gap-4"><dt className="text-ink-2">Agon routing fee</dt><dd className="font-mono text-ink">{feeLine(true, "0")}</dd></div>
+                      <div className="flex items-baseline justify-between gap-4 border-t border-[color:var(--hairline)] pt-3"><dt className="font-medium text-ink">Total</dt><dd className="font-mono text-[22px] tabular-nums text-ink">{price ? `${price} USDC` : "–"}</dd></div>
                     </dl>
-
-                    {visibleTags(service.tags, service.category.slug).length ? (
-                      <div className="mt-6">
-                        <div className="font-mono text-[9px] uppercase tracking-[0.14em] text-ink-3">SKILLS</div>
-                        <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 font-mono text-[11px] uppercase text-ink-2">
-                          {visibleTags(service.tags, service.category.slug).map((tag) => <span key={tag}>#{tag}</span>)}
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {!service.hasIndexedManifest ? (
-                      <div className="mt-6 border-l-[3px] border-[color:var(--warn)] bg-canvas-2 px-4 py-3 font-mono text-[11px] leading-relaxed text-ink-2">
-                        AGON can confirm the published record, but the full service description is not available yet. Review the original service file before use.
-                      </div>
-                    ) : null}
-                  </BracketedCell>
-
-                  {servicesForAgent(agentListings, hydratedListing!).length > 1 ? <BracketedCell pad="lg">
-                    <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">SERVICES</div>
-                    <ul className="mt-4 divide-y divide-[color:var(--hairline)] border-y border-[color:var(--hairline)]">
-                      {servicesForAgent(agentListings, hydratedListing!).map((row) => (
-                        <li key={row.id} className="flex flex-wrap items-center gap-x-5 gap-y-3 py-4">
-                          <div className="min-w-0 flex-1 basis-[240px]">
-                            <div className="font-sans text-[15px] font-semibold text-ink">{row.name}</div>
-                            <p className="mt-1 line-clamp-2 font-sans text-[13px] leading-[1.45] text-ink-2">{row.line}</p>
-                          </div>
-                          {row.price ? <span className="font-mono text-[12px] text-ink">{row.price}</span> : null}
-                          {row.current
-                            ? <a href="#use" className="inline-flex min-h-11 items-center bg-accent px-4 font-mono text-[10px] uppercase tracking-[0.14em] text-accent-ink hover:bg-accent-press">{row.action}</a>
-                            : <Link href={networkHref(row.href, networkKey)} className="inline-flex min-h-11 items-center border border-ink px-4 font-mono text-[10px] uppercase tracking-[0.14em] text-ink hover:bg-ink hover:text-[color:var(--canvas)]">{row.action}</Link>}
-                        </li>
-                      ))}
-                    </ul>
-                  </BracketedCell> : null}
-
-                  <BracketedCell pad="lg">
-                    <div id="rating" className="scroll-mt-24">
-                      <AgentRating agentId={listing.agentId} listingReference={listing.id} categoryId={listing.category} manifestBody={manifestBody} />
-                    </div>
-                  </BracketedCell>
-
-                  <details className="border border-[color:var(--hairline-strong)] bg-canvas">
-                    <summary className="cursor-pointer px-5 py-5 font-mono text-[11px] uppercase tracking-[0.14em] text-ink sm:px-6">VIEW TECHNICAL PROOF AND PROVENANCE</summary>
-                    <div className="grid gap-px border-b border-[color:var(--hairline)] bg-[color:var(--hairline)] sm:grid-cols-2">
-                      <OverviewFact label="AGENT ID" value={`ERC-8004 #${listing.agentId}`} note="The identity that owns this service listing." />
-                      <OverviewFact label="VERSION" value={`Current version ${listing.version}`} note="The immutable service version used for evidence." />
-                    </div>
-                    <ServiceProof listing={listing} proof={proof} assurance={assurance} identityRegistry={null} currentOwner={null} />
-                    <div className="border-t border-[color:var(--hairline)] px-5 py-5 sm:px-6">
-                      <TagButton variant="ghost" href={`/list/version?listingId=${encodeURIComponent(listing.listingId)}&manifestUri=${encodeURIComponent(listing.manifest.uri)}`}>UPDATE THIS SERVICE</TagButton>
-                    </div>
-                  </details>
-                </div>
-
-                <aside id="use" className="scroll-mt-24 lg:sticky lg:top-24">
-                  <BracketedCell tone="ink" pad="lg">
-                    <div className="font-mono text-[10px] uppercase tracking-[0.16em] opacity-60">PRICE AND USE</div>
-                    <div className="mt-4 font-stencil text-[36px] uppercase leading-none sm:text-[42px]">{service.amountUSDC ? `${service.amountUSDC} USDC` : "PRICE NOT INDEXED"}</div>
-                    <div className="mt-7 border-t border-current pt-5">
-                      <Readiness
-                        label="STATUS"
-                        state={listing.status !== "Listed" || quarantined || listing.endpointQa.status === "failed" ? "blocked" : listing.endpointQa.status === "passed" ? "ready" : "caution"}
-                        value={listing.status !== "Listed" || quarantined ? "PAUSED" : listing.endpointQa.status === "passed" ? "AVAILABLE NOW" : listing.endpointQa.status === "failed" ? "NOT ANSWERING" : "BEING CHECKED"}
-                      />
-                      <p className="mt-3 font-mono text-[10px] leading-relaxed opacity-70">
-                        {availabilityMessage(listing.endpointQa.status)}
-                        {listing.endpointQa.status === "passed" && listing.endpointQa.attempts > 0 ? ` It answered ${listing.endpointQa.successRate}% of recent checks.` : ""}
-                      </p>
-                    </div>
-
-                    {listing.payment.rail === "X402" ? (
-                      <div className="mt-7 border-t border-current pt-5">
-                        <div className="font-mono text-[10px] uppercase tracking-[0.14em]">HIRE THIS AGENT</div>
-                        {hasNamedInputs(manifestBody) && assessX402Readiness(listing).eligible ? (
-                          <>
-                            <p className="mt-2 max-w-[42ch] font-mono text-[10px] leading-relaxed opacity-70">Describe your task. You see the price before you pay.</p>
-                            <TagButton className="mt-4" href={`/?agent=${encodeURIComponent(listing.id)}`}>HIRE {service.name.toUpperCase()}</TagButton>
-                          </>
-                        ) : (
-                          <p className="mt-2 max-w-[42ch] font-mono text-[10px] leading-relaxed opacity-70">{hasNamedInputs(manifestBody) ? assessX402Readiness(listing).reason : "This agent's listing needs an update before Agon can hire it."}</p>
-                        )}
-                      </div>
-                    ) : (
-                      <AgonJobEscrowPanel listing={listing} defaultAmountUSDC={service.amountUSDC} eligible={escrowEligible} />
-                    )}
-
-                    <div className="mt-7 border-t border-current pt-5 font-mono text-[9px] uppercase leading-relaxed tracking-[0.1em] opacity-55">
-                      Test USDC on {network.name}
-                    </div>
-                  </BracketedCell>
-                </aside>
-              </div>
+                    <p className="mt-2 text-xs text-ink-3">{moneyLine(network.key) ?? `USDC on ${network.name}`}, from your agent wallet.</p>
+                    {hireable ? <TagButton className="mt-5 w-full justify-center" href={`/?agent=${encodeURIComponent(listing.id)}`}>{price ? `Hire for ${price} USDC` : "Hire this agent"}</TagButton>
+                      : <p className="mt-5 text-sm leading-6 text-ink-2">{paused || quarantined ? "Hiring is paused for now." : !hasNamedInputs(manifestBody) ? "This listing needs an update before Agon can hire it." : readiness?.reason}</p>}
+                    <p className="mt-3 text-xs text-ink-3">You see the exact price before you pay.</p>
+                  </>
+                )}
+              </aside>
             </div>
-          ) : null}
-        </section>
+
+            {services.length > 1 ? (
+              <section aria-label="Services from this agent" className={`mt-12 p-6 ${box}`}>
+                <h2 className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Services from this agent</h2>
+                <ul className="mt-4 divide-y divide-[color:var(--hairline)]">
+                  {services.map((row) => (
+                    <li key={row.id} className="flex flex-wrap items-center gap-x-5 gap-y-2 py-3">
+                      <div className="min-w-0 flex-1 basis-[240px]"><p className="font-medium text-ink">{row.name}</p><p className="mt-0.5 line-clamp-2 text-[13px] text-ink-2">{row.line}</p></div>
+                      {row.price ? <span className="font-mono text-[12px] text-ink">{row.price}</span> : null}
+                      {row.current ? <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3">This page</span> : <TagButton variant="ghost" size="sm" href={networkHref(row.href, networkKey)}>{row.action}</TagButton>}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+
+            <div className="mt-16"><AgentRating agentId={listing.agentId} listingReference={listing.id} categoryId={listing.category} manifestBody={manifestBody} /></div>
+
+            <div className="mt-16 grid grid-cols-1 items-start gap-10 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+              <section aria-labelledby="use-heading" className="min-w-0">
+                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">How to use it</p>
+                <h2 id="use-heading" className="mt-2 text-[clamp(1.6rem,2.6vw,2.1rem)] font-medium tracking-[-.02em] text-ink">What it takes and what you get</h2>
+                <div className="mt-6 grid gap-3 md:grid-cols-2">
+                  <div className={`p-5 ${box}`}>
+                    <h3 className="font-mono text-[9px] uppercase tracking-[0.14em] text-ink-3">You send</h3>
+                    {takes.length ? (
+                      <ul className="mt-3 space-y-2">{takes.map((f) => (
+                        <li key={f.name} className="border border-[color:var(--hairline)] bg-canvas px-4 py-3">
+                          <p className="font-mono text-[13px] text-ink">{f.name}{f.optional ? <span className="text-ink-3"> (optional)</span> : null}</p>
+                          {f.description ? <p className="mt-1 text-[13px] text-ink-2">{f.description}</p> : null}
+                        </li>
+                      ))}</ul>
+                    ) : <p className="mt-3 text-sm text-ink-2">This agent does not publish its inputs yet.</p>}
+                  </div>
+                  <div className={`p-5 ${box}`}>
+                    <h3 className="font-mono text-[9px] uppercase tracking-[0.14em] text-ink-3">You get</h3>
+                    {gives.length ? (
+                      <ul className="mt-3 space-y-2">{gives.map((f) => (
+                        <li key={f.name} className="flex gap-3 text-[13px] leading-5 text-ink"><span aria-hidden className="mt-1.5 inline-block size-1.5 shrink-0 bg-accent" /><span><span className="font-mono">{f.name}</span>{f.description ? <span className="text-ink-2">: {f.description}</span> : null}</span></li>
+                      ))}</ul>
+                    ) : <p className="mt-3 text-sm text-ink-2">The answer comes back as its provider describes it above.</p>}
+                  </div>
+                </div>
+              </section>
+
+              <aside aria-labelledby="details-heading" className={`p-6 ${box}`}>
+                <h2 id="details-heading" className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink">Listing details</h2>
+                <dl className="mt-4 space-y-3 text-[13px]">
+                  <Row label="Listing" value={`${listing.listingId}, version ${listing.version}`} />
+                  <Row label="Agent ID" value={`${listing.agentId} (ERC-8004)`} />
+                  {service.endpoint ? <Row label="Endpoint" value={service.endpoint.replace(/^https?:\/\//, "")} /> : null}
+                  <Row label="Payment" value={`${listing.payment.rail === "X402" ? "x402" : "Escrow"}, USDC on ${network.name}`} />
+                  <Row label="Service file" value={short(listing.manifest.hash)} title={listing.manifest.hash} />
+                </dl>
+                <a href={`${network.explorerUrl}/tx/${listing.provenance.sourceTxHash}`} target="_blank" rel="noopener noreferrer" className="mt-4 inline-flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.12em] text-accent hover:underline">View on Arc ↗</a>
+                <details className="mt-2 border-t border-[color:var(--hairline)] pt-3">
+                  <summary className="cursor-pointer py-2 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-2 hover:text-ink">Technical proof</summary>
+                  <ServiceProof listing={listing} proof={proof} assurance={assurance} identityRegistry={null} currentOwner={null} />
+                </details>
+                {publisher ? (
+                  <div className="mt-4 border border-[color:var(--hairline)] bg-canvas p-4">
+                    <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-ink-3">Only you see this, as its publisher</p>
+                    <TagButton variant="ghost" size="sm" className="mt-3" href={`/list?update=${encodeURIComponent(listing.id)}`}>Update listing</TagButton>
+                  </div>
+                ) : null}
+              </aside>
+            </div>
+
+            {hireable ? (
+              <div className={`mt-16 flex flex-wrap items-center justify-between gap-4 p-5 ${box}`}>
+                <p className="min-w-0"><span className="font-medium text-ink">{service.name}</span><span className="ml-3 font-mono text-[11px] text-ink-3">{price ? `${price} USDC per call · no routing fee from here` : "No routing fee from here"}</span></p>
+                <TagButton href={`/?agent=${encodeURIComponent(listing.id)}`}>Hire this agent</TagButton>
+              </div>
+            ) : null}
+          </>
+        ) : null}
       </main>
       <Footer variant="agon" />
     </div>
   );
 }
 
-function OverviewFact({ label, value, note }: { label: string; value: string; note: string }) {
+function Fact({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-canvas-2 p-4">
+    <div className="border border-[color:var(--hairline-strong)] bg-canvas-2 p-4">
       <dt className="font-mono text-[9px] uppercase tracking-[0.14em] text-ink-3">{label}</dt>
-      <dd className="mt-2 font-mono text-[12px] text-ink">{value}</dd>
-      <dd className="mt-1 break-all font-mono text-[9px] leading-relaxed text-ink-3">{note}</dd>
+      <dd className="mt-2 break-words font-mono text-[12px] text-ink">{value}</dd>
     </div>
   );
 }
 
-function Readiness({ label, state, value }: { label: string; state: "ready" | "caution" | "blocked"; value: string }) {
-  const color = state === "ready" ? "var(--ok)" : state === "caution" ? "var(--warn)" : "var(--err)";
-  return <div className="flex items-center justify-between gap-4 font-mono text-[10px]"><span className="opacity-65">{label}</span><span className="inline-flex items-center gap-2 uppercase"><span className="h-2 w-2" style={{ background: color }} />{value}</span></div>;
-}
-
-function availabilityMessage(status: AgonListing["endpointQa"]["status"]): string {
-  if (status === "passed") return "Ready to take a job.";
-  if (status === "failed") return "It is not answering right now. Try again later.";
-  return "Agon is checking that it is ready.";
-}
-
-function DetailLoading() {
+function Row({ label, value, title }: { label: string; value: string; title?: string }) {
   return (
-    <div aria-label="Loading service" className="border-y border-[color:var(--hairline)] py-10">
-      <div className="font-mono text-[11px] uppercase tracking-[0.15em] text-ink-2">LOADING SERVICE...</div>
-      <div className="mt-4 h-0.5 w-full overflow-hidden bg-canvas-3"><div className="h-full w-1/3 animate-pulse bg-accent" /></div>
+    <div className="flex items-baseline justify-between gap-4">
+      <dt className="shrink-0 text-ink-3">{label}</dt>
+      <dd className="min-w-0 break-all text-right font-mono text-[12px] text-ink" title={title}>{value}</dd>
     </div>
   );
-}
-
-/// Search terms worth showing: not bare numbers, not just the category name again.
-function visibleTags(tags: string[], categorySlug: string): string[] {
-  return tags.filter((tag) => !/^\d+$/.test(tag) && tag.toLowerCase() !== categorySlug.toLowerCase());
 }

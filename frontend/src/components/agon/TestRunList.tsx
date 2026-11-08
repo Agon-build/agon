@@ -9,7 +9,7 @@ const RUNS_PER_PAGE = 5;
 const when = (iso: string) => new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
 /// Published Playground runs. Each opens its input, the agent's answer, how it was scored and its fingerprint.
-export function TestRunList({ runs, showAgent = false, empty = "No tests yet.", names }: { runs: TestRun[]; showAgent?: boolean; empty?: string; names?: Map<string, string> }) {
+export function TestRunList({ runs, showAgent = false, empty = "No tests yet.", names, table = false }: { runs: TestRun[]; showAgent?: boolean; empty?: string; names?: Map<string, string>; table?: boolean }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [detail, setDetail] = useState<TestRunDetail | null>(null);
   const [failed, setFailed] = useState(false);
@@ -24,8 +24,31 @@ export function TestRunList({ runs, showAgent = false, empty = "No tests yet.", 
   }
 
   if (!runs.length) return <p className="font-mono text-[11px] text-ink-3">{empty}</p>;
+  const short = (h: string) => `${h.slice(0, 6)}…${h.slice(-4)}`;
   return (
     <>
+      {table ? (
+        <div className="overflow-x-auto border border-[color:var(--hairline-strong)] bg-canvas-2">
+          <table className="w-full min-w-[560px] text-left">
+            <thead>
+              <tr className="border-b border-[color:var(--hairline)] font-mono text-[9px] uppercase tracking-[0.14em] text-ink-3">
+                <th className="px-5 py-3 font-normal">When</th><th className="px-3 py-3 font-normal">Task</th><th className="px-3 py-3 font-normal">Score</th><th className="px-3 py-3 font-normal">Time</th><th className="px-5 py-3 text-right font-normal">Evidence</th>
+              </tr>
+            </thead>
+            <tbody>
+              {shown.rows.map((r) => (
+                <tr key={r.id} className="border-b border-[color:var(--hairline)] last:border-b-0 hover:bg-canvas-3">
+                  <td className="px-5 py-3 font-mono text-[12px] tabular-nums text-ink-2"><button type="button" onClick={() => void open(r.id)} className="min-h-11 text-left hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink">{when(r.createdAt)}</button></td>
+                  <td className="px-3 py-3 text-[13px] text-ink">{runTestTitle(r) ?? categoryLabel(r.categoryId)}{r.source === "public" ? <span className="text-ink-3"> · public</span> : null}{r.error ? <span className="text-ink-3"> · failed to answer</span> : null}</td>
+                  <td className="relative px-3 py-3 font-mono text-[12px] tabular-nums text-ink"><span aria-hidden className={`mr-2 inline-block size-1.5 ${r.passed ? "bg-[color:var(--ok)]" : "bg-[color:var(--err)]"}`} />{r.score}<span className="sr-only">{r.passed ? " passed" : " failed"}</span></td>
+                  <td className="px-3 py-3 font-mono text-[12px] tabular-nums text-ink-2">{r.durationMs} ms</td>
+                  <td className="px-5 py-3 text-right font-mono text-[12px]">{r.evidenceHash ? <button type="button" onClick={() => void open(r.id)} className="min-h-11 text-accent hover:underline">{short(r.evidenceHash)}</button> : <span className="text-ink-3">–</span>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
       <ul className="divide-y divide-[color:var(--hairline)] border-y border-[color:var(--hairline)]">
         {shown.rows.map((r) => (
           <li key={r.id}>
@@ -43,6 +66,7 @@ export function TestRunList({ runs, showAgent = false, empty = "No tests yet.", 
           </li>
         ))}
       </ul>
+      )}
       {shown.pages > 1 ? (
         <nav aria-label="Test run pages" className="mt-3 flex items-center justify-between gap-3 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3">
           <button type="button" onClick={() => setPage(shown.page - 1)} disabled={shown.page === 0} className="min-h-11 px-1 hover:text-accent disabled:opacity-40 disabled:hover:text-ink-3">Newer</button>

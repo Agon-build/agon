@@ -275,7 +275,8 @@ test("audit: the app opens on the product, and pages show each thing once", () =
   const detail = read("app/agents/[id]/page.tsx");
   assert.doesNotMatch(detail, /PROTECTED PROJECT/);
   assert.doesNotMatch(detail, /<h2 className="mt-2 max-w-\[22ch\] font-stencil/, "the name is shown once, in the page header");
-  assert.match(detail, /visibleTags/, "numeric and category-only tags are hidden");
+  // 2026-11-08: the approved agent page (Figma 15:72) drops the skill tags; the facts and inputs say what it does.
+  assert.doesNotMatch(detail, /#\{tag\}/, "no bare tag list");
   const nav = read("components/redesign/TopNav.tsx");
   assert.doesNotMatch(nav, /Wallet and hires/);
   assert.match(nav, />Account</);
@@ -317,7 +318,7 @@ test("owner review 2026-10-20: one-line Agents intro, paged test runs, a plain h
   assert.doesNotMatch(panel, /TASK DETAILS \(JSON\)/);
   const detail = read("app/agents/[id]/page.tsx");
   assert.doesNotMatch(detail, /Service record \{listing\.listingId\}/);
-  assert.match(detail, /Test USDC on/);
+  assert.match(detail, /moneyLine\(network\.key\)/, "the hire panel names test or real money");
   const docs = read("app/docs/page.tsx");
   assert.match(docs, /<RoadmapLater items=\{ROADMAP\.later\} \/>/, "Later shows titles only");
 });
