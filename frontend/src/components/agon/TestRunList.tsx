@@ -28,7 +28,7 @@ export function TestRunList({ runs, showAgent = false, empty = "No tests yet.", 
   return (
     <>
       {table ? (
-        <div className="overflow-x-auto border border-[color:var(--hairline-strong)] bg-canvas-2">
+        <div className="relative overflow-x-auto border border-[color:var(--hairline-strong)] bg-canvas-2">
           <table className="w-full min-w-[560px] text-left">
             <thead>
               <tr className="border-b border-[color:var(--hairline)] font-mono text-[9px] uppercase tracking-[0.14em] text-ink-3">

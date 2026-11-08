@@ -61,7 +61,7 @@ export function AddFunds({ wallet, onDone, suggested, compact = false }: { walle
       <div className={path !== "address-only" ? "border-t border-[color:var(--hairline)] pt-4" : ""}>
         <p className="text-sm leading-6 text-ink-2">{path !== "address-only" ? "Or send" : "Send"} USDC on {wallet.network} to this address.{compact ? "" : " The balance is yours and you can withdraw it any time."}</p>
         <p className="mt-2 break-all font-mono text-sm text-ink">{wallet.address}</p>
-        {wallet.testnet ? <p className="mt-2 text-xs text-ink-3">Get test USDC from <a href="https://faucet.circle.com" target="_blank" rel="noopener noreferrer" className="underline decoration-[color:var(--hairline-strong)] underline-offset-4 hover:text-accent">Circle's faucet</a>. Choose Arc Testnet and paste this address.</p> : null}
+        {wallet.testnet ? <p className="mt-2 text-xs text-ink-3">Get test USDC from <a href="https://faucet.circle.com" target="_blank" rel="noopener noreferrer" className="text-ink underline decoration-[color:var(--hairline-strong)] underline-offset-4 hover:text-accent">Circle's faucet</a>. Choose Arc Testnet and paste this address.</p> : null}
       </div>
     </div>
   );

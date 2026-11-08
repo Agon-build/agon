@@ -27,51 +27,66 @@ export function AgentAccess() {
   const snippets = setupSnippets(MCP_URL);
 
   return (
-    <div className="grid gap-8">
-      <div className="grid gap-3">
-        <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">Add Agon to your agent</p>
-        <div role="tablist" aria-label="Client" className="flex flex-wrap gap-2">
+    <div className="grid gap-6">
+      <section className="border border-[color:var(--hairline-strong)] bg-canvas-2 p-5 sm:p-6">
+        <h3 className="text-[17px] font-medium text-ink">Add Agon to your agent</h3>
+        <p className="mt-1 text-[13px] text-ink-2">Run this once. The first time your agent uses Agon, a page opens here to confirm what it may do.</p>
+        <div role="tablist" aria-label="Client" className="mt-4 flex flex-wrap gap-2">
           {snippets.map((s, i) => <button key={s.label} type="button" role="tab" aria-selected={tab === i} onClick={() => setTab(i)} className={TAB(tab === i)}>{s.label}</button>)}
         </div>
-        <div className="flex flex-wrap items-start gap-3">
-          <pre className="min-w-0 flex-1 overflow-x-auto bg-canvas-2 p-3 font-mono text-xs leading-5 text-ink">{snippets[tab]!.code}</pre>
-          <TagButton size="sm" variant="ghost" arrow={false} onClick={() => { void navigator.clipboard?.writeText(snippets[tab]!.code); setCopied(true); window.setTimeout(() => setCopied(false), 1500); }}>{copied ? "Copied" : "Copy"}</TagButton>
+        <div className="mt-3 flex flex-wrap items-center gap-3 border border-[color:var(--hairline-strong)] bg-canvas p-3 sm:p-4">
+          <pre className="min-w-0 flex-1 overflow-x-auto font-mono text-xs leading-5 text-ink">{snippets[tab]!.code}</pre>
+          <TagButton size="sm" variant="ghost" onClick={() => { void navigator.clipboard?.writeText(snippets[tab]!.code); setCopied(true); window.setTimeout(() => setCopied(false), 1500); }}>{copied ? "Copied" : "Copy"}</TagButton>
         </div>
-        <p className="text-sm leading-6 text-ink-2">The first time your agent uses Agon, a page opens here to confirm what it may do.</p>
-      </div>
+        <dl className="mt-4 grid grid-cols-1 border border-[color:var(--hairline)] sm:grid-cols-2 lg:grid-cols-4">
+          {LEVELS.map((l) => (
+            <div key={l.level} className="border-[color:var(--hairline)] p-4 [&:not(:last-child)]:border-b sm:[&:nth-child(odd)]:border-r lg:border-b-0 lg:[&:not(:last-child)]:border-r">
+              <dt className="font-mono text-[9px] uppercase tracking-[0.14em] text-ink">{l.label}</dt>
+              <dd className="mt-1.5 text-[13px] leading-5 text-ink-2">{l.detail}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
 
-      <div className="overflow-x-auto">
-        <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">Connected agents</p>
-        {connections === null ? <p className="text-sm text-ink-3">Loading</p> : connections.length === 0 ? <p className="text-sm text-ink-2">No agents connected yet.</p> : (
-          <table className="w-full min-w-[520px] text-left text-sm">
-            <thead className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3"><tr><th className="py-2">Agent</th><th>Access</th><th>Connected</th><th>Last used</th><th /></tr></thead>
-            <tbody className="divide-y divide-[color:var(--hairline)]">
-              {connections.map((c) => (
-                <tr key={c.id}>
-                  <td className="py-3 text-ink">{c.clientName}</td>
-                  <td className="text-ink-2">{LEVELS.find((l) => l.level === c.level)?.label}</td>
-                  <td className="text-ink-2">{day(c.createdAt)}</td>
-                  <td className="text-ink-2">{day(c.lastUsedAt)}</td>
-                  <td className="text-right">
-                    <button type="button" className="min-h-11 px-2 text-sm underline decoration-[color:var(--hairline-strong)] underline-offset-4 hover:text-[color:var(--err)]"
-                      onClick={() => {
-                        if (confirming !== c.id) { setConfirming(c.id); return; }
-                        setConfirming(null);
-                        void disconnectConnection(c.id).then(load).catch(() => setError("That did not go through. Try again."));
-                      }}>{confirming === c.id ? "Disconnect now?" : "Disconnect"}</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <section>
+        <p className="mb-3 font-mono text-[9px] uppercase tracking-[0.14em] text-ink-3">Connected agents</p>
+        {connections === null ? <p className="text-sm text-ink-3">Loading</p> : connections.length === 0 ? <p className="border border-[color:var(--hairline-strong)] bg-canvas-2 p-5 text-sm text-ink-2">No agents connected yet.</p> : (
+          <div className="relative overflow-x-auto border border-[color:var(--hairline-strong)]">
+            <table className="w-full min-w-[560px] text-left text-sm">
+              <thead className="bg-canvas-2 font-mono text-[9px] uppercase tracking-[0.14em] text-ink-3"><tr><th className="px-5 py-3 font-normal">Agent</th><th className="px-3 py-3 font-normal">Access</th><th className="px-3 py-3 font-normal">Connected</th><th className="px-3 py-3 font-normal">Last used</th><th className="px-5 py-3"><span className="sr-only">Disconnect</span></th></tr></thead>
+              <tbody>
+                {connections.map((c) => (
+                  <tr key={c.id} className="border-t border-[color:var(--hairline)]">
+                    <td className="px-5 py-3 text-ink">{c.clientName}</td>
+                    <td className="px-3 py-3 text-ink-2">{LEVELS.find((l) => l.level === c.level)?.label}</td>
+                    <td className="px-3 py-3 text-ink-2">{day(c.createdAt)}</td>
+                    <td className="px-3 py-3 text-ink-2">{day(c.lastUsedAt)}</td>
+                    <td className="px-5 py-3 text-right">
+                      <button type="button" className="min-h-11 font-mono text-[10px] uppercase tracking-[0.14em] text-accent hover:text-[color:var(--err)]"
+                        onClick={() => {
+                          if (confirming !== c.id) { setConfirming(c.id); return; }
+                          setConfirming(null);
+                          void disconnectConnection(c.id).then(load).catch(() => setError("That did not go through. Try again."));
+                        }}>{confirming === c.id ? "Disconnect now?" : "Disconnect"}</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
         {error ? <p role="alert" className="mt-2 text-sm text-[color:var(--err)]">{error}</p> : null}
-      </div>
+      </section>
 
-      <details className="border-t border-[color:var(--hairline)] pt-4">
-        <summary className="min-h-11 cursor-pointer font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 hover:text-ink">Advanced: no browser</summary>
-        <p className="mt-3 text-sm leading-6 text-ink-2">For agents that run where no browser can open, such as a server or CI. Create a token and store it in the AGON_TOKEN environment variable.</p>
-        <div className="mt-4"><TokenAccess /></div>
+      <details className="group border border-[color:var(--hairline-strong)]">
+        <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center justify-between gap-3 px-5 py-4">
+          <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2">Advanced: no browser</span>
+          <span className="text-[13px] text-ink-3">For servers and CI. Create a token instead. <span aria-hidden className="ml-1 inline-block font-mono transition-transform group-open:rotate-180 motion-reduce:transition-none">↓</span></span>
+        </summary>
+        <div className="border-t border-[color:var(--hairline)] px-5 py-5">
+          <p className="text-sm leading-6 text-ink-2">For agents that run where no browser can open, such as a server or CI. Create a token and store it in the AGON_TOKEN environment variable.</p>
+          <div className="mt-4"><TokenAccess /></div>
+        </div>
       </details>
     </div>
   );
