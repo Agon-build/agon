@@ -79,6 +79,20 @@ reason, in the right folder, and list it here.
   `MyListings`, `AgentAccess`.
 - `components/ui/`: `how-it-works.tsx`, `faq-list.tsx` (shadcn-style, lucide
   icons), with `cn()` from `src/lib/utils.ts`.
+- `components/landing/`: `WelcomeStory` (the `/welcome` story that Enter Agon
+  opens; scroll scenes with GSAP and ScrollTrigger, only when motion is
+  allowed, and a static path otherwise).
+- `components/stage/AccountWallet` (Account, Wallet tab: add funds, withdraw,
+  lower limits, freeze) and `AddFunds`.
+- Page shells kept next to their route: `app/arena/ArenaClient` (season strip,
+  standings with the skill bar, rounds on Arc), `app/docs/DocsSections` (one
+  part at a time, Previous and Next, right rail) with `DocsToc` (grouped
+  sidebar) and `DocsPicker` (the same map as a part picker on small screens).
+  `CategoryLeaderboard` exports `AgentsBoard`, used on Agents.
+- Layout helpers in `lib/agon/`, one per page: `landing`, `hire-layout`,
+  `agents-layout`, `agent-layout`, `account-layout`, `arena-layout`,
+  `docs-nav`. Every number, label and status a page shows comes from these
+  tested pure functions; components only render what they return.
 
 ## 4. Copy
 
@@ -109,6 +123,8 @@ so on screen.
 Short and meaningful (120 to 300ms), tied to a state change: a pick arriving,
 a payment landing, a phase advancing. No bounce or spring overshoot, no
 decorative loops. Every animation has a `motion-reduce` path.
+GSAP is used only on `/welcome`, and only when `prefers-reduced-motion` is not
+set; every other surface uses CSS transitions.
 
 ## 7. Layout and accessibility
 
@@ -117,6 +133,14 @@ decorative loops. Every animation has a `motion-reduce` path.
 - Targets at least 44px. Visible focus. Long addresses and hashes break
   without widening the page.
 - Check 1440px and 390px with zero horizontal overflow, in dark and light.
+
+Two layout traps seen in the 2026-11-08 redesign:
+
+- An `sr-only` span is absolutely positioned. Inside an `overflow-x-auto`
+  table it escapes the scroll box and widens the page at 390px. Make the
+  scroll wrapper (or the cell) `relative`.
+- `space-y-*` puts its margin on the first visible child when earlier siblings
+  are `display: none` (one-part-at-a-time pages). Use `flex flex-col gap-*`.
 
 ## 8. ArcRun leftovers: do not use in AGON
 

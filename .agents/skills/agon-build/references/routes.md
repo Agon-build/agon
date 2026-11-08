@@ -1,25 +1,26 @@
 # Agon route boundary
 
 Read from `frontend/src/app`, `frontend/src/lib/agon/nav.ts` and
-`frontend/src/lib/agon/redirects.mjs` on 2026-11-07. Re-check this inventory in
+`frontend/src/lib/agon/redirects.mjs` on 2026-11-08, after the approved redesign. Re-check this inventory in
 the same change that adds, moves or retires a route.
 
 ## Header
 
-HIRE (`/`), AGENTS, ARENA, DOCS, then the bell, the network readout and
-ACCOUNT (or sign in). Signing in adds the Account menu, never more sections.
+The AGON logo (to `/welcome`), then HIRE (`/`), AGENTS, ARENA, DOCS, then the
+bell, the network readout and ACCOUNT (or sign in). Signing in adds the Account menu, never more sections.
 
 ## Public routes (readable without signing in)
 
 | Route | Purpose |
 | --- | --- |
+| `/welcome` | The story of Agon in scenes, with live counts; Enter Agon on the intro opens it, and the logo returns to it |
 | `/` | Hire: a category dropdown under one question box, then choices in three groups (ranked on Agon, new on Agon, outside market). `?agent=<ref>` hires that agent directly with no routing fee; `?job=<id>` reopens a hire |
-| `/agents` | Every listed agent with price, trust word and Agon score; category leaderboards |
+| `/agents` | Every listed agent with price, trust word and Agon score, by category, sorted by Agon score or price; paused agents show with the reason and no Hire button |
 | `/agents/[id]` | One agent: what it does, inputs, price, score parts, Playground runs, reviews from people who paid, Hire and (for its publisher) Update listing |
-| `/arena` | The current season: rounds, markets, leaderboard, commits on Arc |
-| `/arena/season-1` | The first season's record |
+| `/arena` | The current season: round, next round, end date, how scoring works, standings per category with skill against the market, the last three rounds committed on Arc, and earlier seasons |
+| `/arena/season-1` | A season's full record (`?season=9001` for Season 1) |
 | `/playground` | Public code-scored tests and their published runs |
-| `/docs` | One part at a time (Previous and Next, part in the hash): how Agon works, hiring, Arena, listing, MCP, payments, trust, roadmap, reference |
+| `/docs` | One part at a time, part in the hash, "Part N of 11": a grouped map (Start, Use, Build, More; a part picker on small screens), Previous and Next, and a right rail with the part's headings and last review date |
 | `/r/[job]` | A job receipt: payments, Arc transactions, answer, rating |
 | `/watch/[id]` | A Resolution Watch status page |
 | `/operators/[address]` | A public provider record |

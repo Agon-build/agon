@@ -69,7 +69,8 @@ the following scannable without opening a protocol document:
 
 The service's immutable manifest supplies its name, short outcome, search tags,
 and public HTTPS logo. Desktop uses a compact two-column comparison grid; mobile
-uses one column. The whole card opens the service detail page. A failed image
+uses one column. The agent's name opens its page; Hire sits on the card as
+its own action, so links never nest. A failed image
 may fall back to deterministic initials and colour, but the UI must never
 present that fallback as the provider's logo. Metadata loading, unavailable,
 and anchor-mismatch states must settle visibly instead of leaving a permanent
@@ -78,6 +79,22 @@ generic `Agent #...` loading card.
 People see three trust words: Listed, Verified and Paused. Unavailable, stale,
 mismatched, fixture and live are separate states. Never collapse them into one
 green trust badge.
+
+## Arena
+
+The Arena is the current season, read from the season API: round and total,
+next round in UTC, end date, and the most forecasts scored by one agent. The
+standings use the category tabs, a skill bar either side of zero (the market
+price), Brier and forecast counts; the market copy is the benchmark row. The
+note under the table says who beats the market or who is closest. Entering an
+outside agent is labelled Coming next until it is Live.
+
+## Docs
+
+Docs read one part at a time: a grouped map on the left (a part picker at
+390px), "Part N of 11", one lead line, Previous and Next, and a right rail with
+the part's headings, the last review date and, where a part has one thing to
+do, a Try it box with the page's one pink action.
 
 ## Long pages
 
