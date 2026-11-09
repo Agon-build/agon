@@ -126,6 +126,12 @@ test("with outside off, Circle entries are shown but quoting says outside_off; a
   const r2 = await changed.router.route("op:x", "analyst ratings AAPL");
   assert.ok(r2.kind === "pick");
   assert.deepEqual(await changed.router.quote("op:x", r2.routeId, "circle:ratings"), { ok: false, code: "terms_changed" });
+  // A live price below the one shown is fine: the quote carries the live price.
+  const cheaper = setup({ entries: [circle], kind: "market_data", quoteAmount: 9_999n });
+  const r3 = await cheaper.router.route("op:x", "analyst ratings AAPL");
+  assert.ok(r3.kind === "pick");
+  const q3 = await cheaper.router.quote("op:x", r3.routeId, "circle:ratings");
+  assert.ok(q3.ok && "amount" in q3 && q3.amount === 9_999n, JSON.stringify(q3, (_k, v) => (typeof v === "bigint" ? v.toString() : v)));
 });
 
 test("a request that fits nothing says so, and an unknown or foreign route is refused", async () => {

@@ -439,6 +439,14 @@ test("minor: changed terms or a short wallet are refused before any job or code 
   assert.equal(store.jobs.size, 0, "no job was written");
 });
 
+// 2026-11-09 production: BlockRun's image service was listed at 0.022001 and asked 0.022000, and was refused.
+test("a live price at or below the one shown is quoted at the live price", async () => {
+  const { deps, req } = world();
+  const lower = await quoteHire(deps, { ...req, expect: { amount: 300_001n, payTo: null } });
+  assert.ok(lower.ok, show(lower));
+  assert.equal(lower.quote.amount, 300_000n);
+});
+
 const ticker = { ownerRef: "wa:abc", providerUrl: "http://api.test/agon/data/ticker", providerRef: "circle:ticker", providerLabel: "Ticker", method: "GET" as const, body: { ticker: "BTC" }, feeBps: 500, feeAddress: FEE_TO };
 
 async function hireTicker(deps: HireDeps) {

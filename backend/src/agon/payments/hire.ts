@@ -108,7 +108,8 @@ export async function quoteHire(
   const now = deps.now();
   const fee = req.feeAddress ? feeFor(peek.option.amount, req.feeBps ?? 0, deps.feeMin ?? 0n) : 0n;
   const total = peek.option.amount + fee;
-  if (req.expect && (peek.option.amount !== req.expect.amount || (req.expect.payTo && peek.option.payTo.toLowerCase() !== req.expect.payTo.toLowerCase()))) {
+  // A live price above the one shown, or another payee, is refused; a lower price is quoted as it is.
+  if (req.expect && (peek.option.amount > req.expect.amount || (req.expect.payTo && peek.option.payTo.toLowerCase() !== req.expect.payTo.toLowerCase()))) {
     return { ok: false, code: "terms_changed" };
   }
   if (req.balanceOf) {

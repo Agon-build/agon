@@ -248,8 +248,8 @@ export function createRouter(deps: {
         return { ok: false, code: quoted.code, ...(quoted.detail ? { detail: quoted.detail } : {}) };
       }
       const q = quoted.quote;
-      // The live terms must be the ones the person was shown.
-      if (q.amount !== entry.price || (entry.payTo && q.payTo.toLowerCase() !== entry.payTo.toLowerCase())) return { ok: false, code: "terms_changed" };
+      // The live terms must be the ones the person was shown, or cheaper; the quote shows the live price.
+      if (q.amount > entry.price || (entry.payTo && q.payTo.toLowerCase() !== entry.payTo.toLowerCase())) return { ok: false, code: "terms_changed" };
       const wallet = await runtime.wallets.ensure(ownerRef);
       const balance = deps.balanceOf ? await deps.balanceOf(entry.network, wallet.address).catch(() => null) : null;
       const needed = q.total + (q.fee > 0n ? FEE_GAS_RESERVE : 0n);
