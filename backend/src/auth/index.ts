@@ -189,6 +189,9 @@ import {
   verifyEmailOtp,
 } from "../lib/emailOtp.js";
 import { createEmailAuthGate } from "../lib/emailAuthLimits.ts";
+import { bodyLimit } from "hono/body-limit";
+import { legacyApiEnabled, legacyGate } from "../http/legacy-surface.ts";
+import { CLIENT_EVENT_LIMITS, createClientEventGate, pruneClientEvents, readClientEvent } from "../http/client-events.ts";
 import {
   MAX_EQUIPPED,
   validateLoadout,
@@ -248,6 +251,11 @@ app.use(
     allowMethods: ["GET", "POST", "OPTIONS"],
   }),
 );
+
+// The public ArcRun API is off on Agon unless ARCRUN_LEGACY_API=on (audit B4).
+const legacyApiOn = legacyApiEnabled(process.env);
+app.use("*", legacyGate(legacyApiOn));
+if (!legacyApiOn) console.log("[auth] legacy ArcRun API off (set ARCRUN_LEGACY_API=on to serve it)");
 
 const NONCE_TTL = 300; // seconds
 const STATE_TTL = 600;
@@ -2350,31 +2358,32 @@ app.get("/auth/me", requireAgonScope("agon:read"), async (c) => {
 
 // Open ingest: clients and services append events here. The friendly message is
 // shown to the user; the raw error and context land here for the admin.
-app.post("/events", async (c) => {
-  let body: { level?: string; kind?: string; message?: string; context?: unknown; address?: string };
+// Browser events: small, limited per address and overall, kept 30 days (audit B5).
+const clientEventGate = createClientEventGate();
+app.post("/events", bodyLimit({ maxSize: 4096, onError: (c) => c.json({ error: "too large" }, 413) }), async (c) => {
+  if (!clientEventGate(clientAddress((name) => c.req.header(name)))) return c.json({ error: "rate_limited" }, 429);
+  let body: unknown;
   try {
     body = await c.req.json();
   } catch {
     return c.json({ error: "bad json" }, 400);
   }
-  if (!body.kind || typeof body.kind !== "string") return c.json({ error: "kind required" }, 400);
-  const level = body.level === "error" || body.level === "warn" ? body.level : "info";
-  await logEvent({
-    level,
-    kind: body.kind,
-    message: typeof body.message === "string" ? body.message : undefined,
-    context: body.context,
-    address: typeof body.address === "string" ? body.address : undefined,
-    source: "web",
-  });
+  const read = readClientEvent(body);
+  if (!read.ok) return c.json({ error: read.error }, read.status);
+  await logEvent({ ...read.event, source: "web" });
   return c.json({ ok: true });
 });
+setInterval(() => {
+  pruneClientEvents(pool, new Date())
+    .then((n) => (n ? console.log(`[events] removed ${n} browser events past ${CLIENT_EVENT_LIMITS.retentionDays} days`) : undefined))
+    .catch((e) => console.warn(`[events] prune failed: ${(e as Error).message}`));
+}, 6 * 60 * 60_000).unref();
 
 // Read: token-gated, admin only. Send the token as the x-admin-token header.
 app.get("/admin/events", async (c) => {
   const adminToken = config.adminToken;
   if (!adminToken) return c.json({ error: "admin log disabled (set ADMIN_TOKEN)" }, 503);
-  if (c.req.header("x-admin-token") !== adminToken) return c.json({ error: "unauthorized" }, 401);
+  if (!secretMatches(c.req.header("x-admin-token"), adminToken)) return c.json({ error: "unauthorized" }, 401);
 
   const limit = Math.min(Math.max(Number(c.req.query("limit") ?? 100), 1), 500);
   const level = c.req.query("level");
@@ -4679,7 +4688,7 @@ app.get("/agents/modes", async (c) => {
 app.post("/admin/agents/:id/delist", async (c) => {
   const adminToken = config.adminToken;
   if (!adminToken) return c.json({ error: "admin disabled (set ADMIN_TOKEN)" }, 503);
-  if (c.req.header("x-admin-token") !== adminToken) return c.json({ error: "unauthorized" }, 401);
+  if (!secretMatches(c.req.header("x-admin-token"), adminToken)) return c.json({ error: "unauthorized" }, 401);
 
   const agentId = Number(c.req.param("id"));
   if (!Number.isFinite(agentId)) return c.json({ error: "invalid agent id" }, 400);
@@ -4697,7 +4706,7 @@ app.post("/admin/agents/:id/delist", async (c) => {
 app.delete("/admin/agents/:id/delist", async (c) => {
   const adminToken = config.adminToken;
   if (!adminToken) return c.json({ error: "admin disabled (set ADMIN_TOKEN)" }, 503);
-  if (c.req.header("x-admin-token") !== adminToken) return c.json({ error: "unauthorized" }, 401);
+  if (!secretMatches(c.req.header("x-admin-token"), adminToken)) return c.json({ error: "unauthorized" }, 401);
 
   const agentId = Number(c.req.param("id"));
   if (!Number.isFinite(agentId)) return c.json({ error: "invalid agent id" }, 400);
@@ -5449,7 +5458,7 @@ app.post("/custom-requests", requireAuth, async (c) => {
 app.get("/admin/custom-requests", async (c) => {
   const adminToken = config.adminToken;
   if (!adminToken) return c.json({ error: "admin disabled (set ADMIN_TOKEN)" }, 503);
-  if (c.req.header("x-admin-token") !== adminToken) return c.json({ error: "unauthorized" }, 401);
+  if (!secretMatches(c.req.header("x-admin-token"), adminToken)) return c.json({ error: "unauthorized" }, 401);
   const status = c.req.query("status");
   const { rows } = await query(
     `select id::text, operator, surface, kind, contact, spec, status, created_at

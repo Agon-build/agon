@@ -1,3 +1,5 @@
+import { reportBody } from "./report-body";
+
 const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_URL ?? "http://localhost:8082";
 
 export type ReportLevel = "info" | "warn" | "error";
@@ -13,7 +15,7 @@ export function reportEvent(
     void fetch(`${AUTH_URL}/events`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind, ...opts }),
+      body: JSON.stringify(reportBody(kind, opts)),
       keepalive: true,
     }).catch(() => {});
   } catch {

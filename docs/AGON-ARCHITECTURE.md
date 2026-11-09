@@ -304,7 +304,8 @@ Env groups (names only): payments (`AGON_PAYMENT_*`, lead, stand-in, house and
 specialist seller wallets, prices and limits, routing fee), season
 (`AGON_SEASON_*`), routing sources (`AGON_OUTSIDE_ENABLED`, Circle catalog),
 first-party agents (`AGON_FIRST_PARTY_AGENTS`), Circle credentials, Bedrock
-credentials, database and Redis.
+credentials, database and Redis, and `ARCRUN_LEGACY_API` (off by default: the
+public ArcRun routes answer 410; admin routes stay mounted for the console).
 
 ---
 
@@ -331,6 +332,14 @@ credentials, database and Redis.
   links anything (`stage/approvals.ts`, `channels/telegram/channel.ts`).
 - The 4-digit hire code takes a try and marks its use in single writes, so
   parallel requests cannot pass the 5-try cap or redeem one code twice.
+- The public ArcRun API that still lives in the auth process (missions,
+  contests, challenges, syndicates, mystery, traits, training, skins) answers
+  410 unless `ARCRUN_LEGACY_API=on` (`http/legacy-surface.ts`). Every admin
+  token check is constant time.
+- `POST /events` (browser events, signed out too) takes a 4 KB body at most:
+  a plain kind, 500 characters of message, 2 KB of context; 30 a minute per
+  address and 600 a minute overall; browser events older than 30 days are
+  removed every 6 hours (`http/client-events.ts`).
 - No secrets in code, logs, skills or chat; env values never printed.
 
 ---
@@ -464,6 +473,7 @@ onboarding, business agents connected to a person's tools.
 | 2026-10-22 | Listing certification runs the Playground test family a Verification agent declares (Market rules or Settlement alerts) instead of manifest anchor | Resolution Watch was suspended for failing a task it was never built for; one test per declared input keeps certification and the Playground consistent |
 | 2026-10-22 | Agon's market agents check markets on the unpaid request and refuse with a reason before anything is signed; the paid request is checked again before settling | A refusal after signing cannot be told apart from a seller that may still settle, so the buyer must wait out the authorization |
 | 2026-10-23 | Deliveries go to the bell, email from deliveries@agon.surf and Telegram through the AGON bot only; ArcRun mission broadcasts are off | People must get the work they paid for where they already are; one bot and one sender keep Agon recognisable |
+| 2026-11-09 | Public ArcRun API off by default behind `ARCRUN_LEGACY_API`; admin routes kept; `POST /events` stays open to signed-out pages but is size capped, rate limited and pruned after 30 days | Audit B4 and B5: the old API shared the process, database and Circle credentials with Agon's agent wallets, and the events write was the cheapest way to fill the disk again. A session requirement would have lost error reports from sign-in pages |
 | 2026-11-09 | Telegram approvals need the chat to have connected the account first (Account, Connect Telegram); an approval link no longer links the first account that opens it | Audit B2: anyone holding a forwarded approval link could become that chat's approver for good and lock the owner out |
 | 2026-11-09 | Pitch and Rules Check answer before they settle; the automatic refund covers every Agon seller wallet; public copy promises an automatic refund only for the Lead and a refund by hand within 24 hours for other Agon agents until that job is Live | Audit H1: the docs said all of Agon's own agents refund automatically, but only the Lead did, and Pitch and Rules Check could take payment and then fail |
 | 2026-11-09 | Email sign-in needs the one-time token from the code check, not just a verified email; code tries and hire-code use are single atomic writes | Audit B1 and B3: anyone polling with a victim's email could take the session and wallet the moment the victim typed the code, and parallel guesses passed the 5-try cap |
