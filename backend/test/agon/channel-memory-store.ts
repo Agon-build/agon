@@ -1,6 +1,6 @@
 import type { Address } from "viem";
 
-import type { ChannelAccount, ChannelStore, ChatChannel, LinkResult } from "../../src/agon/channels/types.ts";
+import type { ChannelAccount, ChannelStore, ChatChannel } from "../../src/agon/channels/types.ts";
 
 /// Behaviour-compatible stand-in for PostgresChannelStore. Keep it in step
 /// with channel-store.test.ts.
@@ -34,15 +34,9 @@ export class MemoryChannelStore implements ChannelStore {
     const a = this.accounts.get(`${channel}|${userHash}`);
     if (a) a.lastInboundAt = now;
   }
-  async linkOperator(channel: ChatChannel, userHash: string, operator: Address): Promise<LinkResult> {
-    const a = this.accounts.get(`${channel}|${userHash}`);
-    if (!a) return "no_account";
-    const address = operator.toLowerCase() as Address;
-    if (a.operatorAddress === null) {
-      a.operatorAddress = address;
-      return "linked";
-    }
-    return a.operatorAddress === address ? "already_same" : "other_operator";
+  async bindOperator(channel: ChatChannel, userHash: string, operator: Address, now: Date) {
+    const a = await this.ensureAccount(channel, userHash, now);
+    a.operatorAddress = operator.toLowerCase() as Address;
   }
   async operatorTelegramId(operator: Address) {
     return this.telegramIds.get(operator.toLowerCase()) ?? null;

@@ -92,16 +92,35 @@ test("a Telegram user whose website account has the same Telegram linked approve
   assert.equal((await s.post(token, ALICE)).status, 200);
 });
 
-test("an unlinked Telegram user is linked by the first approval and later approvals must match it", async () => {
+// Audit B2 (2026-11-09): the first signed-in account to open a Telegram user's
+// approval link became that chat's approver for good. An approval link now
+// never links anything; only Account, Connect Telegram does.
+test("an approval link never links a Telegram chat to the account that opens it", async () => {
   const s = setup();
   await s.channels.ensureAccount("telegram", TG_HASH, new Date());
   const first = await overLimitToken(s, telegramOwnerRef(TG_HASH));
-  assert.equal((await s.post(first.token, ALICE)).status, 200);
-  assert.equal((await s.channels.getAccount("telegram", TG_HASH))!.operatorAddress, ALICE);
-  const second = await overLimitToken(s, telegramOwnerRef(TG_HASH));
-  const refused = await s.post(second.token, MALLORY);
+  const refused = await s.post(first.token, MALLORY);
   assert.equal(refused.status, 403);
-  assert.deepEqual(await authorizeApprover(s.gate, `budget:${telegramOwnerRef(TG_HASH)}`, ALICE), { ok: true });
+  assert.equal(((await refused.json()) as { error: string }).error, "telegram_not_linked");
+  assert.equal((await s.channels.getAccount("telegram", TG_HASH))!.operatorAddress, null, "nothing was linked");
+  assert.deepEqual(await authorizeApprover(s.gate, `budget:${telegramOwnerRef(TG_HASH)}`, ALICE), { ok: false, code: "telegram_not_linked" });
+});
+
+test("an account that connected this Telegram for deliveries approves; its private chat id is the Telegram user", async () => {
+  const s = setup();
+  const delivery = new Map<string, string>([[ALICE.toLowerCase(), TG_ID], [MALLORY.toLowerCase(), "-100123"]]);
+  s.gate.deliveryChatOf = async (op) => delivery.get(op.toLowerCase()) ?? null;
+  const { token } = await overLimitToken(s, telegramOwnerRef(TG_HASH));
+  assert.equal((await s.post(token, MALLORY)).status, 403, "a group chat or another chat is not this user");
+  assert.equal((await s.post(token, ALICE)).status, 200);
+});
+
+test("once the chat itself connects an account, only that account approves", async () => {
+  const s = setup();
+  await s.channels.bindOperator("telegram", TG_HASH, ALICE, new Date());
+  const { token } = await overLimitToken(s, telegramOwnerRef(TG_HASH));
+  assert.equal((await s.post(token, MALLORY)).status, 403);
+  assert.equal((await s.post(token, ALICE)).status, 200);
 });
 
 test("Telegram approvals are refused when the chat pepper is not configured", async () => {
@@ -138,7 +157,7 @@ test("an account whose website has a different Telegram linked cannot claim a ch
   const refused = await s.post(token, MALLORY);
   assert.equal(refused.status, 403);
   assert.equal((await s.channels.getAccount("telegram", TG_HASH))!.operatorAddress, null, "nothing was linked");
-  assert.equal((await s.post(token, ALICE)).status, 200, "the link still works for an unlinked account");
+  assert.equal((await s.post(token, ALICE)).status, 403, "an account the chat never connected cannot approve either (audit B2)");
 });
 
 test("final I3: a mainnet over-limit hire is described as real USDC on Arc, with the fee and the total", async () => {

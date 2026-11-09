@@ -82,6 +82,7 @@ const APPROVAL: Record<string, string> = {
   wrong_account: "This approval belongs to a different Agon account. Sign in with the account linked to this chat.",
   unknown_owner: "This approval does not belong to an Agon wallet.",
   chat_not_configured: "Chat approvals are not set up on this server.",
+  telegram_not_linked: "This chat is not connected to an Agon account yet. Open Account, tap Connect Telegram, then tap Start in the bot.",
   used: "This link was already used.",
   expired: "This link expired. Ask again from the chat or the app.",
   not_found: "This link is not valid.",

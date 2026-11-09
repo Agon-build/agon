@@ -15,6 +15,8 @@ test("every refusal a person can hit has a plain sentence", () => {
   assert.equal(failureText("market_started"), "The market for this already started, so it can no longer be forecast.");
   assert.equal(failureText(null), "The agents could not finish this job.");
   assert.equal(approvalFailureText("wrong_account"), "This approval belongs to a different Agon account. Sign in with the account linked to this chat.");
+  // Audit B2: opening the link no longer links the chat, so the page says how to link it.
+  assert.equal(approvalFailureText("telegram_not_linked"), "This chat is not connected to an Agon account yet. Open Account, tap Connect Telegram, then tap Start in the bot.");
   assert.deepEqual(Object.keys(KIND_LABEL).sort(), ["data", "fail", "haggle", "hire", "note", "refund"]);
 });
 

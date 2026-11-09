@@ -12,7 +12,11 @@ export type ApprovalView = {
   action: ApprovalAction; title: string; network: string; testnet: boolean; expiresAt: string; jobId: string | null;
   rows: { label: string; value: string }[]; owner: "web" | "telegram";
 };
-export type ApprovalGateDeps = { payments: PaymentsStore; channels: ChannelStore; chatIdPepper: string | null; network: AgonNetwork; now: () => Date };
+export type ApprovalGateDeps = {
+  payments: PaymentsStore; channels: ChannelStore; chatIdPepper: string | null; network: AgonNetwork; now: () => Date;
+  /** The chat an account connected for deliveries through the bot's /start code (Account, Connect Telegram). */
+  deliveryChatOf?: (operator: string) => Promise<string | null>;
+};
 
 const TITLES: Record<ApprovalAction, string> = { over_limit_hire: "Approve a hire", withdraw: "Approve a withdrawal", unfreeze: "Unfreeze your wallet" };
 
@@ -56,12 +60,15 @@ export async function describeApproval(
   };
 }
 
-/// Owner decision P3-4: a website sign-in, linked once to the chat identity.
+/// Owner decision P3-4: a website sign-in approves for a chat identity. Audit B2
+/// (2026-11-09): the link must already exist and must have been made from the
+/// chat side (Account, Connect Telegram, then /start in the bot). Opening an
+/// approval link never links anything.
 export async function authorizeApprover(
   deps: ApprovalGateDeps,
   walletRef: string,
   operator: Address,
-): Promise<{ ok: true } | { ok: false; code: "wrong_account" | "unknown_owner" | "chat_not_configured" }> {
+): Promise<{ ok: true } | { ok: false; code: "wrong_account" | "unknown_owner" | "chat_not_configured" | "telegram_not_linked" }> {
   const owner = parseOwnerRef(ownerRefFromWalletRef(walletRef) ?? "");
   if (!owner) return { ok: false, code: "unknown_owner" };
   const me = operator.toLowerCase() as Address;
@@ -69,10 +76,14 @@ export async function authorizeApprover(
   if (!deps.chatIdPepper) return { ok: false, code: "chat_not_configured" };
   const linkedTelegram = await deps.channels.operatorTelegramId(me);
   if (linkedTelegram) {
-    // An account that already linked a Telegram on the website can only approve for that same Telegram.
+    // An account that linked a Telegram through the website login widget can only approve for that same Telegram.
     return hashChatUser(deps.chatIdPepper, "telegram", linkedTelegram) === owner.userHash ? { ok: true } : { ok: false, code: "wrong_account" };
   }
-  const link = await deps.channels.linkOperator("telegram", owner.userHash, me);
-  if (link === "linked" || link === "already_same") return { ok: true };
-  return { ok: false, code: link === "no_account" ? "unknown_owner" : "wrong_account" };
+  const account = await deps.channels.getAccount("telegram", owner.userHash);
+  if (account?.operatorAddress) return account.operatorAddress.toLowerCase() === me ? { ok: true } : { ok: false, code: "wrong_account" };
+  // Connected for deliveries before approvals read the chat account: that link was
+  // also made by the bot's /start code, and a private chat's id is the user's id.
+  const chat = deps.deliveryChatOf ? await deps.deliveryChatOf(me) : null;
+  if (chat && hashChatUser(deps.chatIdPepper, "telegram", chat) === owner.userHash) return { ok: true };
+  return { ok: false, code: chat ? "wrong_account" : "telegram_not_linked" };
 }

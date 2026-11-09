@@ -5,9 +5,11 @@ import { createTelegramChannel } from "../../src/agon/channels/telegram/channel.
 import { keywordIntent, parseCodeIntent } from "../../src/agon/channels/chat/intents.ts";
 import { MemoryChannelStore } from "./channel-memory-store.ts";
 import { stageWorld } from "./stage-test-world.ts";
+import { hashChatUser } from "../../src/agon/stage/settings.ts";
 
 const SECRET = "s".repeat(40);
 const TOKEN = "1234567890:AAH" + "x".repeat(32);
+const OPERATOR = `0x${"a1".repeat(20)}`;
 
 test("a Telegram update reaches the chat core and the reply goes back to the same chat", async () => {
   const world = stageWorld();
@@ -54,7 +56,7 @@ test("/start with a delivery code links the chat to the account and never reache
     pepper: "p".repeat(40), services: world.services, channels,
     classify: async (t) => parseCodeIntent(t) ?? keywordIntent(t), off: () => false,
     defer: (fn) => { pending.push(fn()); },
-    linkDelivery: async (code, chat) => { claimed.push({ code, chat }); return code === "a".repeat(24); },
+    linkDelivery: async (code, chat) => { claimed.push({ code, chat }); return code === "a".repeat(24) ? OPERATOR : null; },
     fetchImpl: (async (url: string, init: RequestInit) => {
       api.push({ method: url.split("/").pop()!, body: JSON.parse(String(init.body)) });
       return new Response(JSON.stringify({ ok: true, result: { message_id: api.length } }));
@@ -71,4 +73,7 @@ test("/start with a delivery code links the chat to the account and never reache
   assert.match(String(api[0]!.body.text), /^Connected\./);
   assert.match(String(api[1]!.body.text), /expired or was already used/);
   assert.equal(api.length, 2, "nothing else is said: the code never reaches the chat agent");
+  // Audit B2: the code proves the web account and the sender proves the Telegram
+  // user, so this is the one place a chat's approvals get their account.
+  assert.equal((await channels.getAccount("telegram", hashChatUser("p".repeat(40), "telegram", "555")))!.operatorAddress, OPERATOR);
 });

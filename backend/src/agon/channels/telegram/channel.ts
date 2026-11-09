@@ -1,4 +1,5 @@
 import type { Hono } from "hono";
+import type { Address } from "viem";
 
 import type { StageServices } from "../../stage/services.ts";
 import { hashChatUser, operatorOwnerRef, telegramOwnerRef, type TelegramSettings } from "../../stage/settings.ts";
@@ -29,8 +30,8 @@ export function createTelegramChannel(deps: {
   now?: () => Date;
   pollMs?: number;
   sleep?: (ms: number) => Promise<void>;
-  /** Links this chat to the Agon account that made the code (Account, Connect Telegram); true when it did. */
-  linkDelivery?: (code: string, chatId: string) => Promise<boolean>;
+  /** Links this chat to the Agon account that made the code (Account, Connect Telegram); that account, or null. */
+  linkDelivery?: (code: string, chatId: string) => Promise<string | null>;
   /** Rates a delivered job from the stars under its delivery message. */
   rate?: (jobId: string, stars: number, raterRefs: string[]) => Promise<RateOutcome>;
   /** The Agon account this chat is linked to for deliveries, if any. */
@@ -56,7 +57,11 @@ export function createTelegramChannel(deps: {
       }
       const link = u.kind === "start" && deps.linkDelivery ? LINK_START.exec(u.text) : null;
       if (link) {
-        const linked = await deps.linkDelivery!(link[1]!, String(u.chatId));
+        const operator = await deps.linkDelivery!(link[1]!, String(u.chatId));
+        // The code proves the web account and this sender proves the Telegram
+        // user, so this is where the chat's approvals get their account (audit B2).
+        if (operator) await deps.channels.bindOperator("telegram", hashChatUser(deps.pepper, "telegram", u.userId), operator as Address, now());
+        const linked = operator !== null;
         await api.send(u.chatId, {
           text: linked
             ? "Connected. Agon will send your finished jobs and watch alerts here."

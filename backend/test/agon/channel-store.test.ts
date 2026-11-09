@@ -37,12 +37,12 @@ test("accounts are created once, accept terms and record activity", async () => 
   assert.equal(await store.acceptTerms("telegram", "b".repeat(64), "v", now), null);
 });
 
-test("a website account links once; a second account is refused", async () => {
-  assert.equal(await store.linkOperator("telegram", H, OP), "linked");
-  assert.equal(await store.linkOperator("telegram", H, OP), "already_same");
-  assert.equal(await store.linkOperator("telegram", H, OTHER), "other_operator");
-  assert.equal(await store.linkOperator("telegram", "c".repeat(64), OP), "no_account");
-  assert.equal((await store.getAccount("telegram", H))!.operatorAddress, OP);
+test("a chat is bound to the account its own Connect Telegram code names, and a later code moves it", async () => {
+  const fresh = "d".repeat(64);
+  await store.bindOperator("telegram", fresh, OP, new Date("2026-11-09T10:00:00Z"));
+  assert.equal((await store.getAccount("telegram", fresh))!.operatorAddress, OP, "a chat with no account yet gets one");
+  await store.bindOperator("telegram", fresh, OTHER.toUpperCase().replace("0X", "0x") as Address, new Date("2026-11-09T10:05:00Z"));
+  assert.equal((await store.getAccount("telegram", fresh))!.operatorAddress, OTHER);
 });
 
 test("the Telegram id an operator linked on the website can be read", async () => {

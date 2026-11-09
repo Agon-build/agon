@@ -10,7 +10,6 @@ export type ChannelAccount = {
   createdAt: Date;
   lastInboundAt: Date | null;
 };
-export type LinkResult = "linked" | "already_same" | "other_operator" | "no_account";
 
 export interface ChannelStore {
   /** True only the first time this update id is seen on this channel. */
@@ -20,8 +19,12 @@ export interface ChannelStore {
   ensureAccount(channel: ChatChannel, userHash: string, now: Date): Promise<ChannelAccount>;
   acceptTerms(channel: ChatChannel, userHash: string, version: string, now: Date): Promise<ChannelAccount | null>;
   touch(channel: ChatChannel, userHash: string, now: Date): Promise<void>;
-  /** Links a website account once. A different account later is refused. */
-  linkOperator(channel: ChatChannel, userHash: string, operator: Address): Promise<LinkResult>;
+  /**
+   * Binds the chat user's account to a website account. Only for proof from both
+   * sides: the bot received the account's own one-time Connect code from this
+   * chat user. A later proven code moves the binding. Never from an approval link.
+   */
+  bindOperator(channel: ChatChannel, userHash: string, operator: Address, now: Date): Promise<void>;
   /** The Telegram user id an operator linked through the website login widget. */
   operatorTelegramId(operator: Address): Promise<string | null>;
 }

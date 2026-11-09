@@ -946,7 +946,7 @@ if (agonPayments) {
   }));
   app.route("/agon/app", createAppRoutes({ services: stageServices, requireAuth, off: () => stage.settings.channelsOff.web, terms: custodyTerms, router: agonRouter, outside: outsideServices, ratings: agonRatings }));
   app.route("/agon", createApprovalRoutes({
-    gate: { payments: agonPayments.store, channels: channelStore, chatIdPepper: stage.settings.chatIdPepper, network: agonPayments.settings.network, now: () => new Date() },
+    gate: { payments: agonPayments.store, channels: channelStore, chatIdPepper: stage.settings.chatIdPepper, network: agonPayments.settings.network, now: () => new Date(), deliveryChatOf: (op) => telegramLinks.chatOf(op) },
     hire: approvalsByNetwork(agonPayments.hire, outsideRuntime?.hire ?? null, agonPayments.store),
     requireAuth,
   }));
@@ -962,7 +962,7 @@ if (agonPayments) {
       classify: (text) => classifyIntent(text, { callModel: async (p) => ({ text: (await callModel(p)).text }), model: stage.settings.classifierModel, log: (m) => console.warn(`[telegram] ${m}`) }),
       off: () => stage.settings.channelsOff.telegram,
       log: (m) => console.warn(`[telegram] ${m}`),
-      linkDelivery: async (code, chatId) => (await telegramLinks.claimCode(code, chatId, new Date())) !== null,
+      linkDelivery: (code, chatId) => telegramLinks.claimCode(code, chatId, new Date()),
       rate: (jobId, stars, refs) => agonRatings!.rate(jobId, refs, stars),
       operatorOfChat: (chatId) => telegramLinks.operatorOfChat(chatId),
     });

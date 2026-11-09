@@ -1,7 +1,7 @@
 import type pg from "pg";
 import type { Address } from "viem";
 
-import type { ChannelAccount, ChannelStore, ChatChannel, LinkResult } from "./types.ts";
+import type { ChannelAccount, ChannelStore, ChatChannel } from "./types.ts";
 
 type AccountRow = {
   channel: ChatChannel; user_hash: string; operator_address: Address | null; terms_version: string | null; terms_at: Date | null; created_at: Date; last_inbound_at: Date | null;
@@ -51,16 +51,12 @@ export class PostgresChannelStore implements ChannelStore {
     await this.pool.query("update agon_channel_accounts set last_inbound_at = $3 where channel = $1 and user_hash = $2", [channel, userHash, now]);
   }
 
-  async linkOperator(channel: ChatChannel, userHash: string, operator: Address): Promise<LinkResult> {
-    const address = operator.toLowerCase() as Address;
-    const { rowCount } = await this.pool.query(
-      "update agon_channel_accounts set operator_address = $3 where channel = $1 and user_hash = $2 and operator_address is null",
-      [channel, userHash, address],
+  async bindOperator(channel: ChatChannel, userHash: string, operator: Address, now: Date): Promise<void> {
+    await this.pool.query(
+      `insert into agon_channel_accounts (channel, user_hash, operator_address, created_at) values ($1, $2, $3, $4)
+       on conflict (channel, user_hash) do update set operator_address = excluded.operator_address`,
+      [channel, userHash, operator.toLowerCase(), now],
     );
-    if (rowCount === 1) return "linked";
-    const account = await this.getAccount(channel, userHash);
-    if (!account) return "no_account";
-    return account.operatorAddress === address ? "already_same" : "other_operator";
   }
 
   async operatorTelegramId(operator: Address): Promise<string | null> {
