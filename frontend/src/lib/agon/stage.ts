@@ -156,7 +156,7 @@ export async function freezeWallet(): Promise<{ frozen: boolean }> {
 export async function requestUnfreeze(): Promise<{ approvalUrl: string; expiresAt: string }> {
   return AGON_PREVIEW_MODE ? { approvalUrl: "/approve?t=preview", expiresAt: new Date(Date.now() + 900_000).toISOString() } : call("/agon/app/wallet/unfreeze", { body: {} });
 }
-export async function requestWithdraw(to: string, amount: string): Promise<{ ok: boolean; approvalUrl?: string; code?: string }> {
+export async function requestWithdraw(to: string, amount: string): Promise<{ ok: boolean; approvalUrl?: string; code?: string; max?: string }> {
   return AGON_PREVIEW_MODE ? { ok: true, approvalUrl: "/approve?t=preview" } : call("/agon/app/wallet/withdraw", { body: { to, amount } });
 }
 export async function getApproval(token: string): Promise<{ approval: ApprovalView }> {

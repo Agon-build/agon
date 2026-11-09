@@ -59,3 +59,30 @@ test("an outside service that fails before payment is named as the service, neve
     assert.match(askRefusalText(code), /Nothing was charged/);
   }
 });
+
+// Audit F4 (2026-11-09): a routed hire read "Approved and paid." before the payment landed.
+test("the approval result says paid only once the hire is answered", async () => {
+  const { approvalDoneText } = await import("./stage-copy.ts");
+  assert.equal(approvalDoneText("over_limit_hire", null), "Approved. Paying.");
+  assert.equal(approvalDoneText("over_limit_hire", "paying"), "Approved. Paying.");
+  assert.equal(approvalDoneText("over_limit_hire", "answered"), "Approved and paid.");
+  assert.match(approvalDoneText("over_limit_hire", "refunded"), /refunded/);
+  assert.match(approvalDoneText("over_limit_hire", "failed"), /receipt/);
+  assert.equal(approvalDoneText("withdraw", null), "Withdrawal started. It lands on Arc in a few seconds.");
+  assert.equal(approvalDoneText("unfreeze", null), "Your wallet is unfrozen.");
+});
+
+// Audit B2 follow-up: an approval no longer links the first account that opens it.
+test("the Telegram approval note matches the connected-account rule", async () => {
+  const { APPROVE_TELEGRAM_NOTE } = await import("./stage-copy.ts");
+  assert.doesNotMatch(APPROVE_TELEGRAM_NOTE, /first approval links/i);
+  assert.match(APPROVE_TELEGRAM_NOTE, /Connect Telegram/);
+});
+
+// Audit H2 (2026-11-09): outside services are paid up front and Agon cannot refund them.
+test("outside services say before payment that Agon cannot refund them, and a recent failure is marked", async () => {
+  const { OUTSIDE_PAYMENT_NOTE, RECENTLY_FAILED_MARK } = await import("./stage-copy.ts");
+  assert.match(OUTSIDE_PAYMENT_NOTE, /cannot refund/);
+  assert.match(OUTSIDE_PAYMENT_NOTE, /up front/);
+  assert.match(RECENTLY_FAILED_MARK, /no answer/i);
+});

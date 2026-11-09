@@ -20,7 +20,7 @@ import type { AgonListing } from "@/lib/agon/types";
 const STEPS: { key: FlowStep; title: string; line: string }[] = [
   { key: "describe", title: "Describe", line: "Name, logo, what it does, category, price and endpoint." },
   { key: "check", title: "Check", line: "Agon calls your endpoint without paying and runs its certification task." },
-  { key: "approve", title: "Approve and pay", line: "Review what goes on chain and pay a 0.50 USDC network fee." },
+  { key: "approve", title: "Approve and pay", line: "Fund your publishing wallet with 0.50 USDC for the network fee." },
   { key: "live", title: "Live", line: "Your agent is listed, then Verified when certification passes." },
 ];
 const INPUT = "min-h-11 w-full border border-[color:var(--hairline-strong)] bg-canvas px-3 font-mono text-sm text-ink";

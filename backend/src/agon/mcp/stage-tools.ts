@@ -24,7 +24,7 @@ export type StageMcpDeps = {
   limit?: (actor: string) => boolean;
 };
 
-const LEAD_OUTCOME = "A probability for a Polymarket question, with three reasons, next to the market's own price. The lead agent buys live data and hires one of Agon's Season 1 forecasters after haggling.";
+const LEAD_OUTCOME = "A probability for a Polymarket question, with three reasons, next to the market's own price. The lead agent buys live data and hires one of Agon's season forecasters after haggling.";
 
 const findSchema = fromJsonSchema<{ need?: string }>({
   type: "object",
@@ -72,7 +72,7 @@ const routedInput = z.object({ routeId: z.string().min(1).max(64), reference: z.
 const confirmInput = z.object({ jobId: z.string().uuid(), code: z.string().regex(/^\d{4}$/) });
 
 async function forward(season: StageMcpDeps["season"], path: string, body: unknown) {
-  if (!season) return failure("season_unavailable", "Season 1 is not running on this server.");
+  if (!season) return failure("season_unavailable", "No season is running on this server.");
   const res = await season.request(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   return result({ status: res.status, body: await res.json().catch(() => null) });
 }
@@ -116,7 +116,7 @@ export function registerStageTools(server: McpServer, authInfo: () => AuthInfo |
 
   server.registerTool("hire_service", {
     title: "Get terms to hire an agent service",
-    description: "Returns the exact price and a confirmation code (under your limit) or a browser approval link (over it). Nothing is paid until confirm_hire or the approval.",
+    description: "Returns the exact price and a confirmation code (under your limit) or a browser approval link (over it). Nothing is paid until confirm_hire or the approval. Hiring over MCP is built but not yet verified on production.",
     inputSchema: hireSchema,
   }, async (args) => {
     const who = requireActor(authInfo(), "agon:read");
@@ -151,7 +151,7 @@ export function registerStageTools(server: McpServer, authInfo: () => AuthInfo |
 
   server.registerTool("confirm_hire", {
     title: "Pay for a quoted hire",
-    description: "Pays the quoted price from the user's Agon budget wallet within their limits and returns the result with a receipt link.",
+    description: "Pays the quoted price from the user's Agon budget wallet within their limits and returns the result with a receipt link. Hiring over MCP is built but not yet verified on production.",
     inputSchema: confirmSchema,
   }, async (args) => {
     const who = requireActor(authInfo(), "wallet:execute");
@@ -175,23 +175,23 @@ export function registerStageTools(server: McpServer, authInfo: () => AuthInfo |
   });
 
   server.registerTool("get_leaderboard", {
-    title: "Season 1 leaderboard",
-    description: "Season 1 forecasters ranked by how much they beat the market once their forecasts resolve. The dry run on Arc Testnet is not scoring yet.",
+    title: "Season leaderboard",
+    description: "The current season's forecasters ranked by how much they beat the market once their forecasts resolve. The dry run on Arc Testnet is not scoring yet.",
     inputSchema: boardSchema,
   }, async ({ limit }) => {
     const rows = await deps.services.leaderboard(Math.max(1, Math.min(limit ?? 10, 50)));
-    return rows ? result({ rows }) : failure("season_unavailable", "Season 1 is not running on this server.");
+    return rows ? result({ rows }) : failure("season_unavailable", "No season is running on this server.");
   });
 
   server.registerTool("enter_season", {
-    title: "Enter Season 1",
-    description: "Enter an ERC-8004 agent in Season 1. Needs the identity owner's signature and the forecast signer's signature over the entry message.",
+    title: "Enter the season",
+    description: "Enter an ERC-8004 agent in the current season. Needs the identity owner's signature and the forecast signer's signature over the entry message.",
     inputSchema: entrySchema,
   }, async (args) => forward(deps.season, `/${deps.seasonId}/entries`, args));
 
   server.registerTool("submit_forecasts", {
     title: "Submit signed forecasts",
-    description: "Submit up to 50 signed Season 1 forecasts for the open round.",
+    description: "Submit up to 50 signed forecasts for the current season's open round.",
     inputSchema: forecastsSchema,
   }, async (args) => forward(deps.season, `/${deps.seasonId}/forecasts`, args));
 }

@@ -5,6 +5,7 @@ import { TagButton } from "@/components/redesign/TagButton";
 import { feeLine, moneyLine } from "@/lib/agon/hire-layout";
 import { sourceLabel } from "@/lib/agon/route-view";
 import type { RoutePick } from "@/lib/agon/stage-types";
+import { OUTSIDE_PAYMENT_NOTE } from "@/lib/agon/stage-copy";
 
 /// The hire the person is about to make: why this agent, the price with the routing fee and
 /// the total, and which money pays it. Asking for the exact price checks the live terms and fills the input.
@@ -65,7 +66,7 @@ export function RouteCard({ pick, alternatives, question, missing, busy, note, d
         </div>
       </dl>
       {money ? <p className="mt-2 text-xs leading-5 text-ink-3">From your agent wallet, in {money.charAt(0).toLowerCase()}{money.slice(1)}.</p> : null}
-      {pick.source === "circle" ? <p className="mt-3 text-sm leading-6 text-ink">An outside service on Circle. It is paid up front; Agon takes its fee only if the answer arrives.</p> : null}
+      {pick.source === "circle" ? <p className="mt-3 text-sm leading-6 text-ink">{OUTSIDE_PAYMENT_NOTE}</p> : null}
 
       <div className="mt-6 grid gap-3">
         <TagButton onClick={submit} disabled={busy || (Boolean(field) && !answer.trim())}>{busy ? "Checking the price" : "Get the exact price"}</TagButton>

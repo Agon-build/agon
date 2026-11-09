@@ -35,6 +35,8 @@ export type RoutePick = {
   source: "agon" | "circle"; reference: string; name: string; provider: string; category: string; description: string; method: "GET" | "POST";
   network: "arc-testnet" | "arc"; rating: { tier: "scored" | "verified" | "listed" | "unrated"; score: number | null; proof?: Proof | null }; reason: string;
   price: string; fee: string; total: string; group?: ChoiceGroup;
+  /** Took payment and sent no answer in the last day; listed last. */
+  recentlyFailed?: boolean;
 };
 export type HireCategoryId = "prediction" | "research" | "market_data" | "social" | "creative" | "developer" | "business";
 export type HireCategory = { id: HireCategoryId; label: string; agon: number | null; outside: number | null };

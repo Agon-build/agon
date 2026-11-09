@@ -4,6 +4,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { z } from "zod";
 import { loadAgonDeployment } from "./deployments.js";
 import { productionSecretProblems } from "./secret-guard.ts";
+import { adminActorsFromEnv } from "../agon/http/admin-auth.ts";
 
 /// Loads and validates all backend configuration in one place. Secrets come
 /// from the environment; public contract addresses come from the committed
@@ -126,6 +127,8 @@ const envSchema = z.object({
   // Auth service
   JWT_SECRET: z.string().default("dev-insecure-secret-change-me"),
   ADMIN_TOKEN: z.string().optional(), // gates GET /admin/events; unset = read endpoint disabled
+  /** Operator wallets the admin token may act as on Agon routes, comma separated. Empty: none. */
+  AGON_ADMIN_ACTORS: z.string().optional(),
   SUPPORT_TOKEN: z.string().optional(), // read-only admin tier (Members/Events/Audit, no money actions)
   AGON_SUPPORT_AI_ENABLED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   AGON_SUPPORT_AI_DAILY_USD: z.coerce.number().min(0).max(100).default(2),
@@ -789,6 +792,7 @@ export const config = {
     },
   },
   adminToken: env.ADMIN_TOKEN,
+  agonAdminActors: adminActorsFromEnv(env.AGON_ADMIN_ACTORS),
   supportToken: env.SUPPORT_TOKEN,
   support: {
     aiEnabled: env.AGON_SUPPORT_AI_ENABLED,

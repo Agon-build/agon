@@ -72,3 +72,22 @@ test("a market check goes to the market checker, not a scored forecaster in the 
   assert.equal(out.pick!.reference, "scout");
   assert.equal(out.alternatives[0]!.reference, "pitch");
 });
+
+// Audit H2 (2026-11-09): a service that took payment and sent no answer must show it.
+test("a service that recently failed after payment carries the mark and says so", async () => {
+  const { groupCandidates, RECENT_FAILURE_REASON, OUTSIDE_PAYMENT_NOTE } = await import("../../src/agon/routing/rank.ts");
+  const rows = [
+    entry({ reference: "circle:a", source: "circle", category: "FINANCIAL_ANALYSIS", rating: { tier: "unrated", score: null }, network: "arc" }),
+    entry({ reference: "circle:b", source: "circle", category: "FINANCIAL_ANALYSIS", rating: { tier: "unrated", score: null }, network: "arc", price: 200_000n }),
+  ];
+  const groups = groupCandidates(rows, intent, { feeBps: 150, downranked: new Set(["circle:a"]), category: "market_data", always: ["circle:a", "circle:b"] });
+  const failed = groups.outside.find((c) => c.reference === "circle:a")!;
+  assert.equal(groups.outside[groups.outside.length - 1]!.reference, "circle:a");
+  assert.equal(failed.recentlyFailed, true);
+  assert.equal(failed.reason, RECENT_FAILURE_REASON);
+  assert.equal(groups.outside.find((c) => c.reference === "circle:b")!.recentlyFailed, undefined);
+
+  const ranked = rankCandidates(rows, intent, { feeBps: 150, downranked: new Set(["circle:a"]) });
+  assert.equal(ranked.alternatives.find((c) => c.reference === "circle:a")!.recentlyFailed, true);
+  assert.match(OUTSIDE_PAYMENT_NOTE, /cannot refund/);
+});

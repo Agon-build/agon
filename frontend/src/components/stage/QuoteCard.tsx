@@ -3,6 +3,7 @@ import { feeLine, moneyLine } from "@/lib/agon/hire-layout";
 import type { AskResponse } from "@/lib/agon/stage-types";
 import { hasFee, inputRows } from "@/lib/agon/route-view";
 import { formatCountdown } from "@/lib/agon/stage-view";
+import { OUTSIDE_PAYMENT_NOTE } from "@/lib/agon/stage-copy";
 
 type Quote = Extract<AskResponse, { ok: true }>;
 const path = (url: string) => { try { const u = new URL(url); return `${u.pathname}${u.search}`; } catch { return url; } };
@@ -58,7 +59,7 @@ export function QuoteCard({ quote, nowMs, paying, direct = false, onPay, onCance
       </dl>
       <p className="mt-2 text-xs leading-5 text-ink-3">Paid from your agent wallet in {money.charAt(0).toLowerCase()}{money.slice(1)}.</p>
       {hasFee(quote.fee) ? <p className="mt-1 text-xs leading-5 text-ink-3">Agon's fees go out together once they reach 0.10 USDC, with one small network fee.</p> : null}
-      {routed && quote.source === "circle" ? <p className="mt-3 text-sm leading-6 text-ink-2">Paid to an outside service up front. Agon takes its fee only if the answer arrives.</p> : null}
+      {routed && quote.source === "circle" ? <p className="mt-3 text-sm leading-6 text-ink-2">{OUTSIDE_PAYMENT_NOTE}</p> : null}
       {!quote.testnet ? <p className="mt-3 text-sm text-ink">This is real USDC on Arc. Every payment shows its transaction as it lands.</p> : null}
 
       {approval ? (

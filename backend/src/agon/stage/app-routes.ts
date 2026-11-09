@@ -43,6 +43,7 @@ export function rankedJson(r: Ranked & { group?: string }) {
     ...(r.group ? { group: r.group } : {}),
     source: r.source, reference: r.reference, name: r.name, provider: r.provider, category: r.category, description: r.description,
     method: r.method, network: r.network, rating: r.rating, reason: r.reason,
+    ...(r.recentlyFailed ? { recentlyFailed: true } : {}),
     price: formatUsdc(r.price), fee: formatUsdc(r.fee), total: formatUsdc(r.total),
   };
 }
@@ -248,7 +249,8 @@ export function createAppRoutes(deps: {
     if (perHireCap === null || dailyCap === null) return c.json({ error: "invalid_body" }, 400);
     const services = servicesFor(c);
     if (!services) return c.json({ error: "outside_off" }, 404);
-    return c.json(await services.lowerLimits(owner(c), { ...(perHireCap !== undefined ? { perHireCap } : {}), ...(dailyCap !== undefined ? { dailyCap } : {}) }));
+    // The signed-in website may raise limits back up to the starting limits; a chat may only lower them.
+    return c.json(await services.lowerLimits(owner(c), { ...(perHireCap !== undefined ? { perHireCap } : {}), ...(dailyCap !== undefined ? { dailyCap } : {}) }, { allowRaise: true }));
   });
 
   app.post("/wallet/freeze", async (c) => {

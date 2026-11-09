@@ -18,7 +18,13 @@ export type WalletDeps = {
   defaults?: { perHireCap: bigint; dailyCap: bigint };
   /** Pays the wallet's owed routing fees; a withdrawal runs it first so the tab is never left behind. */
   settleOwed?: (wallet: BudgetWallet) => Promise<void>;
+  /** The wallet's USDC balance in base units, or null when it cannot be read. */
+  balanceOf?: (address: Address) => Promise<bigint | null>;
 };
+
+const owedTotal = async (deps: WalletDeps, wallet: BudgetWallet) =>
+  (await deps.store.listOwedFees(wallet.address, deps.network.id)).reduce((sum, p) => sum + p.amount, 0n);
+const readBalance = async (deps: WalletDeps, wallet: BudgetWallet) => (deps.balanceOf ? await deps.balanceOf(wallet.address).catch(() => null) : null);
 
 export const budgetWalletRef = (ownerRef: string) => `budget:${ownerRef}`;
 export const ownerRefFromWalletRef = (walletRef: string) => (walletRef.startsWith("budget:") ? walletRef.slice("budget:".length) : null);
@@ -44,13 +50,21 @@ export async function ensureBudgetWallet(deps: WalletDeps, ownerRef: string): Pr
   return wallet;
 }
 
+/// Sets the wallet's limits. A chat can only lower them, because a hijacked chat
+/// must not be able to spend more (audit B8, 2026-11-09). The signed-in website
+/// passes allowRaise and may go back up to the wallet's starting limits, never above.
 export async function lowerLimits(
   deps: WalletDeps,
   ownerRef: string,
   limits: { perHireCap?: bigint; dailyCap?: bigint },
-): Promise<{ ok: true; wallet: BudgetWallet } | { ok: false; code: "no_wallet" | "above_default" | "not_positive" }> {
+  options: { allowRaise?: boolean } = {},
+): Promise<{ ok: true; wallet: BudgetWallet } | { ok: false; code: "no_wallet" | "above_default" | "above_current" | "not_positive" }> {
   if ((limits.perHireCap !== undefined && limits.perHireCap <= 0n) || (limits.dailyCap !== undefined && limits.dailyCap <= 0n)) return { ok: false, code: "not_positive" };
-  if ((limits.perHireCap ?? 0n) > BUDGET_DEFAULTS.perHireCap || (limits.dailyCap ?? 0n) > BUDGET_DEFAULTS.dailyCap) return { ok: false, code: "above_default" };
+  const ceiling = deps.defaults ?? BUDGET_DEFAULTS;
+  if ((limits.perHireCap ?? 0n) > ceiling.perHireCap || (limits.dailyCap ?? 0n) > ceiling.dailyCap) return { ok: false, code: "above_default" };
+  const current = await deps.store.getBudgetWallet(ownerRef, deps.network.id);
+  if (!current) return { ok: false, code: "no_wallet" };
+  if (!options.allowRaise && ((limits.perHireCap ?? 0n) > current.perHireCap || (limits.dailyCap ?? 0n) > current.dailyCap)) return { ok: false, code: "above_current" };
   const wallet = await deps.store.updateBudgetWallet(ownerRef, deps.network.id, limits);
   return wallet ? { ok: true, wallet } : { ok: false, code: "no_wallet" };
 }
@@ -78,10 +92,15 @@ export async function requestWithdraw(
   ownerRef: string,
   to: Address,
   amount: bigint,
-): Promise<{ ok: true; token: string; expiresAt: Date } | { ok: false; code: "no_wallet" | "bad_amount" | "bad_address" }> {
+): Promise<{ ok: true; token: string; expiresAt: Date } | { ok: false; code: "no_wallet" | "bad_amount" | "bad_address" } | { ok: false; code: "above_withdrawable"; max: bigint }> {
   if (amount <= 0n) return { ok: false, code: "bad_amount" };
   if (!/^0x[0-9a-fA-F]{40}$/.test(to)) return { ok: false, code: "bad_address" };
-  if (!(await deps.store.getBudgetWallet(ownerRef, deps.network.id))) return { ok: false, code: "no_wallet" };
+  const wallet = await deps.store.getBudgetWallet(ownerRef, deps.network.id);
+  if (!wallet) return { ok: false, code: "no_wallet" };
+  // Routing fees on the tab are owed from this balance, so they are not withdrawable (audit B7).
+  const owed = await owedTotal(deps, wallet);
+  const balance = owed > 0n ? await readBalance(deps, wallet) : null;
+  if (balance !== null && amount > balance - owed) return { ok: false, code: "above_withdrawable", max: balance > owed ? balance - owed : 0n };
   const link = await issueApproval(deps.store, {
     walletRef: budgetWalletRef(ownerRef), action: "withdraw", payload: { to: to.toLowerCase(), amount: amount.toString(), network: deps.network.id }, now: deps.now(),
   });
@@ -94,13 +113,20 @@ export async function completeWithdraw(deps: WalletDeps, token: string): Promise
   const ownerRef = ownerRefFromWalletRef(approval.walletRef);
   const wallet = ownerRef ? await deps.store.getBudgetWallet(ownerRef, deps.network.id) : null;
   if (!wallet) return { ok: false, code: "no_wallet" };
-  // A tab that cannot be sent now stays owed and is retried by reconcile; the withdrawal goes ahead.
+  // A tab that cannot be sent now stays owed and is retried by reconcile. The withdrawal
+  // goes ahead only if the balance still covers it after what is owed (audit B7).
   await deps.settleOwed?.(wallet).catch(() => undefined);
+  const amount = BigInt(String(approval.payload.amount));
+  const owed = await owedTotal(deps, wallet);
+  if (owed > 0n) {
+    const balance = await readBalance(deps, wallet);
+    if (balance === null || amount > balance - owed) return { ok: false, code: "fee_owed" };
+  }
   const refId = `agon-withdraw-${token.slice(0, 16)}`;
   const transfer = await deps.ops.transfer({
     walletId: wallet.walletId,
     destinationAddress: String(approval.payload.to) as Address,
-    amountBaseUnits: BigInt(String(approval.payload.amount)),
+    amountBaseUnits: amount,
     idempotencyKey: stableUuid(refId),
     refId,
   });

@@ -201,7 +201,7 @@ test("tool descriptions claim only what is live (agon-build capabilities.md, 202
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
   });
   const raw = await (await setup().handler.fetch(list)).text();
-  const body = JSON.parse(raw.slice(raw.indexOf("{"))) as { result: { tools: { name: string; description: string; inputSchema: unknown }[] } };
+  const body = JSON.parse(raw.slice(raw.indexOf("{"))) as { result: { tools: { name: string; title?: string; description: string; inputSchema: unknown }[] } };
   const stage = body.result.tools.filter((t) => ["find_service", "hire_service", "confirm_hire", "get_job_status", "get_leaderboard", "enter_season", "submit_forecasts"].includes(t.name));
   for (const t of stage) {
     const text = `${t.description} ${JSON.stringify(t.inputSchema)}`;
@@ -209,6 +209,11 @@ test("tool descriptions claim only what is live (agon-build capabilities.md, 202
     assert.doesNotMatch(text, /forecaster ratings/, `${t.name} presents Arena ratings as existing`);
   }
   assert.match(stage.find((t) => t.name === "get_leaderboard")!.description, /not scoring yet/);
+  // Audit H4 (2026-11-09): no hire over MCP has run on production, and Season 1 is over.
+  for (const t of stage) assert.doesNotMatch(`${t.title ?? ""} ${t.description}`, /Season 1/, `${t.name} still names Season 1`);
+  for (const name of ["hire_service", "confirm_hire"]) {
+    assert.match(stage.find((t) => t.name === name)!.description, /not yet verified on production/, `${name} reads as proven`);
+  }
 });
 
 test("the Lead agent is not described as hiring a best-rated forecaster while no forecaster is rated", async () => {

@@ -4,6 +4,7 @@ import type { ReceiptNode } from "../../payments/jobs.ts";
 import type { AskResult, LiveView, StageServices, WalletView } from "../../stage/services.ts";
 import { hashChatUser } from "../../stage/settings.ts";
 import type { Router } from "../../routing/router.ts";
+import { OUTSIDE_PAYMENT_NOTE } from "../../routing/rank.ts";
 import { parseCodeIntent, type ChatIntent } from "./intents.ts";
 import type { ChatInbound, ChatReply } from "./types.ts";
 
@@ -215,7 +216,7 @@ async function act(deps: ConversationDeps, ownerRef: string, intent: ChatIntent,
       const out = await s.lowerLimits(ownerRef, { ...(intent.perHire !== null ? { perHireCap: intent.perHire } : {}), ...(intent.daily !== null ? { dailyCap: intent.daily } : {}) });
       if (!out.ok) {
         const ceiling = s.network.id === "arc" ? "0.25 per hire and 1.00 per day" : "0.50 per hire and 2.00 per day";
-        await deps.reply.send({ text: out.code === "above_default" ? `Limits can only be lowered here, up to ${ceiling}.` : "Those limits did not work. Try: limits 0.20 per hire" });
+        await deps.reply.send({ text: out.code === "above_current" ? `Limits can only be lowered here. To raise them, up to ${ceiling}, open Account on ${s.siteUrl}.` : out.code === "above_default" ? `Limits can only be lowered here, up to ${ceiling}.` : "Those limits did not work. Try: limits 0.20 per hire" });
         return;
       }
       const w = await s.wallet(ownerRef);
@@ -254,7 +255,7 @@ async function act(deps: ConversationDeps, ownerRef: string, intent: ChatIntent,
       const out = await s.requestWithdraw(ownerRef, intent.to, intent.amount);
       await deps.reply.send(out.ok
         ? { text: `Withdraw ${formatUsdc(intent.amount)} USDC to ${intent.to}. Approve it in your browser; the link works once, for 15 minutes.`, buttons: [[{ label: "Approve in browser", url: out.approvalUrl }]] }
-        : { text: "That withdrawal did not work. Check the amount and the address." });
+        : { text: out.code === "above_withdrawable" && out.max ? `You can withdraw up to ${out.max} USDC now. The rest pays Agon fees you owe.` : "That withdrawal did not work. Check the amount and the address." });
       return;
     }
     case "help":
@@ -340,7 +341,7 @@ async function routeTask(deps: ConversationDeps, ownerRef: string, text: string)
   const money = `${formatUsdc(q.amount)} USDC and Agon's ${formatUsdc(q.fee)} fee, ${formatUsdc(q.total)} USDC in total`;
   const network = q.testnet ? "test USDC on Arc Testnet" : "real USDC on Arc mainnet";
   const sent = Object.entries(q.input).map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`).join(", ");
-  const outsideNote = pick.source === "circle" ? "\nPaid to an outside service up front; Agon only takes its fee if the answer arrives." : "";
+  const outsideNote = pick.source === "circle" ? `\n${OUTSIDE_PAYMENT_NOTE}` : "";
   if (q.step === "confirm_code" && q.code) {
     await deps.reply.send({
       text: `${pick.name} (${pick.reason}).\n${money}, ${network}.\nSending: ${sent || "your request"}${outsideNote}\nReply YES ${q.code} to pay. Expires in 5 min.`,

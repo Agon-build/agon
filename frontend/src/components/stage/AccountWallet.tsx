@@ -6,6 +6,7 @@ import { TagButton } from "@/components/redesign/TagButton";
 import { AddFunds } from "@/components/stage/AddFunds";
 import { moneyLine } from "@/lib/agon/hire-layout";
 import { freezeWallet, lowerLimits, requestUnfreeze, requestWithdraw, StageApiError } from "@/lib/agon/stage";
+import { walletRefusalText } from "@/lib/agon/stage-copy";
 import type { StageWallet } from "@/lib/agon/stage-types";
 
 const path = (url: string) => { try { const u = new URL(url); return `${u.pathname}${u.search}`; } catch { return url; } };
@@ -51,7 +52,7 @@ export function AccountWallet({ wallet, signInWallet, onChanged }: { wallet: Sta
             <AddFunds wallet={wallet} onDone={onChanged} compact />
           </Box>
           <Box title="Withdraw" line="Move USDC out to any Arc address. You approve every withdrawal on the next page.">
-            <form className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]" onSubmit={(e) => { e.preventDefault(); void run("withdraw", async () => { const out = await requestWithdraw(to.trim(), amount.trim()); if (out.ok && out.approvalUrl) router.push(path(out.approvalUrl)); else setNote({ box: "withdraw", text: out.code?.replaceAll("_", " ") ?? "Withdraw refused." }); }); }}>
+            <form className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]" onSubmit={(e) => { e.preventDefault(); void run("withdraw", async () => { const out = await requestWithdraw(to.trim(), amount.trim()); if (out.ok && out.approvalUrl) router.push(path(out.approvalUrl)); else setNote({ box: "withdraw", text: walletRefusalText(out.code, out.max) }); }); }}>
               <label className="grid gap-1"><span className="font-mono text-[9px] uppercase tracking-[0.14em] text-ink-3">To address</span><input value={to} onChange={(e) => setTo(e.target.value)} required pattern="^0x[0-9a-fA-F]{40}$" placeholder="0x…" className={INPUT} /></label>
               <label className="grid gap-1"><span className="font-mono text-[9px] uppercase tracking-[0.14em] text-ink-3">Amount (USDC)</span><input value={amount} onChange={(e) => setAmount(e.target.value)} required inputMode="decimal" placeholder="0.00" className={INPUT} /></label>
               <div><TagButton type="submit" variant="ghost" size="sm" disabled={busy === "withdraw"}>Continue</TagButton></div>
@@ -71,7 +72,7 @@ export function AccountWallet({ wallet, signInWallet, onChanged }: { wallet: Sta
               <form className="mt-4 grid gap-3" onSubmit={(e) => { e.preventDefault(); void run("limits", async () => {
                 const input = { ...(perHire.trim() ? { perHire: perHire.trim() } : {}), ...(daily.trim() ? { daily: daily.trim() } : {}) };
                 const out = await lowerLimits(input);
-                if (!out.ok) { setNote({ box: "limits", text: out.code?.replaceAll("_", " ") ?? "Those limits could not be set." }); return; }
+                if (!out.ok) { setNote({ box: "limits", text: walletRefusalText(out.code) }); return; }
                 setLowering(false); setPerHire(""); setDaily(""); onChanged();
               }); }}>
                 <div className="grid grid-cols-2 gap-3">

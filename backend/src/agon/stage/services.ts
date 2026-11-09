@@ -48,10 +48,10 @@ export type StageServices = {
   pendingJob(ownerRef: string): Promise<string | null>;
   live(jobId: string): Promise<LiveView | null>;
   history(ownerRef: string, limit?: number, offset?: number): Promise<HistoryItem[]>;
-  lowerLimits(ownerRef: string, limits: { perHireCap?: bigint; dailyCap?: bigint }): Promise<{ ok: true } | { ok: false; code: string }>;
+  lowerLimits(ownerRef: string, limits: { perHireCap?: bigint; dailyCap?: bigint }, options?: { allowRaise?: boolean }): Promise<{ ok: true } | { ok: false; code: string }>;
   freeze(ownerRef: string): Promise<boolean>;
   requestUnfreeze(ownerRef: string): Promise<ApprovalLink | null>;
-  requestWithdraw(ownerRef: string, to: Address, amount: bigint): Promise<({ ok: true } & ApprovalLink) | { ok: false; code: string }>;
+  requestWithdraw(ownerRef: string, to: Address, amount: bigint): Promise<({ ok: true } & ApprovalLink) | { ok: false; code: string; max?: string }>;
   leaderboard(limit: number): Promise<LeaderboardRow[] | null>;
   receiptUrl(jobId: string): string;
   approvalUrl(token: string): string;
@@ -215,8 +215,8 @@ export function createStageServices(deps: StageServiceDeps): StageServices {
       return jobs.map((j) => ({ jobId: j.jobId, question: questionOf(j), agent: j.providerLabel || null, state: j.state, price: formatUsdc(j.priceAtomic), createdAt: j.createdAt.toISOString(), receiptUrl: receiptUrl(j.jobId) }));
     },
 
-    async lowerLimits(ownerRef, limits) {
-      const out = await deps.hire.wallets.lowerLimits(ownerRef, limits);
+    async lowerLimits(ownerRef, limits, options) {
+      const out = await deps.hire.wallets.lowerLimits(ownerRef, limits, options);
       return out.ok ? { ok: true } : { ok: false, code: out.code };
     },
 
@@ -229,7 +229,8 @@ export function createStageServices(deps: StageServiceDeps): StageServices {
 
     async requestWithdraw(ownerRef, to, amount) {
       const out = await deps.hire.wallets.requestWithdraw(ownerRef, to, amount);
-      return out.ok ? { ok: true, approvalUrl: approvalUrl(out.token), expiresAt: out.expiresAt } : { ok: false, code: out.code };
+      if (out.ok) return { ok: true, approvalUrl: approvalUrl(out.token), expiresAt: out.expiresAt };
+      return "max" in out ? { ok: false, code: out.code, max: formatUsdc(out.max) } : { ok: false, code: out.code };
     },
 
     leaderboard: (limit) => deps.leaderboard(limit),

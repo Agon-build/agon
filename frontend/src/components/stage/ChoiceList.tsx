@@ -3,7 +3,7 @@ import { useState } from "react";
 
 import { groupHeading, proofLines } from "@/lib/agon/choice-view";
 import { moneyLine } from "@/lib/agon/hire-layout";
-import { CHOICES_COPY } from "@/lib/agon/stage-copy";
+import { CHOICES_COPY, RECENTLY_FAILED_MARK } from "@/lib/agon/stage-copy";
 import type { ChoiceGroup, ChoiceGroups, HireCategory, HireCategoryId, RoutePick, RouteSourceStatus } from "@/lib/agon/stage-types";
 
 const SHOWN = 3;
@@ -95,6 +95,7 @@ function badge(pick: RoutePick): string {
 }
 
 function under(pick: RoutePick): string {
+  if (pick.recentlyFailed) return RECENTLY_FAILED_MARK;
   if (pick.group === "outside" || pick.source === "circle") return moneyLine(pick.network) ?? "";
   const score = pick.rating.proof?.score ?? null;
   return score !== null ? `Agon score ${Math.round(score * 10) / 10}` : "Not scored yet";

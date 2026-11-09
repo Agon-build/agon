@@ -4,7 +4,13 @@ import { formatUsdc } from "../payments/bargain.ts";
 import { feeFor } from "./fee.ts";
 import { kindFromWords, type Intent } from "./intent.ts";
 
-export type Ranked = CatalogEntry & { fee: bigint; total: bigint; reason: string };
+/// recentlyFailed: the service took payment and sent no answer in the last day (audit H2).
+export type Ranked = CatalogEntry & { fee: bigint; total: bigint; reason: string; recentlyFailed?: true };
+
+/// Shown on a service that recently took payment and sent no answer.
+export const RECENT_FAILURE_REASON = "Took payment without answering in the last day";
+/// Said before anyone pays an outside service (audit H2, 2026-11-09).
+export const OUTSIDE_PAYMENT_NOTE = "Paid to an outside service up front. Agon cannot refund it if no answer comes, and takes its fee only if one does.";
 
 const TIER_ORDER: Record<CatalogEntry["rating"]["tier"], number> = { scored: 0, verified: 1, listed: 2, unrated: 3 };
 
@@ -41,7 +47,7 @@ export function rankCandidates(entries: CatalogEntry[], intent: Intent, opts: { 
       || (a.e.price + a.fee < b.e.price + b.fee ? -1 : a.e.price + a.fee > b.e.price + b.fee ? 1 : 0)
       || (a.e.latencyMs ?? Number.MAX_SAFE_INTEGER) - (b.e.latencyMs ?? Number.MAX_SAFE_INTEGER));
   const minPrice = ranked.reduce((m, r) => (r.e.price < m ? r.e.price : m), ranked[0]!.e.price);
-  const out: Ranked[] = ranked.slice(0, 4).map(({ e, fee }) => ({ ...e, fee, total: e.price + fee, reason: reasonFor(e, e.price === minPrice && ranked.length > 1) }));
+  const out: Ranked[] = ranked.slice(0, 4).map(({ e, fee, down }) => ({ ...e, fee, total: e.price + fee, ...(down ? { reason: RECENT_FAILURE_REASON, recentlyFailed: true as const } : { reason: reasonFor(e, e.price === minPrice && ranked.length > 1) }) }));
   return { pick: out[0]!, alternatives: out.slice(1) };
 }
 
@@ -80,7 +86,7 @@ export function groupCandidates(entries: CatalogEntry[], intent: Intent, opts: G
     return list
       .sort((a, b) => a.down - b.down || sort(a, b))
       .slice(0, GROUP_MAX)
-      .map(({ e, fee, total }) => ({ ...e, fee, total, group, reason: group === "outside" ? OUTSIDE_REASON : reasonFor(e, e.price === minPrice && list.length > 1) }));
+      .map(({ e, fee, total, down }) => ({ ...e, fee, total, group, ...(down ? { reason: RECENT_FAILURE_REASON, recentlyFailed: true as const } : { reason: group === "outside" ? OUTSIDE_REASON : reasonFor(e, e.price === minPrice && list.length > 1) }) }));
   };
   const agon = priced.filter((p) => p.e.source === "agon");
   return {

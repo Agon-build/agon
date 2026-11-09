@@ -56,8 +56,8 @@ test("limits can be lowered or restored up to the defaults, never raised above t
   await ensureBudgetWallet(d, "wa:abc");
   const lowered = await lowerLimits(d, "wa:abc", { perHireCap: 100_000n });
   assert.ok(lowered.ok && lowered.wallet.perHireCap === 100_000n);
-  assert.ok((await lowerLimits(d, "wa:abc", { perHireCap: 500_000n })).ok);
-  assert.deepEqual(await lowerLimits(d, "wa:abc", { dailyCap: 2_000_001n }), { ok: false, code: "above_default" });
+  assert.ok((await lowerLimits(d, "wa:abc", { perHireCap: 500_000n }, { allowRaise: true })).ok);
+  assert.deepEqual(await lowerLimits(d, "wa:abc", { dailyCap: 2_000_001n }, { allowRaise: true }), { ok: false, code: "above_default" });
   assert.deepEqual(await lowerLimits(d, "wa:abc", { perHireCap: 0n }), { ok: false, code: "not_positive" });
   assert.deepEqual(await lowerLimits(d, "wa:none", { perHireCap: 1n }), { ok: false, code: "no_wallet" });
 });
@@ -87,4 +87,68 @@ test("withdrawals move money only through the approval link, once", async () => 
   assert.equal(transfers[0]!.amountBaseUnits, 1_500_000n);
   assert.equal(transfers[0]!.destinationAddress, to);
   assert.deepEqual(await completeWithdraw(d, req.token), { ok: false, code: "used" });
+});
+
+// Audit B8 (2026-11-09): a chat could raise limits back to the defaults with no browser approval.
+test("a chat can only lower limits; raising needs the signed-in browser", async () => {
+  const { d } = deps();
+  await ensureBudgetWallet(d, "wa:abc");
+  assert.ok((await lowerLimits(d, "wa:abc", { perHireCap: 100_000n, dailyCap: 500_000n })).ok);
+  assert.deepEqual(await lowerLimits(d, "wa:abc", { perHireCap: 200_000n }), { ok: false, code: "above_current" });
+  assert.deepEqual(await lowerLimits(d, "wa:abc", { dailyCap: 600_000n }), { ok: false, code: "above_current" });
+  assert.ok((await lowerLimits(d, "wa:abc", { perHireCap: 100_000n })).ok, "the same value is not a raise");
+  assert.ok((await lowerLimits(d, "wa:abc", { perHireCap: 200_000n }, { allowRaise: true })).ok);
+});
+
+test("the ceiling is the wallet's own starting limits, lower on mainnet", async () => {
+  const { d } = deps("arc");
+  const mainnet = { ...d, defaults: { perHireCap: 250_000n, dailyCap: 1_000_000n } };
+  await ensureBudgetWallet(mainnet, "wa:abc");
+  assert.deepEqual(await lowerLimits(mainnet, "wa:abc", { perHireCap: 400_000n }, { allowRaise: true }), { ok: false, code: "above_default" });
+  assert.deepEqual(await lowerLimits(mainnet, "wa:abc", { dailyCap: 1_500_000n }, { allowRaise: true }), { ok: false, code: "above_default" });
+});
+
+// Audit B7 (2026-11-09): a withdrawal could take everything and leave the routing fee unpaid.
+function owe(d: ReturnType<typeof deps>["d"], payer: Address, amount: bigint) {
+  const now = new Date("2026-10-27T11:00:00Z");
+  d.store.payments.set(`fee-${amount}`, {
+    idempotencyKey: `fee-${amount}`, jobId: "00000000-0000-4000-8000-000000000001", kind: "fee", payer, payee: `0x${"8".repeat(40)}` as Address,
+    amount, network: "arc-testnet", status: "pending", txHash: null, detail: "Agon routing fee, on tab", authNonce: null, authValidBefore: null, createdAt: now, updatedAt: now,
+  });
+}
+
+test("a withdrawal request cannot take money owed as routing fees", async () => {
+  const { d } = deps();
+  const w = await ensureBudgetWallet(d, "wa:abc");
+  owe(d, w.address, 50_000n);
+  const withBalance = { ...d, balanceOf: async () => 1_000_000n };
+  const to = `0x${"9".repeat(40)}` as Address;
+  assert.deepEqual(await requestWithdraw(withBalance, "wa:abc", to, 1_000_000n), { ok: false, code: "above_withdrawable", max: 950_000n });
+  assert.ok((await requestWithdraw(withBalance, "wa:abc", to, 950_000n)).ok);
+});
+
+test("an approved withdrawal stops when the fee is still owed and the balance cannot cover both", async () => {
+  const { d, transfers } = deps();
+  const w = await ensureBudgetWallet(d, "wa:abc");
+  const to = `0x${"9".repeat(40)}` as Address;
+  const req = await requestWithdraw(d, "wa:abc", to, 1_000_000n);
+  assert.ok(req.ok);
+  owe(d, w.address, 50_000n);
+  const failingSettle = { ...d, balanceOf: async () => 1_000_000n, settleOwed: async () => { throw new Error("circle down"); } };
+  assert.deepEqual(await completeWithdraw(failingSettle, req.token), { ok: false, code: "fee_owed" });
+  assert.equal(transfers.length, 0);
+
+  const second = await requestWithdraw({ ...d, balanceOf: async () => 1_000_000n }, "wa:abc", to, 900_000n);
+  assert.ok(second.ok);
+  assert.deepEqual(await completeWithdraw({ ...d, balanceOf: async () => null }, second.token), { ok: false, code: "fee_owed" }, "an unknown balance does not risk the fee");
+});
+
+test("a withdrawal with nothing owed goes ahead as before", async () => {
+  const { d, transfers } = deps();
+  await ensureBudgetWallet(d, "wa:abc");
+  const to = `0x${"9".repeat(40)}` as Address;
+  const req = await requestWithdraw({ ...d, balanceOf: async () => 1_000_000n }, "wa:abc", to, 1_000_000n);
+  assert.ok(req.ok);
+  assert.deepEqual(await completeWithdraw({ ...d, balanceOf: async () => 1_000_000n }, req.token), { ok: true, transferId: "t-1" });
+  assert.equal(transfers[0]!.amountBaseUnits, 1_000_000n);
 });

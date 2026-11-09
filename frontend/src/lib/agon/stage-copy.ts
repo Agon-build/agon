@@ -88,9 +88,42 @@ const APPROVAL: Record<string, string> = {
   not_found: "This link is not valid.",
   unknown: "This link is not valid.",
   unauthorized: "Sign in to approve.",
+  fee_owed: "Agon fees you owe come out of this balance first. Withdraw a little less, or try again once they are paid.",
 };
 
 export const approvalFailureText = (code: string) => APPROVAL[code] ?? CONFIRM[code] ?? "The approval did not go through.";
+
+/// The first line after an approval. A hire reads as paid only once it is answered (audit F4).
+export function approvalDoneText(action: string, phase: string | null | undefined): string {
+  if (action === "withdraw") return "Withdrawal started. It lands on Arc in a few seconds.";
+  if (action === "unfreeze") return "Your wallet is unfrozen.";
+  if (phase === "answered") return "Approved and paid.";
+  if (phase === "refunded") return "Approved, but the hire failed and your payment was refunded.";
+  if (phase === "failed") return "Approved, but the hire did not finish. The receipt shows what was charged.";
+  return "Approved. Paying.";
+}
+
+/// Shown on a Telegram approval. Only the account connected to the chat can approve (audit B2).
+export const APPROVE_TELEGRAM_NOTE = "Only the Agon account connected to this Telegram chat can approve. To connect it, open Account and tap Connect Telegram.";
+
+/// Said before anyone pays an outside service (audit H2). Matches the server's own note.
+export const OUTSIDE_PAYMENT_NOTE = "Paid to an outside service up front. Agon cannot refund it if no answer comes, and takes its fee only if one does.";
+/// On a service that recently took payment and sent no answer.
+export const RECENTLY_FAILED_MARK = "Took payment with no answer in the last day";
+
+const WALLET: Record<string, string> = {
+  above_current: "Limits can only go up to the starting limits.",
+  above_default: "That is above the starting limits for this wallet.",
+  above_withdrawable: "Agon fees you owe stay in the wallet.",
+  not_positive: "Limits must be above zero.",
+  bad_amount: "Enter an amount above zero.",
+  bad_address: "Enter a full 0x wallet address.",
+  no_wallet: "Your agent wallet is not set up yet.",
+};
+
+/// A refused wallet change in plain words; a withdrawal over the limit names the most it can be.
+export const walletRefusalText = (code: string | undefined, max?: string) =>
+  code === "above_withdrawable" && max ? `You can withdraw up to ${max} USDC now. Agon fees you owe stay in the wallet.` : (code && WALLET[code]) || "That did not work. Try again.";
 
 /// A question is the heading. A hire's raw input (links, slugs, one per line) is not a sentence:
 /// it shows as a plain list under "Hire <agent>".

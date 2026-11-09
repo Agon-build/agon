@@ -359,6 +359,22 @@ public ArcRun routes answer 410; admin routes stay mounted for the console).
   a plain kind, 500 characters of message, 2 KB of context; 30 a minute per
   address and 600 a minute overall; browser events older than 30 days are
   removed every 6 hours (`http/client-events.ts`).
+- The operator console's `ADMIN_TOKEN` acts on Agon routes only as the wallets
+  in `AGON_ADMIN_ACTORS`, never on listing writes or hires, and each use is
+  logged with wallet, method and path (`agon/http/admin-auth.ts`). Rotate the
+  token at least every 90 days.
+- Limits: a chat can only lower them; the signed-in website can raise them back
+  to the wallet's starting limits. A withdrawal never takes routing fees still
+  owed from the same balance (`payments/budget-wallets.ts`).
+- Paid https provider calls resolve the host inside the connection and refuse
+  any private or reserved answer, so a second DNS answer cannot redirect a paid
+  call (`payments/provider-fetch.ts`).
+- Pages send `script-src 'self' 'unsafe-inline'`: only the site's own bundled
+  scripts load. A per-request nonce is the next step
+  (`frontend/src/lib/security-headers.mjs`).
+- Outside services are paid before they answer and Agon cannot refund them; the
+  price step says so, and one that took payment without answering in the last
+  day is marked and listed last.
 - No secrets in code, logs, skills or chat; env values never printed.
 
 ---
@@ -492,6 +508,7 @@ onboarding, business agents connected to a person's tools.
 | 2026-10-22 | Listing certification runs the Playground test family a Verification agent declares (Market rules or Settlement alerts) instead of manifest anchor | Resolution Watch was suspended for failing a task it was never built for; one test per declared input keeps certification and the Playground consistent |
 | 2026-10-22 | Agon's market agents check markets on the unpaid request and refuse with a reason before anything is signed; the paid request is checked again before settling | A refusal after signing cannot be told apart from a seller that may still settle, so the buyer must wait out the authorization |
 | 2026-10-23 | Deliveries go to the bell, email from deliveries@agon.surf and Telegram through the AGON bot only; ArcRun mission broadcasts are off | People must get the work they paid for where they already are; one bot and one sender keep Agon recognisable |
+| 2026-11-09 | Admin token scoped to listed operator wallets; chat may only lower limits; withdrawals keep owed fees; provider calls pinned to checked addresses; script-src on pages; outside-service refund warning before payment; MCP hire tools say not yet verified | Audit B6 to B9, F1, F4, H2, H4, H5. A script nonce was left for later because it makes every page dynamic and needs a browser pass over the wallet flows |
 | 2026-11-09 | Contract source: suspended profiles can be reinstated; a suspended or archived profile cannot publish, relist or take escrow hires, but an agent with no bound profile can still publish; PrizeVault leftovers are returnable by anyone; JobEscrowV2 pauses stop the provider's clock. Not redeployed | Audit C1, C2, C4, C5. Requiring a bound profile would break every current publish path, which never binds one |
 | 2026-11-09 | The alert worker ends Telegram deliveries queued over 24 hours (open critical alerts excepted) and paces sends; api.agon.surf sends HSTS and nosniff | Audit O1 and O3: about 790 alerts were queued while the worker was off, and switching it on would have sent them all at once; the API lacked the headers the site already sends |
 | 2026-11-09 | Public ArcRun API off by default behind `ARCRUN_LEGACY_API`; admin routes kept; `POST /events` stays open to signed-out pages but is size capped, rate limited and pruned after 30 days | Audit B4 and B5: the old API shared the process, database and Circle credentials with Agon's agent wallets, and the events write was the cheapest way to fill the disk again. A session requirement would have lost error reports from sign-in pages |

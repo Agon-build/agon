@@ -1,4 +1,4 @@
-import { createPublicClient, fallback, http, parseAbi, type Address, type Hex } from "viem";
+import { createPublicClient, fallback, http, parseAbi, type Address, type Hex, type PublicClient } from "viem";
 import type { Hono } from "hono";
 
 import { pool } from "../../db/pool.js";
@@ -36,6 +36,7 @@ import { createPaymentRoutes } from "./routes.ts";
 import { resolveOutsideSettings, resolvePaymentSettings, type PaymentSettings, type WalletHandle } from "./settings.ts";
 import { createStandinRoutes } from "./standin-seller.ts";
 import { PostgresPaymentsStore } from "./store.ts";
+import { createProviderFetch } from "./provider-fetch.ts";
 import type { BudgetWallet } from "./types.ts";
 
 /// Agon's own agents and the job provider ref their cards count.
@@ -46,7 +47,17 @@ export function firstPartyActivity(env: Record<string, string | undefined>): { a
 }
 
 const AUTHORIZATION_STATE_ABI = parseAbi(["function authorizationState(address authorizer, bytes32 nonce) view returns (bool)"]);
+const providerFetch = createProviderFetch();
 const USDC_BALANCE_ABI = parseAbi(["function balanceOf(address owner) view returns (uint256)"]);
+
+/// The USDC balance on the ERC-20 interface (6 decimals), or null when the RPC cannot answer.
+async function usdcBalance(client: Pick<PublicClient, "readContract">, usdc: Address, address: Address): Promise<bigint | null> {
+  try {
+    return (await client.readContract({ address: usdc, abi: USDC_BALANCE_ABI, functionName: "balanceOf", args: [address] })) as bigint;
+  } catch {
+    return null;
+  }
+}
 
 export type HireService = {
   leadProviderUrl: string;
@@ -57,7 +68,7 @@ export type HireService = {
   reconcile(): ReturnType<typeof reconcileStuckHires>;
   wallets: {
     ensure(ownerRef: string): Promise<BudgetWallet>;
-    lowerLimits(ownerRef: string, limits: { perHireCap?: bigint; dailyCap?: bigint }): ReturnType<typeof wallets.lowerLimits>;
+    lowerLimits(ownerRef: string, limits: { perHireCap?: bigint; dailyCap?: bigint }, options?: { allowRaise?: boolean }): ReturnType<typeof wallets.lowerLimits>;
     freeze(ownerRef: string): Promise<boolean>;
     requestUnfreeze(ownerRef: string): ReturnType<typeof wallets.requestUnfreeze>;
     completeUnfreeze(token: string): ReturnType<typeof wallets.completeUnfreeze>;
@@ -103,7 +114,7 @@ export function startPaymentsRuntime(input: {
     const settler = (w: WalletHandle) => createCircleExactSettler({ walletId: w.walletId, network, execute: (i) => executeContractCall(i), getTxState });
     const claimNonce = store.claimSellerNonce.bind(store);
     const walletDeps = {
-      store, network, now: () => new Date(),
+      store, network, now: () => new Date(), balanceOf: (address: Address) => usdcBalance(client, network.usdc, address),
       ops: {
         createWallet: createAgonWallet,
         seedTestnet: seedTestnetUsdc,
@@ -112,6 +123,8 @@ export function startPaymentsRuntime(input: {
     };
     const hireDeps: HireDeps = {
       ...walletDeps,
+      // Paid provider calls connect only to the public address that was just checked (audit B9).
+      fetchImpl: providerFetch,
       signJson,
       off: { all: s.off.all, budget: s.off.budget },
       feeTxState: getTxState,
@@ -195,7 +208,7 @@ export function startPaymentsRuntime(input: {
       reconcile: () => reconcileStuckHires(hireDeps),
       wallets: {
         ensure: (ownerRef) => wallets.ensureBudgetWallet(walletDeps, ownerRef),
-        lowerLimits: (ownerRef, limits) => wallets.lowerLimits(walletDeps, ownerRef, limits),
+        lowerLimits: (ownerRef, limits, options) => wallets.lowerLimits(walletDeps, ownerRef, limits, options),
         freeze: (ownerRef) => wallets.freeze(walletDeps, ownerRef),
         requestUnfreeze: (ownerRef) => wallets.requestUnfreeze(walletDeps, ownerRef),
         completeUnfreeze: (token) => wallets.completeUnfreeze(walletDeps, token),
@@ -239,13 +252,7 @@ ${m.body}${ratable ? "\n\nRate this job:" : ""}`, buttons: [[{ label: "Open on A
       });
       log(`deliveries on: bell${deliveryFrom ? ", email" : ""}${agonBot ? ", telegram" : ""}`);
     }
-    const balanceOf = async (address: Address): Promise<bigint | null> => {
-      try {
-        return (await client.readContract({ address: network.usdc, abi: USDC_BALANCE_ABI, functionName: "balanceOf", args: [address] })) as bigint;
-      } catch {
-        return null;
-      }
-    };
+    const balanceOf = (address: Address) => usdcBalance(client, network.usdc, address);
     return { settings: s, store, hire, routes, balanceOf };
   } catch (error) {
     console.error(`[payments] disabled: ${(error as Error).message}`);
@@ -268,7 +275,7 @@ export function startOutsideRuntime(input: { env?: Record<string, string | undef
     const client = createPublicClient({ transport: fallback(network.rpcHttp.map((url) => http(url))) });
     const store = new PostgresPaymentsStore(pool);
     const walletDeps = {
-      store, network, now: () => new Date(), defaults: OUTSIDE_WALLET_DEFAULTS,
+      store, network, now: () => new Date(), defaults: OUTSIDE_WALLET_DEFAULTS, balanceOf: (address: Address) => usdcBalance(client, network.usdc, address),
       ops: {
         createWallet: createAgonWallet,
         seedTestnet: async () => ({}),
@@ -277,6 +284,8 @@ export function startOutsideRuntime(input: { env?: Record<string, string | undef
     };
     const hireDeps: HireDeps = {
       ...walletDeps,
+      // Paid provider calls connect only to the public address that was just checked (audit B9).
+      fetchImpl: providerFetch,
       // Mainnet wallets live under the live Circle keys.
       signJson: (walletId: string, json: string) => signTypedDataJson(walletId, json, network.circleChain),
       off: { all: false, budget: false },
@@ -295,7 +304,7 @@ export function startOutsideRuntime(input: { env?: Record<string, string | undef
       reconcile: () => reconcileStuckHires(hireDeps),
       wallets: {
         ensure: (ownerRef) => wallets.ensureBudgetWallet(walletDeps, ownerRef),
-        lowerLimits: (ownerRef, limits) => wallets.lowerLimits(walletDeps, ownerRef, limits),
+        lowerLimits: (ownerRef, limits, options) => wallets.lowerLimits(walletDeps, ownerRef, limits, options),
         freeze: (ownerRef) => wallets.freeze(walletDeps, ownerRef),
         requestUnfreeze: (ownerRef) => wallets.requestUnfreeze(walletDeps, ownerRef),
         completeUnfreeze: (token) => wallets.completeUnfreeze(walletDeps, token),
@@ -306,13 +315,7 @@ export function startOutsideRuntime(input: { env?: Record<string, string | undef
     if (input.startLoops !== false) {
       setInterval(() => { hire.reconcile().catch((e) => console.warn(`[outside] reconcile failed: ${(e as Error).message}`)); }, 5 * 60_000).unref();
     }
-    const balanceOf = async (address: Address): Promise<bigint | null> => {
-      try {
-        return (await client.readContract({ address: network.usdc, abi: USDC_BALANCE_ABI, functionName: "balanceOf", args: [address] })) as bigint;
-      } catch {
-        return null;
-      }
-    };
+    const balanceOf = (address: Address) => usdcBalance(client, network.usdc, address);
     console.log(`[outside] Circle routes on ${network.label}`);
     return { hire, balanceOf, feeAddress };
   } catch (error) {

@@ -137,7 +137,7 @@ import { walletPrincipalForLinkedCircleWallet } from "./wallet-principal.js";
 import { getWalletPrincipal, listWalletPrincipals, linkCircleUserControlledWallet } from "./wallet-principal-repository.js";
 import { createCircleUserControlledService } from "./circle-user-controlled.js";
 import { CLI_USER_CODE_RE, formatCliUserCode, hashCliCode, randomCliCode } from "./cli-device.js";
-import { createAgonAuthMiddleware } from "../agon/http/admin-auth.js";
+import { createAgonAuthMiddleware, type AgonAdminAccess } from "../agon/http/admin-auth.js";
 import { createAgonPrincipalMiddleware } from "../agon/http/principal-auth.js";
 import { checkEntry } from "./entryGuard.js";
 import {
@@ -1035,10 +1035,13 @@ const agonTestService = createTestService({
   chain: { chainId: () => publicClient.getChainId(), blockNumber: () => publicClient.getBlockNumber() },
   fetchDeps: { fetch: agonCheckerFetch, assertPublic: (url) => assertPublicHttpsDestination(url) },
 });
+// The operator console's admin token acts only as these wallets on Agon routes (audit B6).
+const agonAdmin: AgonAdminAccess = { token: config.adminToken, actors: config.agonAdminActors };
+if (config.adminToken && config.agonAdminActors.length === 0) console.warn("[agon] AGON_ADMIN_ACTORS is empty: the admin console cannot act on Agon routes");
 const agonTestRoutes = createTestRoutes({
   service: agonTestService,
   store: agonTestResults,
-  requireRun: createAgonAuthMiddleware(config.adminToken, requireAgonScope("playground:run")),
+  requireRun: createAgonAuthMiddleware(agonAdmin, requireAgonScope("playground:run")),
 });
 app.route("/agon/tests", agonTestRoutes);
 
@@ -1113,14 +1116,15 @@ app.route("/agon", createAgonRoutes({
         ...(agonRouter ? { router: agonRouter } : {}),
       }
     : undefined,
-  requireAuth: createAgonAuthMiddleware(config.adminToken, requireAuth),
-  requireListingPrepareAuth: createAgonAuthMiddleware(config.adminToken, requireAgonScope("listing:prepare")),
-  requireListingWriteAuth: createAgonAuthMiddleware(config.adminToken, requireAgonScope("listing:write")),
-  requireListingConfirmAuth: createAgonAuthMiddleware(config.adminToken, requireAgonScope("listing:confirm")),
-  requirePlaygroundAuth: createAgonAuthMiddleware(config.adminToken, requireAgonScope("playground:run")),
-  requireArenaAuth: createAgonAuthMiddleware(config.adminToken, requireAgonScope("arena:prepare")),
-  requireHireReadAuth: createAgonAuthMiddleware(config.adminToken, requireAgonScope("agon:read")),
-  requireHireWalletAuth: createAgonAuthMiddleware(config.adminToken, requireAgonScope("wallet:execute")),
+  requireAuth: createAgonAuthMiddleware(agonAdmin, requireAuth),
+  // Listing writes and hires are never done by the console, so the admin token does not reach them (audit B6).
+  requireListingPrepareAuth: requireAgonScope("listing:prepare"),
+  requireListingWriteAuth: requireAgonScope("listing:write"),
+  requireListingConfirmAuth: requireAgonScope("listing:confirm"),
+  requirePlaygroundAuth: createAgonAuthMiddleware(agonAdmin, requireAgonScope("playground:run")),
+  requireArenaAuth: createAgonAuthMiddleware(agonAdmin, requireAgonScope("arena:prepare")),
+  requireHireReadAuth: requireAgonScope("agon:read"),
+  requireHireWalletAuth: requireAgonScope("wallet:execute"),
   requirePrincipal: createAgonPrincipalMiddleware(async (operatorAddress, requestedAddress) =>
     Boolean(await getWalletPrincipal(operatorAddress, requestedAddress, pool)),
   ),

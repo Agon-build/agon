@@ -256,3 +256,12 @@ test("hiring docs name the money per group and the MCP hire tools that exist, wi
   const { ROADMAP } = await import("./docs-content.ts");
   assert.doesNotMatch(ROADMAP.live[0]!.body, /over MCP/, "hiring over MCP has not run on production yet");
 });
+
+// Audit H5 (2026-11-09): listing was described as a flat 0.50 USDC fee.
+test("listing fee copy gives the real fee: Arc's network fee, capped at 1 USDC", () => {
+  const all = docsStrings().join("\n");
+  assert.doesNotMatch(all, /pay a 0\.50 USDC network fee/);
+  assert.doesNotMatch(all, /Listing costs a 0\.50 USDC network fee/);
+  const fees = FAQS.find((f) => f.q === "What fees does Agon charge?")!.a;
+  assert.match(fees, /capped at 1 USDC/);
+});
