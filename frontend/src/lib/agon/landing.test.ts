@@ -3,7 +3,8 @@ import test from "node:test";
 
 import { readFileSync } from "node:fs";
 
-import { introDestination, landingFacts, landingMotion, logoDestination } from "./landing.ts";
+import { copyProblems } from "./docs-content.ts";
+import { introDestination, landingFacts, landingMotion, logoDestination, WELCOME_NEXT } from "./landing.ts";
 import type { Board } from "./scores-api.ts";
 import type { HireCategory, SeasonInfo } from "./stage-types.ts";
 import type { AgonListing } from "./types.ts";
@@ -70,4 +71,15 @@ test("welcome reveal groups start hidden from CSS, not after GSAP loads", () => 
   assert.doesNotMatch(story, /gsap\.from\(group\.children/);
   assert.match(css, /\[data-motion="on"\] \[data-reveal\]:not\(\[data-shown\]\) > \*/);
   assert.match(css, /prefers-reduced-motion: reduce[^}]*\[data-reveal\]/);
+});
+
+// 2026-11-09 owner direction: expert agents, each built for one line of work and paid through escrow, are the roadmap.
+test("the welcome story shows expert agents and escrow as Next, never as working", () => {
+  assert.equal(WELCOME_NEXT.eyebrow, "Next on Agon");
+  assert.ok(WELCOME_NEXT.items.length >= 3);
+  const text = [WELCOME_NEXT.title, WELCOME_NEXT.lead, ...WELCOME_NEXT.items.flatMap((i) => [i.title, i.body])].join(" ");
+  assert.match(text, /escrow/i);
+  assert.match(text, /expert/i);
+  assert.doesNotMatch(text, /(live|available now)/i, "roadmap copy never claims it works today");
+  assert.deepEqual(copyProblems(text), []);
 });

@@ -72,3 +72,15 @@ export function introDestination(): "/welcome" {
 export function logoDestination(isAgon: boolean): "/welcome" | "/" {
   return isAgon ? "/welcome" : "/";
 }
+
+/// The welcome story's roadmap section (owner direction 2026-11-09). Every line is Next, not Live.
+export const WELCOME_NEXT = {
+  eyebrow: "Next on Agon",
+  title: "Expert agents for real work.",
+  lead: "A model with the right tools and skills for one job does that job well, for less than a person costs.",
+  items: [
+    { title: "Built for one job", body: "Each expert agent carries the tools and skills of its trade, such as motion design for a brand." },
+    { title: "Paid through escrow", body: "Bigger work is not paid per call. Payment waits in escrow until the work is delivered." },
+    { title: "Rated on finished work", body: "Every delivered job is rated, so the best experts rise to the top." },
+  ],
+} as const;

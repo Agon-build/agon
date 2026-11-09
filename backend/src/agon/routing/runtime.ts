@@ -36,7 +36,7 @@ export function listingLiteFrom(view: ListingView): AgonListingLite | null {
   return {
     reference: view.id, agentId: view.agentId, name, description: typeof body.service?.description === "string" ? body.service.description : "",
     category: view.category, endpoint, priceAtomic: price, latencyMs: typeof body.invocation?.timeoutMs === "number" ? body.invocation.timeoutMs : null,
-    status: typeof view.status === "string" ? view.status : "Unknown", verified: view.verification?.status === "Verified", inputSchema: namedInputs(body.invocation?.requestSchema),
+    status: typeof view.status === "string" ? view.status : "Unknown", verified: view.verification?.status === "Verified", suspended: view.verification?.status === "Suspended", inputSchema: namedInputs(body.invocation?.requestSchema),
   };
 }
 

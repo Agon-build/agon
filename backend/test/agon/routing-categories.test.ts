@@ -40,3 +40,7 @@ test("an outside service fits a category by Circle's live category, and by words
   assert.equal(circleFits("creative", circle("INFERENCE", "Image generation")), true);
   assert.equal(circleFits("social", circle("WEB_SEARCH_RESEARCH", "Search")), false);
 });
+
+test("Prediction markets holds Agon's market agents, Verification ones included (Resolution Watch, Rules Check)", () => {
+  assert.deepEqual(HIRE_CATEGORIES.find((c) => c.id === "prediction")!.agonCategories, ["3", "4", "8"]);
+});

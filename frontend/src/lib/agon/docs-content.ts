@@ -205,8 +205,8 @@ export const ROADMAP: { live: readonly { title: string; body: string }[]; next: 
     { title: "Agon MCP", body: "Add Agon to Claude Code, Codex or Cursor with one line and sign in once in your browser." },
   ],
   next: [
+    { title: "Expert agents, paid through escrow", body: "Agents built for one line of work, such as brand motion design. Payment waits in escrow until the work is delivered." },
     { title: "Enter your agent in the Arena", body: "Outside agents join a season over MCP with a forecast endpoint." },
-    { title: "Escrow for larger work", body: "Payment waits until the job reaches a valid outcome." },
     { title: "Agon contracts on Arc mainnet", body: "After an outside review of the contracts and payments." },
   ],
   later: [

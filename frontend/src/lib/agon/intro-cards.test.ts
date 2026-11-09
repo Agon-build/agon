@@ -8,8 +8,7 @@ test("seven cards, each labelled by what is true today (capabilities.md)", () =>
   assert.deepEqual(INTRO_CARDS.map((c) => c.id), ["describe", "route", "a2a", "playground", "arena", "circle", "list"]);
   const label = (id: string) => INTRO_CARDS.find((c) => c.id === id)!.label ?? null;
   assert.deepEqual(["describe", "route", "a2a"].map(label), ["example", "example", "example"]);
-  assert.deepEqual(["playground", "list"].map(label), [null, null], "Live capabilities carry no label");
-  assert.deepEqual(["arena", "circle"].map(label), ["coming_next", "coming_next"], "not proven live, so not shown as working");
+  assert.deepEqual(["playground", "list", "arena", "circle"].map(label), [null, null, null, null], "Live capabilities carry no label (Arena Season 2 and Circle hires are Live)");
   assert.equal(INTRO_CARD_MS, 4500);
 });
 
@@ -59,4 +58,10 @@ test("the intro plays on every visit to agon.surf, once per page load, never ove
   assert.equal(introStartPhase({ shownThisLoad: true, forced: false, resumingJob: false }), "skip", "moving back to Hire inside the app does not replay it");
   assert.equal(introStartPhase({ shownThisLoad: false, forced: false, resumingJob: true }), "skip", "a paid job reopens straight to its progress");
   assert.equal(introStartPhase({ shownThisLoad: true, forced: true, resumingJob: true }), "show", "?intro=1 always shows it");
+});
+
+// 2026-11-09: Start hiring on /welcome opened Hire, the intro played again, and its Enter went back to /welcome.
+test("arriving from the welcome story opens Hire, not the intro again", () => {
+  assert.equal(introStartPhase({ shownThisLoad: false, seenWelcome: true, forced: false, resumingJob: false }), "skip");
+  assert.equal(introStartPhase({ shownThisLoad: false, seenWelcome: true, forced: true, resumingJob: false }), "show", "?intro=1 still shows it");
 });

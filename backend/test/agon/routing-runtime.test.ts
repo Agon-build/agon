@@ -15,9 +15,13 @@ const view = {
 test("an indexed listing with its service record becomes a route entry", () => {
   assert.deepEqual(listingLiteFrom(view), {
     reference: "5042002:0xreg:9", agentId: "9", name: "Scout", description: "A trade, watch or avoid verdict for any Polymarket market.", category: "3",
-    endpoint: "https://api.agon.surf/agon/agents/specialists/scout", priceAtomic: 100_000n, latencyMs: 15000, status: "Listed", verified: true,
+    endpoint: "https://api.agon.surf/agon/agents/specialists/scout", priceAtomic: 100_000n, latencyMs: 15000, status: "Listed", verified: true, suspended: false,
     inputSchema: { type: "object", properties: { market: { type: "string", description: "a Polymarket link, slug or condition id" } }, required: ["market"] },
   });
+});
+
+test("a Suspended verification is carried, so routing leaves the listing out", () => {
+  assert.deepEqual([listingLiteFrom({ ...view, verification: { status: "Suspended" } })!.suspended, listingLiteFrom({ ...view, verification: { status: "Suspended" } })!.verified], [true, false]);
 });
 
 test("a listing that names no input fields has no input schema, so routing leaves it out", () => {

@@ -12,6 +12,8 @@ export type AgonListingLite = {
   latencyMs: number | null;
   status: "Listed" | "Paused" | string;
   verified: boolean;
+  /** Agon suspended its verification after failed checks: shown as Paused, never routed. */
+  suspended: boolean;
   /** The listing's named input fields; null for a listing that names none, which Agon cannot fill. */
   inputSchema: { type: "object"; properties: Record<string, Record<string, unknown>>; required: string[] } | null;
 };
@@ -58,7 +60,7 @@ export function createAgonSource(deps: {
     },
     async all() {
       const rows = await deps.listListings();
-      return Promise.all(rows.filter((l) => l.status === "Listed" && (LEAD.test(l.endpoint) ? l.verified : l.inputSchema && !NOT_ROUTED.some((r) => r.test(l.endpoint)))).map((l) => entryOf(l, false)));
+      return Promise.all(rows.filter((l) => l.status === "Listed" && !l.suspended && (LEAD.test(l.endpoint) ? l.verified : l.inputSchema && !NOT_ROUTED.some((r) => r.test(l.endpoint)))).map((l) => entryOf(l, false)));
     },
     id: "agon",
     status: () => (healthy ? "ok" : "unavailable"),
@@ -71,7 +73,7 @@ export function createAgonSource(deps: {
         healthy = false;
         return [];
       }
-      const fits = rows.filter((l) => l.status === "Listed" && l.inputSchema && q.agonCategories.includes(l.category) && !NOT_ROUTED.some((r) => r.test(l.endpoint)));
+      const fits = rows.filter((l) => l.status === "Listed" && !l.suspended && l.inputSchema && q.agonCategories.includes(l.category) && !NOT_ROUTED.some((r) => r.test(l.endpoint)));
       const out: CatalogEntry[] = [];
       for (const l of fits) {
         if (matchCount({ name: l.name, description: l.description, provider: "Agon", tags: [] }, q.words) === 0) continue;

@@ -146,7 +146,12 @@ sequenceDiagram
 
 - A forecast question goes to the Lead (section 4.3); a market check goes to
   Scout; other jobs go to the best ranked listing.
-- Listings without named inputs (legacy slug-only) are left out of routing.
+- On the web Hire, a market check (rules, liquidity, settlement, disputes,
+  watching a market) always lists Agon's own market agents in Prediction
+  markets, whatever the fit model says. Prediction markets holds Agon categories
+  3, 4 and 8 (Verification), so Resolution Watch and Rules Check are offered.
+- Listings without named inputs (legacy slug-only) are left out of routing, and
+  so is a listing whose verification is Suspended (shown as Paused).
 - Circle picks can be quoted; paying Circle services needs Arc mainnet and waits
   for the mainnet launch (`AGON_OUTSIDE_ENABLED` stays off).
 
@@ -516,4 +521,5 @@ onboarding, business agents connected to a person's tools.
 | 2026-11-09 | Public ArcRun API off by default behind `ARCRUN_LEGACY_API`; admin routes kept; `POST /events` stays open to signed-out pages but is size capped, rate limited and pruned after 30 days | Audit B4 and B5: the old API shared the process, database and Circle credentials with Agon's agent wallets, and the events write was the cheapest way to fill the disk again. A session requirement would have lost error reports from sign-in pages |
 | 2026-11-09 | Telegram approvals need the chat to have connected the account first (Account, Connect Telegram); an approval link no longer links the first account that opens it | Audit B2: anyone holding a forwarded approval link could become that chat's approver for good and lock the owner out |
 | 2026-11-09 | Pitch and Rules Check answer before they settle; the automatic refund covers every Agon seller wallet; public copy promises an automatic refund only for the Lead and a refund by hand within 24 hours for other Agon agents until that job is Live | Audit H1: the docs said all of Agon's own agents refund automatically, but only the Lead did, and Pitch and Rules Check could take payment and then fail |
+| 2026-11-09 | A market check always offers Agon's market agents; Prediction markets includes Verification (category 8); Suspended listings are never routed; the welcome story's Start hiring opens Hire without replaying the intro; expert agents paid through escrow lead the roadmap | Production check before the 10 Nov demo: a Fed market check and a Resolution Watch request listed nothing, Rules Check (Suspended) would have been offered once category 8 was searched, and Start hiring looped back to /welcome through the intro. Expert agents are owner direction, shown as Next only |
 | 2026-11-09 | Email sign-in needs the one-time token from the code check, not just a verified email; code tries and hire-code use are single atomic writes | Audit B1 and B3: anyone polling with a victim's email could take the session and wallet the moment the victim typed the code, and parallel guesses passed the 5-try cap |

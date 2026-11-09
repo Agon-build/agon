@@ -33,7 +33,7 @@ function fakeRuntime(network: "arc-testnet" | "arc", calls: string[], opts: { am
   };
 }
 
-function setup(opts: { kind?: Intent["kind"]; outside?: boolean; entries?: CatalogEntry[]; circleStatus?: "ok" | "unavailable"; quoteAmount?: bigint; quoteFail?: string; quoteCode?: string } = {}) {
+function setup(opts: { judge?: (text: string, list: CatalogEntry[]) => Promise<string[] | null>; kind?: Intent["kind"]; outside?: boolean; entries?: CatalogEntry[]; circleStatus?: "ok" | "unavailable"; quoteAmount?: bigint; quoteFail?: string; quoteCode?: string } = {}) {
   const calls: string[] = [];
   const store = new MemoryPaymentsStore();
   const src = (id: "agon" | "circle", rows: CatalogEntry[], status: "ok" | "unavailable" = "ok"): RouteSource => ({ id, status: () => status, search: async () => rows.filter((r) => r.source === id) });
@@ -42,6 +42,7 @@ function setup(opts: { kind?: Intent["kind"]; outside?: boolean; entries?: Catal
     sources: [src("agon", rows), src("circle", rows, opts.circleStatus)],
     runtimes: { "arc-testnet": fakeRuntime("arc-testnet", calls), ...(opts.outside === false ? {} : { arc: fakeRuntime("arc", calls, { amount: opts.quoteAmount, fail: opts.quoteFail, code: opts.quoteCode }) }) },
     readIntent: async (text) => ({ kind: opts.kind ?? "analysis", query: text, values: {} }),
+    ...(opts.judge ? { judge: opts.judge } : {}),
     fill: async (e) => (e.source === "circle" ? { ok: true as const, input: { symbol: "AAPL" } } : { ok: true as const, input: { market: "arsenal" } }),
     feeBps: 150,
     feeAddress: { "arc-testnet": `0x${"fe".repeat(20)}` as Address, arc: `0x${"ef".repeat(20)}` as Address },
@@ -340,4 +341,25 @@ test("a service whose payment terms do not fit Arc is named, then left off the c
   assert.equal(choices.groups.outside.length, 0);
   const browsed = await router.browse("op:x", "market_data");
   assert.ok(!browsed.groups.outside.some((c) => c.reference === "circle:ratings"));
+});
+
+// 2026-11-09 production: "Check the Polymarket market on a Fed rate cut in December" listed nothing,
+// because the fit model dropped Scout and Pitch, and Resolution Watch (Verification, category 8)
+// was never searched in Prediction markets.
+test("a market check always lists Agon's own market agents, whatever the fit model says", async () => {
+  const pitch = entry({ reference: "agon:pitch", name: "Pitch", description: "Polymarket market pitch" });
+  const watch = entry({ reference: "agon:watch", name: "Resolution Watch", category: "8", description: "Watches Polymarket markets for settlement disputes" });
+  const { router } = setup({ entries: [entry({}), pitch, watch], judge: async () => [] });
+  const out = await router.route("op:x", "Check the Polymarket market on a Fed rate cut in December", { choices: true });
+  assert.ok(out.kind === "choices");
+  assert.equal(out.category, "prediction");
+  const shown = [...out.groups.ranked, ...out.groups.fresh].map((c) => c.reference).sort();
+  assert.deepEqual(shown, ["agon:pitch", "agon:scout", "agon:watch"]);
+});
+
+test("outside a market check, the fit model still decides which Agon agents show", async () => {
+  const { router } = setup({ kind: "research", entries: [entry({ category: "1", description: "Polymarket market research" })], judge: async () => [] });
+  const out = await router.route("op:x", "Research Polymarket market news", { choices: true });
+  assert.ok(out.kind === "choices");
+  assert.equal(out.groups.ranked.length + out.groups.fresh.length, 0);
 });

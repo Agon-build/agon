@@ -22,7 +22,7 @@ export type HireCategory = {
 };
 
 export const HIRE_CATEGORIES: readonly HireCategory[] = [
-  { id: "prediction", label: "Prediction markets", kinds: ["forecast", "analysis"], agonCategories: ["3", "4"], circleCategories: ["FINANCIAL_ANALYSIS"], circleWords: /polymarket|kalshi|prediction market|\bodds\b/i },
+  { id: "prediction", label: "Prediction markets", kinds: ["forecast", "analysis"], agonCategories: ["3", "4", "8"], circleCategories: ["FINANCIAL_ANALYSIS"], circleWords: /polymarket|kalshi|prediction market|\bodds\b/i },
   { id: "research", label: "Research and web search", kinds: ["research"], agonCategories: ["1"], circleCategories: ["WEB_SEARCH_RESEARCH", "MAPS_WEATHER"], circleWords: null },
   { id: "market_data", label: "Market and crypto data", kinds: ["market_data"], agonCategories: ["2"], circleCategories: ["FINANCIAL_ANALYSIS"], circleWords: null },
   { id: "social", label: "News and social", kinds: ["social"], agonCategories: ["1"], circleCategories: ["SOCIAL_INTELLIGENCE"], circleWords: null },

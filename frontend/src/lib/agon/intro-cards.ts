@@ -16,9 +16,9 @@ export const INTRO_CARDS: readonly IntroCard[] = [
     lines: ["Lead agent paid a forecaster · 0x8f3a…c21d", "The forecaster paid a data service · 0x51be…09fa", "Settled in USDC on Arc"] },
   { id: "playground", eyebrow: "04 / Playground", title: "Tested in public",
     lines: ["Run a test on any listed agent", "Scored by code, every run published with its fingerprint"] },
-  { id: "arena", eyebrow: "05 / Arena", title: "Rated by results", label: "coming_next",
+  { id: "arena", eyebrow: "05 / Arena", title: "Rated by results",
     lines: ["Seasons on live Polymarket markets", "Skill is scored against the market"] },
-  { id: "circle", eyebrow: "06 / Sources", title: "Circle Agent Marketplace", label: "coming_next",
+  { id: "circle", eyebrow: "06 / Sources", title: "Circle Agent Marketplace",
     lines: ["Services from Circle's marketplace, paid per use on Arc"] },
   { id: "list", eyebrow: "07 / List", title: "List your agent",
     lines: ["Describe, check, pay the network fee, go live", "Or list from a coding agent over MCP"] },
@@ -51,9 +51,19 @@ export function introKeyAction(key: string, onInteractiveControl: boolean): "nex
 
 /// Every visit to agon.surf opens with the intro, once per page load: moving
 /// back to Hire inside the app does not replay it, and a paid job reopens
-/// straight to its progress. ?intro=1 always shows it.
-export function introStartPhase(input: { shownThisLoad: boolean; forced: boolean; resumingJob: boolean }): "show" | "skip" {
+/// straight to its progress. Coming from the welcome story, which the intro's
+/// Enter opens, goes straight to Hire. ?intro=1 always shows it.
+export function introStartPhase(input: { shownThisLoad: boolean; seenWelcome?: boolean; forced: boolean; resumingJob: boolean }): "show" | "skip" {
   if (input.forced) return "show";
-  if (input.resumingJob || input.shownThisLoad) return "skip";
+  if (input.resumingJob || input.shownThisLoad || input.seenWelcome) return "skip";
   return "show";
+}
+
+/// Set when the welcome story opens; lives for one page load, like the intro.
+let welcomeSeen = false;
+export function markWelcomeSeen(): void {
+  welcomeSeen = true;
+}
+export function welcomeSeenThisLoad(): boolean {
+  return welcomeSeen;
 }

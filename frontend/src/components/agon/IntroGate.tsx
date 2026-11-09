@@ -4,7 +4,7 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { AgonIntro } from "@/components/agon/AgonIntro";
-import { introStartPhase } from "@/lib/agon/intro-cards";
+import { introStartPhase, welcomeSeenThisLoad } from "@/lib/agon/intro-cards";
 import { introDestination } from "@/lib/agon/landing";
 
 const STARTUP_HOLD_MS = 3000;
@@ -28,7 +28,7 @@ export function IntroGate({ children }: { children: ReactNode }) {
   useLayoutEffect(() => {
     if (decided.current) return;
     decided.current = true;
-    if (introStartPhase({ shownThisLoad, forced, resumingJob }) === "skip") { setPhase("hidden"); return; }
+    if (introStartPhase({ shownThisLoad, seenWelcome: welcomeSeenThisLoad(), forced, resumingJob }) === "skip") { setPhase("hidden"); return; }
     shownThisLoad = true;
     setPhase("visible");
   }, [forced, resumingJob]);

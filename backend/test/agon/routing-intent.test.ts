@@ -12,6 +12,9 @@ test("code reads market checks and chances before the model does", () => {
   assert.equal(kindFromWords("Will Arsenal win the Premier League this season?"), "forecast");
   assert.equal(kindFromWords("What are the odds the Fed cuts in December?"), "forecast");
   assert.equal(kindFromWords("What is the chance this market's rules resolve it Yes?"), "forecast", "a chance question stays a forecast");
+  assert.equal(kindFromWords("Check the Polymarket market on a Fed rate cut in December"), "analysis");
+  assert.equal(kindFromWords("Watch my Polymarket markets for settlement disputes"), "analysis");
+  assert.equal(kindFromWords("Alert me if this market settlement is challenged"), "analysis");
   assert.equal(kindFromWords("Summarise the latest Arc docs on gas"), null);
 });
 

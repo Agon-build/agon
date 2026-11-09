@@ -8,7 +8,7 @@ const MARKET = { type: "object" as const, properties: { market: { type: "string"
 const listing = (over: Partial<AgonListingLite>): AgonListingLite => ({
   reference: "5042002:0xreg:9", agentId: "9", name: "Scout", description: "A trade, watch or avoid verdict for any Polymarket market.",
   category: "3", endpoint: "https://api.agon.surf/agon/agents/specialists/scout", priceAtomic: 100_000n, latencyMs: 15_000,
-  status: "Listed", verified: true, inputSchema: MARKET, ...over,
+  status: "Listed", verified: true, suspended: false, inputSchema: MARKET, ...over,
 });
 const q = (words: string[]) => ({ words, agonCategories: ["3"], circleCategories: [] });
 
@@ -40,6 +40,13 @@ test("paused listings, the Lead and house forecasters are never returned", async
     listing({ reference: "r:house", endpoint: "https://api.agon.surf/agon/agents/house/vesper/forecast" }),
   ]);
   assert.deepEqual(await s.search(q(["polymarket"])), []);
+});
+
+// 2026-11-09: Rules Check is Suspended (its page shows Paused, no Hire button), so routing must not offer it either.
+test("a listing whose verification is Suspended is never routed or browsed", async () => {
+  const s = source([listing({ reference: "r:ok" }), listing({ reference: "r:sus", verified: false, suspended: true })]);
+  assert.deepEqual((await s.search(q(["polymarket"]))).map((e) => e.reference), ["r:ok"]);
+  assert.deepEqual((await s.all!()).map((e) => e.reference), ["r:ok"]);
 });
 
 test("only the asked categories and matching words come back", async () => {

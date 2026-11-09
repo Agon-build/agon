@@ -24,7 +24,7 @@ export const KIND_SOURCES: Record<IntentKind, { agonCategories: string[]; circle
 // forecast never leaves the Lead because it also mentions rules or volume.
 const CHANCE = /\b(chances?|probability|probable|odds|likely|likelihood|forecast|predict(ion)?)\b|^\s*(do you think\s+)?will\b/i;
 // A question about a market itself: whether to trade it, how it trades, how it resolves.
-const MARKET_CHECK = /\b(worth (trading|it|betting|a bet)|trad(e|ing) it|tradeable|tradable|liquidity|liquid|spreads?|volume|order ?book|resolution|resolves?|rules?|avoid|red flags?|safe to (trade|bet))\b/i;
+const MARKET_CHECK = /\b(worth (trading|it|betting|a bet)|trad(e|ing) it|tradeable|tradable|liquidity|liquid|spreads?|volume|order ?book|resolution|resolves?|rules?|avoid|red flags?|safe to (trade|bet)|check (the |this |a |my )?(polymarket |kalshi )?markets?|settle(ment|d)?|disputes?|challenged?|(watch|monitor)\w* .*\bmarkets?)\b/i;
 
 /// Code reads the clear cases so they never depend on a model's answer.
 export function kindFromWords(text: string): "forecast" | "analysis" | null {

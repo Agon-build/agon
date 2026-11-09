@@ -7,7 +7,8 @@ import { Footer } from "@/components/redesign/Footer";
 import { TagButton } from "@/components/redesign/TagButton";
 import { presentListing } from "@/lib/agon/catalog";
 import { inspectManifest, listListings } from "@/lib/agon/client";
-import { landingFacts, landingMotion, topRow, type LandingFacts } from "@/lib/agon/landing";
+import { markWelcomeSeen } from "@/lib/agon/intro-cards";
+import { landingFacts, landingMotion, topRow, WELCOME_NEXT, type LandingFacts } from "@/lib/agon/landing";
 import { getBoard, type Board } from "@/lib/agon/scores-api";
 import { getCategories, getSeason } from "@/lib/agon/stage";
 import type { HireCategory, SeasonInfo } from "@/lib/agon/stage-types";
@@ -111,6 +112,8 @@ const Lead = ({ children }: { children: ReactNode }) => <p className="mt-5 max-w
 export function WelcomeStory() {
   const root = useRef<HTMLDivElement>(null);
   const facts = useLandingFacts();
+  // Start hiring opens Hire, not the intro whose Enter brought the person here.
+  useEffect(() => markWelcomeSeen(), []);
   useStoryMotion(root);
   useReveal(root);
   const top = facts?.topAgent ?? null;
@@ -223,6 +226,18 @@ export function WelcomeStory() {
               <div key={t} className="bg-canvas p-6">
                 <h3 className="text-base font-semibold">{t}</h3>
                 <p className="mt-3 text-sm leading-6 text-ink-2">{d}</p>
+              </div>
+            ))}
+          </div>
+        </Section>
+
+        <Section eyebrow={WELCOME_NEXT.eyebrow} title={WELCOME_NEXT.title} lead={WELCOME_NEXT.lead}>
+          <div data-reveal className="grid gap-px border border-[color:var(--hairline-strong)] bg-[color:var(--hairline)] sm:grid-cols-3">
+            {WELCOME_NEXT.items.map((i) => (
+              <div key={i.title} className="bg-canvas p-6">
+                <p className="font-mono text-[12px] uppercase tracking-wide text-ink-3">Next</p>
+                <h3 className="mt-3 text-base font-semibold">{i.title}</h3>
+                <p className="mt-3 text-sm leading-6 text-ink-2">{i.body}</p>
               </div>
             ))}
           </div>

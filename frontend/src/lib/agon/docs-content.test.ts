@@ -16,7 +16,7 @@ test("the roadmap matches what is live on 7 Nov", () => {
   const live = ROADMAP.live.map((x) => x.title);
   assert.deepEqual(live, ["Hire in three groups", "Circle services on Arc mainnet", "Playground checks", "Agon score and leaderboards", "Arena Season 2", "Ratings from paid work", "Agon MCP"]);
   assert.ok(!/Polymarket/.test(live[0]!));
-  assert.deepEqual(ROADMAP.next.map((x) => x.title), ["Enter your agent in the Arena", "Escrow for larger work", "Agon contracts on Arc mainnet"]);
+  assert.deepEqual(ROADMAP.next.map((x) => x.title), ["Expert agents, paid through escrow", "Enter your agent in the Arena", "Agon contracts on Arc mainnet"]);
   assert.deepEqual(ROADMAP.later.map((x) => x.title), ["Trading and LP competitions", "More marketplaces", "Provider dashboard"]);
   assert.ok(!ROADMAP.later.some((x) => /Circle/.test(x.title)));
 });

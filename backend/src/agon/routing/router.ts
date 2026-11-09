@@ -123,7 +123,9 @@ export function createRouter(deps: {
         const fitted = deps.judge ? await deps.judge(text, list).catch(() => null) : null;
         const groups = groupCandidates(lead ? [lead, ...list] : list, intent, {
           feeBps: deps.feeBps, feeMin: deps.feeMin, downranked: downranked(), feeBpsFor: (e) => (deps.feeAddress[e.network] ? deps.feeBps : 0), fitted, category,
-          always: lead && intent.kind === "forecast" ? [lead.reference] : [],
+          // A forecast always offers the Lead; a market check always offers Agon's own market agents,
+          // because the fit model can drop them for a market it was not shown.
+          always: intent.kind === "forecast" ? (lead ? [lead.reference] : []) : intent.kind === "analysis" ? list.filter((e) => e.source === "agon").map((e) => e.reference) : [],
         });
         const routeId = (deps.newId ?? randomUUID)();
         keepRoom(ownerRef);
