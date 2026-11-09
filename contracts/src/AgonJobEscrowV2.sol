@@ -83,6 +83,12 @@ contract AgonJobEscrowV2 is AccessControl, Pausable, ReentrancyGuard {
     mapping(uint256 => uint64) public rejectedAt;
     /// @notice When the dispute was opened. Kept outside Job so getJob stays ABI stable.
     mapping(uint256 => uint64) public disputedAt;
+    /// @dev Paused seconds counted when each job was created. The acceptance deadline
+    ///      moves forward by the paused time that accrued after this mark, because
+    ///      acceptJob and submitJob cannot run while the contract is paused.
+    mapping(uint256 => uint256) private _pausedMarkAtCreate;
+    uint256 private _pausedSecondsTotal;
+    uint64 private _pausedSince;
 
     event JobCreated(
         uint256 indexed jobId,
@@ -254,6 +260,7 @@ contract AgonJobEscrowV2 is AccessControl, Pausable, ReentrancyGuard {
             settlement: Settlement.None
         });
         jobByReference[msg.sender][clientReference] = jobId;
+        _pausedMarkAtCreate[jobId] = _pausedSecondsTotal;
         usdc.safeTransferFrom(msg.sender, address(this), total);
         _emitJobCreated(jobId, clientReference);
     }
@@ -262,7 +269,7 @@ contract AgonJobEscrowV2 is AccessControl, Pausable, ReentrancyGuard {
         Job storage job = _job(jobId);
         if (msg.sender != job.provider) revert NotProvider();
         if (job.status != Status.Created) revert InvalidStatus();
-        if (block.timestamp > job.acceptanceDeadline) revert AcceptanceWindowClosed();
+        if (block.timestamp > effectiveAcceptanceDeadline(jobId)) revert AcceptanceWindowClosed();
         job.status = Status.Accepted;
         emit JobAccepted(jobId, msg.sender);
     }
@@ -271,7 +278,7 @@ contract AgonJobEscrowV2 is AccessControl, Pausable, ReentrancyGuard {
         Job storage job = _job(jobId);
         if (msg.sender != job.provider) revert NotProvider();
         if (job.status != Status.Accepted) revert InvalidStatus();
-        if (block.timestamp > job.acceptanceDeadline) revert AcceptanceWindowClosed();
+        if (block.timestamp > effectiveAcceptanceDeadline(jobId)) revert AcceptanceWindowClosed();
         if (deliverableHash == bytes32(0)) revert ZeroHash();
         job.deliverableHash = deliverableHash;
         job.submittedAt = uint64(block.timestamp);
@@ -359,16 +366,30 @@ contract AgonJobEscrowV2 is AccessControl, Pausable, ReentrancyGuard {
         Job storage job = _job(jobId);
         if (msg.sender != job.buyer) revert NotBuyer();
         if (job.status != Status.Created && job.status != Status.Accepted) revert InvalidStatus();
-        if (block.timestamp <= job.acceptanceDeadline) revert AcceptanceWindowOpen();
+        if (block.timestamp <= effectiveAcceptanceDeadline(jobId)) revert AcceptanceWindowOpen();
         _refundBuyer(job);
     }
 
+    /// @notice Pausing stops the acceptance clock of every open job.
     function pause() external onlyRole(PAUSER_ROLE) {
         _pause();
+        _pausedSince = uint64(block.timestamp);
     }
 
     function unpause() external onlyRole(PAUSER_ROLE) {
         _unpause();
+        _pausedSecondsTotal += block.timestamp - _pausedSince;
+        _pausedSince = 0;
+    }
+
+    /// @notice Last moment the provider can accept and submit, moved out by paused time.
+    /// @dev One window covers both accepting and delivering: it is reviewHours long from
+    ///      creation, the same length as the buyer's review window after submission.
+    function effectiveAcceptanceDeadline(uint256 jobId) public view returns (uint256) {
+        Job storage job = _job(jobId);
+        uint256 pausedNow = _pausedSecondsTotal;
+        if (paused()) pausedNow += block.timestamp - _pausedSince;
+        return uint256(job.acceptanceDeadline) + pausedNow - _pausedMarkAtCreate[jobId];
     }
 
     function setTreasury(address newTreasury) external onlyRole(DEFAULT_ADMIN_ROLE) {

@@ -179,7 +179,9 @@ contract AgonPrizeVault is AccessControl, Pausable, ReentrancyGuard {
         emit PrizeClaimed(poolKey, index, beneficiary, amount);
     }
 
-    function refundRemaining(bytes32 poolKey) external onlyRole(POOL_OPERATOR_ROLE) nonReentrant {
+    /// @notice Return unclaimed principal to the sponsor once every prize is claimed or the claim window has closed.
+    /// @dev Anyone may call. Funds only go to the sponsor.
+    function refundRemaining(bytes32 poolKey) external nonReentrant {
         Pool storage pool = _pool(poolKey);
         if (pool.state != State.RootPublished) revert InvalidState();
         if (pool.claimedTotal != pool.payoutTotal && block.timestamp < effectiveClaimDeadline(poolKey)) {

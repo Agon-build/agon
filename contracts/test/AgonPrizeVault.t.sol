@@ -201,4 +201,23 @@ contract AgonPrizeVaultTest is Test {
         vault.refundRemaining(POOL);
         assertEq(usdc.balanceOf(sponsor), 2000e6 - 50e6 - 600e6);
     }
+
+    // Audit C4 (2026-11-09): leftover principal waited for the operator.
+    function test_anyoneReturnsLeftoverToSponsorAfterClaimDeadline() public {
+        _fund();
+        uint256 start = block.timestamp;
+        vm.prank(admin);
+        vault.publishPayoutRoot(POOL, keccak256("root"), 900e6, uint64(start + 7 days));
+
+        vm.prank(bob);
+        vm.expectRevert(AgonPrizeVault.RefundWindowOpen.selector);
+        vault.refundRemaining(POOL);
+
+        vm.warp(start + 7 days + 1);
+        vm.prank(bob);
+        vault.refundRemaining(POOL);
+        assertEq(usdc.balanceOf(sponsor), 2000e6 - 50e6);
+        assertEq(usdc.balanceOf(bob), 0);
+        assertEq(uint8(vault.getPool(POOL).state), uint8(AgonPrizeVault.State.Closed));
+    }
 }

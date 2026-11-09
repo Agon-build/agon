@@ -27,6 +27,7 @@ contract AgonProfileRegistry is AccessControl {
     error ProfileAlreadyBound();
     error InvalidMetadataURI();
     error MissingIdentity();
+    error ProfileNotSuspended();
     event ProfileBound(uint256 indexed agentId, address indexed owner, string metadataURI);
     event ProfileMetadataUpdated(uint256 indexed agentId, address indexed owner, string metadataURI);
     event ProfileStatusChanged(uint256 indexed agentId, address indexed actor, Status status, bytes32 reason);
@@ -88,6 +89,16 @@ contract AgonProfileRegistry is AccessControl {
         profiles[id].suspensionReason = reason;
         profiles[id].updatedAt = uint64(block.timestamp);
         emit ProfileStatusChanged(id, msg.sender, Status.Suspended, reason);
+    }
+
+    /// @notice Lift a suspension. Only a Suspended profile can return to Active; Archived stays archived.
+    function reinstateProfile(uint256 id) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (profiles[id].agentId == 0) revert MissingIdentity();
+        if (profiles[id].status != Status.Suspended) revert ProfileNotSuspended();
+        profiles[id].status = Status.Active;
+        profiles[id].suspensionReason = bytes32(0);
+        profiles[id].updatedAt = uint64(block.timestamp);
+        emit ProfileStatusChanged(id, msg.sender, Status.Active, bytes32(0));
     }
 
     function archiveProfile(uint256 id) external onlyOwner(id) {

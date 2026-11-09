@@ -149,4 +149,71 @@ contract AgonServiceRegistryV2Test is Test {
         assertEq(arena.getEvaluation(evaluationId).agentId, 42);
         assertEq(arena.getEvaluation(evaluationId).listingVersion, 1);
     }
+
+    // Audit C2 (2026-11-09): a suspended identity kept publishing.
+    function test_suspendedProfileCannotPublishOrPublishVersion() public {
+        uint256 id = _publish();
+        vm.prank(admin);
+        profiles.suspendProfile(42, "review");
+
+        vm.prank(provider);
+        vm.expectRevert(AgonServiceRegistryV2.ProfileNotActive.selector);
+        services.publish(
+            42, keccak256("other"), manifestV1, "ipfs://other", 1, AgonServiceRegistryV2.PaymentRail.X402
+        );
+        vm.prank(provider);
+        vm.expectRevert(AgonServiceRegistryV2.ProfileNotActive.selector);
+        services.publishVersion(id, keccak256("manifest-v2"), "ipfs://manifest-v2", AgonServiceRegistryV2.PaymentRail.X402);
+    }
+
+    function test_archivedProfileCannotPublish() public {
+        vm.prank(provider);
+        profiles.archiveProfile(42);
+        vm.prank(provider);
+        vm.expectRevert(AgonServiceRegistryV2.ProfileNotActive.selector);
+        services.publish(42, serviceKey, manifestV1, "ipfs://manifest-v1", 1, AgonServiceRegistryV2.PaymentRail.X402);
+    }
+
+    function test_unboundIdentityMayStillPublish() public {
+        identity.mint(provider, 43);
+        vm.prank(provider);
+        uint256 id =
+            services.publish(43, serviceKey, manifestV1, "ipfs://manifest-v1", 1, AgonServiceRegistryV2.PaymentRail.X402);
+        assertEq(services.getListing(id).agentId, 43);
+        assertTrue(services.profileUsable(43));
+    }
+
+    function test_reinstatedProfilePublishesAgain() public {
+        vm.prank(admin);
+        profiles.suspendProfile(42, "review");
+        vm.prank(admin);
+        profiles.reinstateProfile(42);
+        assertEq(_publish(), 1);
+    }
+
+    function test_suspensionStopsEscrowAndRelistingButNotDelisting() public {
+        vm.prank(provider);
+        uint256 id = services.publish(
+            42, serviceKey, manifestV1, "ipfs://manifest-v1", 1, AgonServiceRegistryV2.PaymentRail.Escrow
+        );
+        vm.prank(admin);
+        services.setVerificationForVersion(id, 1, manifestV1, AgonServiceRegistryV2.Verification.Verified);
+        assertTrue(services.escrowEligible(id));
+
+        vm.prank(admin);
+        profiles.suspendProfile(42, "review");
+        assertFalse(services.escrowEligible(id));
+
+        vm.prank(provider);
+        services.setStatus(id, AgonServiceRegistryV2.ListingStatus.Delisted);
+        vm.prank(provider);
+        vm.expectRevert(AgonServiceRegistryV2.ProfileNotActive.selector);
+        services.setStatus(id, AgonServiceRegistryV2.ListingStatus.Listed);
+
+        vm.prank(admin);
+        profiles.reinstateProfile(42);
+        vm.prank(provider);
+        services.setStatus(id, AgonServiceRegistryV2.ListingStatus.Listed);
+        assertTrue(services.escrowEligible(id));
+    }
 }

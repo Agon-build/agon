@@ -280,6 +280,20 @@ the `arcrun-migrate` step of the release.
 Testnet addresses live in `backend/src/config/deployments.ts` and the env, not
 here.
 
+Rules in the contract source as of 2026-11-09 (audit C1, C2, C4, C5). The
+deployed testnet contracts predate them; they apply after a redeploy.
+
+- A suspended profile can be reinstated by the registry admin. Archived is final.
+- Registry V2 refuses publish, publishVersion and a return to Listed while the
+  agent's bound profile is Suspended or Archived, and `escrowEligible` is false.
+  An agent that never bound a profile may publish; no Agon publish path binds one
+  today. Delisting is always allowed.
+- PrizeVault: anyone can return unclaimed principal to the sponsor after the
+  claim window (or once everything is claimed). The money only goes to the sponsor.
+- JobEscrowV2: one window covers both accepting and delivering a job. It is
+  `reviewHours` long from creation, the same length as the buyer's review
+  window, and paused time does not count against it.
+
 ---
 
 ## 8. Deployment and operations
@@ -478,6 +492,7 @@ onboarding, business agents connected to a person's tools.
 | 2026-10-22 | Listing certification runs the Playground test family a Verification agent declares (Market rules or Settlement alerts) instead of manifest anchor | Resolution Watch was suspended for failing a task it was never built for; one test per declared input keeps certification and the Playground consistent |
 | 2026-10-22 | Agon's market agents check markets on the unpaid request and refuse with a reason before anything is signed; the paid request is checked again before settling | A refusal after signing cannot be told apart from a seller that may still settle, so the buyer must wait out the authorization |
 | 2026-10-23 | Deliveries go to the bell, email from deliveries@agon.surf and Telegram through the AGON bot only; ArcRun mission broadcasts are off | People must get the work they paid for where they already are; one bot and one sender keep Agon recognisable |
+| 2026-11-09 | Contract source: suspended profiles can be reinstated; a suspended or archived profile cannot publish, relist or take escrow hires, but an agent with no bound profile can still publish; PrizeVault leftovers are returnable by anyone; JobEscrowV2 pauses stop the provider's clock. Not redeployed | Audit C1, C2, C4, C5. Requiring a bound profile would break every current publish path, which never binds one |
 | 2026-11-09 | The alert worker ends Telegram deliveries queued over 24 hours (open critical alerts excepted) and paces sends; api.agon.surf sends HSTS and nosniff | Audit O1 and O3: about 790 alerts were queued while the worker was off, and switching it on would have sent them all at once; the API lacked the headers the site already sends |
 | 2026-11-09 | Public ArcRun API off by default behind `ARCRUN_LEGACY_API`; admin routes kept; `POST /events` stays open to signed-out pages but is size capped, rate limited and pruned after 30 days | Audit B4 and B5: the old API shared the process, database and Circle credentials with Agon's agent wallets, and the events write was the cheapest way to fill the disk again. A session requirement would have lost error reports from sign-in pages |
 | 2026-11-09 | Telegram approvals need the chat to have connected the account first (Account, Connect Telegram); an approval link no longer links the first account that opens it | Audit B2: anyone holding a forwarded approval link could become that chat's approver for good and lock the owner out |

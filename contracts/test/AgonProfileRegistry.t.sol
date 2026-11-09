@@ -136,4 +136,52 @@ contract AgonProfileRegistryTest is Test {
         profiles.syncOwnership(42);
         assertEq(profiles.getProfile(42).ownerSnapshot, buyer);
     }
+
+    // Audit C1 (2026-11-09): a suspension had no way back.
+    function test_reinstateProfile_returnsSuspendedProfileToActive() public {
+        identity.mint(provider, 42);
+        vm.prank(provider);
+        profiles.bindProfile(42, "ipfs://v1");
+        vm.prank(admin);
+        profiles.suspendProfile(42, "review");
+
+        vm.expectEmit(true, true, false, true, address(profiles));
+        emit AgonProfileRegistry.ProfileStatusChanged(42, admin, AgonProfileRegistry.Status.Active, bytes32(0));
+        vm.prank(admin);
+        profiles.reinstateProfile(42);
+
+        AgonProfileRegistry.Profile memory p = profiles.getProfile(42);
+        assertEq(uint8(p.status), uint8(AgonProfileRegistry.Status.Active));
+        assertEq(p.suspensionReason, bytes32(0));
+    }
+
+    function test_reinstateProfile_onlyAdmin() public {
+        identity.mint(provider, 42);
+        vm.prank(provider);
+        profiles.bindProfile(42, "ipfs://v1");
+        vm.prank(admin);
+        profiles.suspendProfile(42, "review");
+        vm.prank(provider);
+        vm.expectRevert();
+        profiles.reinstateProfile(42);
+    }
+
+    function test_reinstateProfile_rejectsActiveArchivedAndMissing() public {
+        identity.mint(provider, 42);
+        vm.prank(provider);
+        profiles.bindProfile(42, "ipfs://v1");
+        vm.prank(admin);
+        vm.expectRevert(AgonProfileRegistry.ProfileNotSuspended.selector);
+        profiles.reinstateProfile(42);
+
+        vm.prank(provider);
+        profiles.archiveProfile(42);
+        vm.prank(admin);
+        vm.expectRevert(AgonProfileRegistry.ProfileNotSuspended.selector);
+        profiles.reinstateProfile(42);
+
+        vm.prank(admin);
+        vm.expectRevert(AgonProfileRegistry.MissingIdentity.selector);
+        profiles.reinstateProfile(7);
+    }
 }

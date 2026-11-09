@@ -275,4 +275,56 @@ contract AgonJobEscrowV2Test is Test {
         vm.expectRevert(AgonJobEscrowV2.ResolverWindowClosed.selector);
         escrow.resolveDispute(jobB, true);
     }
+
+    // Audit C5 (2026-11-09): a pause ran the provider's clock down and let the buyer fail the job.
+    function test_pauseDoesNotEatTheAcceptanceWindow() public {
+        uint256 start = block.timestamp;
+        uint256 jobId = _create(keccak256("paused-job"));
+        uint256 deadline = escrow.getJob(jobId).acceptanceDeadline;
+        assertEq(escrow.effectiveAcceptanceDeadline(jobId), deadline);
+
+        vm.warp(start + 10 hours);
+        vm.prank(admin);
+        escrow.pause();
+        vm.warp(start + 40 hours);
+
+        vm.prank(buyer);
+        vm.expectRevert(AgonJobEscrowV2.AcceptanceWindowOpen.selector);
+        escrow.failJob(jobId);
+
+        vm.prank(admin);
+        escrow.unpause();
+        assertEq(escrow.effectiveAcceptanceDeadline(jobId), deadline + 30 hours);
+
+        vm.prank(provider);
+        escrow.acceptJob(jobId);
+        vm.warp(deadline + 30 hours);
+        vm.prank(provider);
+        escrow.submitJob(jobId, DELIVERABLE_HASH);
+        assertEq(uint8(escrow.getJob(jobId).status), uint8(AgonJobEscrowV2.Status.Submitted));
+    }
+
+    function test_buyerFailsJobOncePauseAdjustedWindowCloses() public {
+        uint256 start = block.timestamp;
+        uint256 jobId = _create(keccak256("late-job"));
+        uint256 deadline = escrow.getJob(jobId).acceptanceDeadline;
+        vm.prank(admin);
+        escrow.pause();
+        vm.warp(start + 5 hours);
+        vm.prank(admin);
+        escrow.unpause();
+
+        vm.warp(deadline + 5 hours);
+        vm.prank(buyer);
+        vm.expectRevert(AgonJobEscrowV2.AcceptanceWindowOpen.selector);
+        escrow.failJob(jobId);
+
+        vm.warp(deadline + 5 hours + 1);
+        vm.prank(provider);
+        vm.expectRevert(AgonJobEscrowV2.AcceptanceWindowClosed.selector);
+        escrow.acceptJob(jobId);
+        vm.prank(buyer);
+        escrow.failJob(jobId);
+        assertEq(usdc.balanceOf(buyer), 1000e6);
+    }
 }

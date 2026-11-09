@@ -64,6 +64,7 @@ contract AgonServiceRegistryV2 is AccessControl {
     error InvalidVersion();
     error ScopedVerificationRequired();
     error VerificationScopeChanged();
+    error ProfileNotActive();
     event ListingPublished(
         uint256 indexed listingId,
         uint256 indexed agentId,
@@ -110,6 +111,7 @@ contract AgonServiceRegistryV2 is AccessControl {
         PaymentRail rail
     ) external returns (uint256 id) {
         if (profiles.currentOwner(agentId) != msg.sender) revert NotIdentityOwner();
+        if (!profileUsable(agentId)) revert ProfileNotActive();
         if (serviceKey == bytes32(0)) revert InvalidServiceKey();
         if (manifestHash == bytes32(0) || bytes(uri).length == 0) revert InvalidManifest();
         if (category == 0) revert InvalidCategory();
@@ -153,6 +155,7 @@ contract AgonServiceRegistryV2 is AccessControl {
     {
         if (hash == bytes32(0) || bytes(uri).length == 0) revert InvalidManifest();
         Listing storage l = listings[id];
+        if (!profileUsable(l.agentId)) revert ProfileNotActive();
         uint256 v = l.version + 1;
         l.version = v;
         l.manifestHash = hash;
@@ -166,7 +169,9 @@ contract AgonServiceRegistryV2 is AccessControl {
         emit ListingVersionPublished(id, v, hash, uri, rail, msg.sender);
     }
 
+    /// @dev Delisting is always allowed. Returning to Listed needs a usable profile.
     function setStatus(uint256 id, ListingStatus status) external ownerOfListing(id) {
+        if (status == ListingStatus.Listed && !profileUsable(listings[id].agentId)) revert ProfileNotActive();
         listings[id].status = status;
         listings[id].updatedAt = uint64(block.timestamp);
         emit ListingStatusChanged(id, msg.sender, status);
@@ -203,7 +208,18 @@ contract AgonServiceRegistryV2 is AccessControl {
     function escrowEligible(uint256 id) public view returns (bool) {
         Listing storage l = listings[id];
         return l.listingId != 0 && l.paymentRail == PaymentRail.Escrow && l.verification == Verification.Verified
-            && l.status == ListingStatus.Listed;
+            && l.status == ListingStatus.Listed && profileUsable(l.agentId);
+    }
+
+    /// @notice False when the agent has a bound profile that is Suspended or Archived.
+    /// @dev An agent with no bound profile may publish (owner decision, audit C2 of 2026-11-09).
+    ///      Any other failure to read the profile counts as not usable.
+    function profileUsable(uint256 agentId) public view returns (bool) {
+        try profiles.getProfile(agentId) returns (AgonProfileRegistry.Profile memory p) {
+            return p.status == AgonProfileRegistry.Status.Active;
+        } catch (bytes memory reason) {
+            return reason.length == 4 && bytes4(reason) == AgonProfileRegistry.MissingIdentity.selector;
+        }
     }
 
     function getListing(uint256 id) external view returns (Listing memory) {
