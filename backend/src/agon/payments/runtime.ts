@@ -30,7 +30,7 @@ import * as wallets from "./budget-wallets.ts";
 import { waitForCircleTx } from "./circle-poll.ts";
 import { createCircleExactSettler } from "./exact-seller.ts";
 import { createGuardedSigner } from "./guarded-signer.ts";
-import { refundUndeliveredLeadHires } from "./auto-refund.ts";
+import { refundUndeliveredAgonHires } from "./auto-refund.ts";
 import { completeApprovedHire, confirmHire, quoteHire, reconcileStuckHires, settleFeeTab, type HireDeps, type HireOutcome, type HireRequest } from "./hire.ts";
 import { createPaymentRoutes } from "./routes.ts";
 import { resolveOutsideSettings, resolvePaymentSettings, type PaymentSettings, type WalletHandle } from "./settings.ts";
@@ -129,10 +129,17 @@ export function startPaymentsRuntime(input: {
       return rankForecasters({ rows: computeLeaderboard(raw), entries, publicApiUrl: s.publicApiUrl, hireableHouseKeys: Object.keys(s.houseSellers) })
         .filter((c) => !blocked.has(c.providerRef.toLowerCase()));
     };
-    const leadRefund = async (to: Address, amount: bigint, key: string): Promise<Hex> => {
-      const t = await createPlatformUsdcTransfer({ walletId: s.lead.walletId, destinationAddress: to, amountBaseUnits: amount, idempotencyKey: stableUuid(key), refId: key, blockchain: network.circleChain });
+    /// Sends USDC back out of one of Agon's own seller wallets. The Circle
+    /// idempotency key comes from `refund:<jobId>`, so a retry never pays twice.
+    const refundFrom = (w: WalletHandle) => async (to: Address, amount: bigint, key: string): Promise<Hex> => {
+      const t = await createPlatformUsdcTransfer({ walletId: w.walletId, destinationAddress: to, amountBaseUnits: amount, idempotencyKey: stableUuid(key), refId: key, blockchain: network.circleChain });
       return waitForCircleTx({ id: t.id, label: key, getTxState });
     };
+    const leadRefund = refundFrom(s.lead);
+    /// Every seller wallet Agon runs, for the automatic refund of paid but undelivered hires.
+    const agonSellers = [s.lead, ...Object.values(s.houseSellers), ...Object.values(s.specialistSellers)]
+      .filter((w): w is WalletHandle => Boolean(w))
+      .map((w) => ({ address: w.address, refund: refundFrom(w) }));
     const leadRun = (run: { parentJobId: string | null; payer: Address; question: string; payment?: { txHash: Hex; amount: bigint } }) =>
       runLeadForecast(
         {
@@ -201,7 +208,7 @@ export function startPaymentsRuntime(input: {
       setInterval(() => {
         hire.reconcile()
           .then((t) => (t.settled || t.released ? log(`reconciled ${JSON.stringify(t)}`) : undefined))
-          .then(() => refundUndeliveredLeadHires({ store, leadAddress: s.lead.address, network: network.id, now: () => new Date(), refund: leadRefund, log }))
+          .then(() => refundUndeliveredAgonHires({ store, sellers: agonSellers, network: network.id, now: () => new Date(), log }))
           .then((r) => (r.refunded || r.skipped ? log(`automatic refunds ${JSON.stringify(r)}`) : undefined))
           .catch((e) => log(`reconcile failed: ${(e as Error).message}`));
       }, 5 * 60_000).unref();

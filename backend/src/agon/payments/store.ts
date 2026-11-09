@@ -243,10 +243,11 @@ export class PostgresPaymentsStore implements PaymentsStore {
     return rows.map(toJob);
   }
 
-  async listFailedJobs(providerRef: string, updatedAfter: Date, updatedBefore: Date): Promise<Job[]> {
+  async listFailedRootJobs(updatedAfter: Date, updatedBefore: Date): Promise<Job[]> {
     const { rows } = await this.pool.query<JobRow>(
-      "select * from agon_jobs where state = 'failed' and provider_ref = $1 and parent_id is null and updated_at >= $2 and updated_at < $3 order by updated_at desc limit 50",
-      [providerRef, updatedAfter, updatedBefore],
+      `select * from agon_jobs where state = 'failed' and parent_id is null and updated_at >= $1 and updated_at < $2
+         and result->>'error' in ('delivery_failed', 'delivery_unknown') order by updated_at desc limit 200`,
+      [updatedAfter, updatedBefore],
     );
     return rows.map(toJob);
   }

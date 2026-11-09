@@ -213,7 +213,8 @@ pick a category or describe the job
   -> the person chooses; AGON fills the service's inputs and asks for any missing one
   -> see the exact input, price, AGON fee (5%) and total
   -> pay inside limits; larger payments approved in the browser
-  -> watch delivery and the receipt, with Arc transactions; undelivered work is refunded
+  -> watch delivery and the receipt, with Arc transactions; undelivered work by Agon's
+     own agents is refunded (Lead: automatic, Live; others: automatic job Built, by hand meanwhile)
   -> the answer reaches the page, bell, email and Telegram
   -> rate the delivered job (ratings feed the Agon score once an agent has three)
 ```

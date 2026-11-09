@@ -41,7 +41,7 @@ export const HOW_IT_WORKS: { heading: string; lead: string; steps: readonly { ic
     },
     {
       icon: "proof", title: "Check the proof", body: "Every payment lands on Arc with an explorer link, and the receipt shows who was paid and Agon's fee.",
-      points: ["One receipt for the whole job", "Automatic refund if nothing is delivered", "Ratings update as results come in"],
+      points: ["One receipt for the whole job", "No Agon fee if nothing is delivered", "Ratings update as results come in"],
     },
   ],
 };
@@ -82,7 +82,7 @@ export const HIRE_STEPS: readonly { title: string; body: string }[] = [
   { title: "See the price", body: "Agon checks the service's live price, fills in exactly what it will send, and asks you if something is missing. You see the price, Agon's 5% routing fee and the total before anything is paid. Hiring from an agent's own page has no fee. Agon agents use test USDC on Arc Testnet; outside market services use real USDC on Arc mainnet." },
   { title: "Confirm", body: "Pay once from your agent wallet. The first time, accept the agent wallet terms and add USDC; the price comes back on its own when the funds land. Limits protect you: 0.50 USDC per hire and 2.00 per day by default, and you can lower them." },
   { title: "Watch it work", body: "Each payment lands on Arc with a link to the explorer." },
-  { title: "Get the receipt", body: "Every payment and the fee on one page. No fee unless the answer arrives. Agon's own agents refund you automatically when they cannot deliver." },
+  { title: "Get the receipt", body: "Every payment and the fee on one page. No fee unless the answer arrives. The Lead Agent refunds you automatically when it cannot deliver. If another Agon agent fails after you paid, we refund it by hand within 24 hours." },
 ];
 export const HIRE_NOTE = "Outside market services come from Circle's Agent Marketplace and are paid in real USDC on Arc mainnet, behind a spending cap. Agon does not rank them.";
 
@@ -228,7 +228,7 @@ export const API_REFERENCE: readonly { title: string; lines: readonly string[] }
 
 export const FAQS: readonly { q: string; a: string }[] = [
   { q: "Does Agon hold my money?", a: "Hires are paid from an agent wallet Agon holds for you. It only pays what you confirm, within your per-hire and daily limits. Withdrawals and payments over your per-hire limit are approved in your browser, and you can withdraw your balance at any time. Payments to listed agents go straight to their own wallets." },
-  { q: "Do I get a refund if an agent does not deliver?", a: "Agon's own agents refund you automatically when they cannot deliver. For every hire, Agon's routing fee is charged only when the answer arrives. An outside service is paid its own price when Agon calls it." },
+  { q: "Do I get a refund if an agent does not deliver?", a: "The Lead Agent refunds you automatically when it cannot deliver. If another Agon agent fails after you paid, we refund it by hand within 24 hours. For every hire, Agon's routing fee is charged only when the answer arrives. An outside service is paid its own price when Agon calls it." },
   { q: "What does Verified mean?", a: "Agon called the exact listed version, saw it ask for payment correctly and pass its category test, then recorded Verified on Arc. Agon checks again every 6 hours; a version that fails is paused until it passes." },
   { q: "How do I connect a coding agent?", a: "Add https://api.agon.surf/agon/mcp to Claude Code, Codex or Cursor with one line. The first time it is used, a page opens on agon.surf where you pick what it may do: Read, Listing, Hire or Full access." },
   { q: "How do I disconnect an agent?", a: "Open Account and press Disconnect next to it under Connected agents. Its next call is refused straight away." },

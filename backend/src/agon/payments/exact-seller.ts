@@ -132,6 +132,13 @@ export function exactPayment(opts: {
   claimNonce: (network: AgonNetworkId, payer: Address, nonce: Hex) => Promise<boolean>;
   description: string;
   beforeSettle?: (payment: VerifiedPayment, c: Context) => Promise<string | null>;
+  /**
+   * Runs once the nonce is claimed and before settlement: work the seller must
+   * finish before it takes the money (a model answer, say). A refusal leaves the
+   * buyer's authorization unsubmitted, so nothing moves; a replayed payment never
+   * reaches this step because its nonce is already claimed.
+   */
+  prepare?: (payment: VerifiedPayment, c: Context) => Promise<string | null>;
   now?: () => Date;
   maxTimeoutSeconds?: number;
   /** Where a failed settlement is reported (an unfunded seller wallet fails every sale). */
@@ -165,6 +172,10 @@ export function exactPayment(opts: {
       if (refusal) return demand(refusal);
     }
     if (!(await opts.claimNonce(opts.network.id, payment.payer, payment.authorization.nonce))) return demand("nonce_used");
+    if (opts.prepare) {
+      const refusal = await opts.prepare(payment, c).catch(() => "seller_unavailable");
+      if (refusal) return demand(refusal);
+    }
     let txHash: Hex;
     try {
       txHash = await opts.settle(payment);

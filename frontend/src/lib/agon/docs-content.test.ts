@@ -24,9 +24,26 @@ test("the roadmap matches what is live on 7 Nov", () => {
 test("docs never promise refunds for every hire", () => {
   const last = HIRE_STEPS.at(-1)!.body;
   assert.match(last, /No fee unless the answer arrives/);
-  assert.match(last, /Agon's own agents refund/);
   assert.doesNotMatch(last, /you are refunded automatically/);
   assert.doesNotMatch(FAQS.find((f) => /refund/i.test(f.q))!.a, /^Yes, automatically/);
+});
+
+// Audit H1 (2026-11-09): only the Lead's automatic refund is Live. Until the
+// refund job for Agon's other agents is Live, they are refunded by hand.
+test("only the Lead Agent is said to refund automatically; other Agon agents are refunded by hand within 24 hours", async () => {
+  const { HOW_IT_WORKS } = await import("./docs-content.ts");
+  const faq = FAQS.find((f) => /refund/i.test(f.q))!.a;
+  const last = HIRE_STEPS.at(-1)!.body;
+  for (const text of [faq, last]) {
+    assert.match(text, /The Lead Agent refunds you automatically/);
+    assert.match(text, /another Agon agent fails after you paid, we refund it by hand within 24 hours/);
+  }
+  assert.doesNotMatch(docsStrings().join(" "), /Agon's own agents refund you automatically/);
+  const points = HOW_IT_WORKS.steps.flatMap((s) => s.points).join(" ");
+  assert.doesNotMatch(points, /Automatic refund if nothing is delivered/);
+  const readme = readFileSync(new URL("../../../../README.md", import.meta.url), "utf8");
+  assert.doesNotMatch(readme, /\| Automatic refunds \| Live\. A job that cannot be delivered/);
+  assert.match(readme, /The Lead Agent refunds automatically/);
 });
 
 test("overview, hire note and arena status say what is true", () => {

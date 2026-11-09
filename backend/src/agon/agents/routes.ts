@@ -65,6 +65,27 @@ export function createSpecialistRoutes(deps: {
   const now = deps.now ?? (() => new Date());
   const markets = new WeakMap<Request, MarketSnapshot>();
   const watched = new WeakMap<Request, MarketSnapshot[]>();
+  const answers = new WeakMap<Request, Record<string, unknown>>();
+  /// Pitch and Rules Check answers, made before the payment settles: if the
+  /// model fails the buyer's payment is never submitted (audit H1, 2026-11-09).
+  const answerFor = async (key: SpecialistKey, m: MarketSnapshot): Promise<{ ok: true; body: Record<string, unknown> } | { ok: false; code: string }> => {
+    const spec = SPECIALISTS[key];
+    if (key === "pitch") {
+      const reply = await deps.callModel({ model: spec.model, ...pitchPrompt(m, now()), maxTokens: FORECAST_MAX_TOKENS, temperature: 0.2 }).catch(() => null);
+      if (!reply) return { ok: false, code: "model_unavailable" };
+      const parsed = parseProbability(reply.text);
+      if (!parsed) return { ok: false, code: "model_unparseable" };
+      return { ok: true, body: {
+        agent: spec.name, market: marketView(m), probabilityBps: parsed.probabilityBps, crowdBps: m.yesBps,
+        edgePts: (parsed.probabilityBps - m.yesBps) / 100, reasons: parsed.reasons.slice(0, 3), model: spec.model,
+      } };
+    }
+    // The model reads the rules; code keeps only quotes found in them and decides the risk. No price is sent or returned.
+    const reply = await deps.callModel({ model: spec.model, ...rulesCheckPrompt(m.question, m.description), maxTokens: RULES_MAX_TOKENS, temperature: 0 }).catch(() => null);
+    if (!reply) return { ok: false, code: "model_unavailable" };
+    const { crowdBps: _price, ...market } = marketView(m);
+    return { ok: true, body: { agent: spec.name, market, ...rulesCheck({ question: m.question, rules: m.description, umaStatuses: m.umaStatuses }, reply.text), model: spec.model } };
+  };
   const sellerFor = (key: string) => (Object.hasOwn(SPECIALISTS, key) && deps.sellers[key as SpecialistKey] && (key !== "watch" || deps.watch) ? { key: key as SpecialistKey, seller: deps.sellers[key as SpecialistKey]! } : null);
   const gates = new Map<string, ReturnType<typeof createCertificationGate>>();
   const gateFor = (key: string) => gates.get(key) ?? gates.set(key, createCertificationGate()).get(key)!;
@@ -152,6 +173,14 @@ export function createSpecialistRoutes(deps: {
           else markets.set(ctx.req.raw, checked.list[0]!);
           return null;
         },
+        ...(key === "pitch" || key === "rules" ? {
+          prepare: async (_payment: unknown, ctx: { req: { raw: Request } }) => {
+            const answer = await answerFor(key, markets.get(ctx.req.raw)!);
+            if (!answer.ok) return answer.code;
+            answers.set(ctx.req.raw, answer.body);
+            return null;
+          },
+        } : {}),
         now,
       })(c, next);
     },
@@ -174,22 +203,7 @@ export function createSpecialistRoutes(deps: {
         });
       }
       const m = markets.get(c.req.raw)!;
-      if (key === "pitch") {
-        const reply = await deps.callModel({ model: spec.model, ...pitchPrompt(m, now()), maxTokens: FORECAST_MAX_TOKENS, temperature: 0.2 });
-        const parsed = parseProbability(reply.text);
-        if (!parsed) return c.json({ error: "model_unparseable" }, 502);
-        return c.json({
-          agent: spec.name, market: marketView(m), probabilityBps: parsed.probabilityBps, crowdBps: m.yesBps,
-          edgePts: (parsed.probabilityBps - m.yesBps) / 100, reasons: parsed.reasons.slice(0, 3), model: spec.model,
-        });
-      }
-      if (key === "rules") {
-        // The model reads the rules; code keeps only quotes found in them and decides the risk. No price is sent or returned.
-        const reply = await deps.callModel({ model: spec.model, ...rulesCheckPrompt(m.question, m.description), maxTokens: RULES_MAX_TOKENS, temperature: 0 }).catch(() => null);
-        if (!reply) return c.json({ error: "model_unavailable" }, 502);
-        const { crowdBps: _price, ...market } = marketView(m);
-        return c.json({ agent: spec.name, market, ...rulesCheck({ question: m.question, rules: m.description, umaStatuses: m.umaStatuses }, reply.text), model: spec.model });
-      }
+      if (key === "pitch" || key === "rules") return c.json(answers.get(c.req.raw)!);
       const report = scoutReport(m, now());
       // The model only summarises the rules; the verdict never depends on it.
       const note = await deps.callModel({ model: spec.model, ...scoutRulesPrompt(m), maxTokens: 200, temperature: 0 })

@@ -3,22 +3,24 @@ import type { Address } from "viem";
 import type { Job, JobPayment } from "./types.ts";
 
 export type ManualRefundPlan =
-  | { ok: true; key: string; to: Address; amount: bigint }
-  | { ok: false; reason: "not_a_lead_job" | "delivered" | "already_refunded" | "not_paid" };
+  | { ok: true; key: string; from: Address; to: Address; amount: bigint }
+  | { ok: false; reason: "not_an_agon_agent" | "delivered" | "already_refunded" | "not_paid" };
 
-/// Decides whether an operator may refund a Lead job by hand, and to whom.
-/// Uses the Lead's own refund key, so a refund that already settled (by the
-/// Lead or by an earlier manual run) is never paid again.
-export function manualRefundPlan(job: Job, payments: readonly JobPayment[], leadAddress: Address): ManualRefundPlan {
-  if (job.providerRef !== "agent:lead") return { ok: false, reason: "not_a_lead_job" };
+/// Decides whether a job of one of Agon's own agents may be refunded, from
+/// which of Agon's seller wallets (`sellers`: the Lead, specialists, house
+/// forecasters), to whom and how much. The wallet is the one the settled hire
+/// paid. Uses `refund:<jobId>`, the key the Lead's own refund and the automatic
+/// refund use, so a refund that already settled is never paid again.
+export function manualRefundPlan(job: Job, payments: readonly JobPayment[], sellers: readonly Address[]): ManualRefundPlan {
   if (job.state === "delivered") return { ok: false, reason: "delivered" };
+  const ours = new Set(sellers.map((a) => a.toLowerCase()));
   const key = `refund:${job.jobId}`;
   const refunds = payments.filter((p) => p.idempotencyKey === key);
   if (refunds.some((p) => p.status === "settled")) return { ok: false, reason: "already_refunded" };
-  const attempt = refunds.find((p) => p.status === "failed");
-  if (attempt) return { ok: true, key, to: attempt.payee, amount: attempt.amount };
-  const lead = leadAddress.toLowerCase();
-  const hire = payments.find((p) => p.kind === "hire" && p.status === "settled" && p.payee.toLowerCase() === lead);
-  if (!hire) return { ok: false, reason: "not_paid" };
-  return { ok: true, key, to: hire.payer, amount: hire.amount };
+  const attempt = refunds.find((p) => p.status === "failed" && ours.has(p.payer.toLowerCase()));
+  if (attempt) return { ok: true, key, from: attempt.payer, to: attempt.payee, amount: attempt.amount };
+  const hires = payments.filter((p) => p.jobId === job.jobId && p.kind === "hire" && p.status === "settled");
+  const hire = hires.find((p) => ours.has(p.payee.toLowerCase()));
+  if (!hire) return { ok: false, reason: hires.length > 0 ? "not_an_agon_agent" : "not_paid" };
+  return { ok: true, key, from: hire.payee, to: hire.payer, amount: hire.amount };
 }

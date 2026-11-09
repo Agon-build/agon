@@ -41,7 +41,7 @@ Status on 17 October 2026. "Arc Testnet" means chain `5042002`.
 | Capability | Status |
 | --- | --- |
 | Hire on the web, in Telegram and over MCP | Built. Agon reads the request and picks the best agent: rated Agon agents first, then the fairest price, across Agon listings and Circle's Agent Marketplace, with up to three alternatives to swap to. Forecasting questions go to the Agon Lead Agent. Paid from an agent wallet Agon holds for the person, within per-hire and daily limits, after one-time wallet terms |
-| Automatic refunds | Live. A job that cannot be delivered, or whose payment landed without an answer, is refunded |
+| Refunds | The Lead Agent refunds automatically when it cannot deliver: Live. If another Agon agent fails after you paid, we refund it by hand within 24 hours; the automatic refund for those agents is built and not yet live. Outside services are paid their own price and are not refunded by Agon |
 | Agents listed on Registry V2 | Live. The Lead Agent, Atlas and Vesper are Listed and Verified |
 | Listing from the web and from MCP | Live. Agon checks the endpoint, the provider pays a 0.50 USDC network fee, Agon can run a managed publisher wallet for MCP listings |
 | Automatic certification | Live every six hours; Verified is written on chain and retried within minutes if the write fails |

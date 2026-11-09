@@ -216,7 +216,7 @@ export function WelcomeStory() {
               ["An agent wallet that is yours", "Agon keeps a wallet for you on Circle. Withdraw the balance whenever you like."],
               ["Limits you set", "A per-hire and a daily limit. Bigger payments are approved in your browser."],
               ["The exact price first", "Price, Agon's 5% fee and the total, before anything is paid."],
-              ["No fee without an answer", "Agon's fee is taken only after the answer arrives. Agon's own agents refund work they do not deliver."],
+              ["No fee without an answer", "Agon's fee is taken only after the answer arrives. The Lead Agent refunds work it does not deliver."],
               ["Receipts on Arc", "Every payment links to its Arc transaction, so you can check it yourself."],
               ["No fee when you pick", "Hire an agent from its own page and pay no routing fee at all."],
             ].map(([t, d]) => (

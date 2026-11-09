@@ -85,7 +85,7 @@ test("scout scores a market from its numbers and names every flag", () => {
   assert.deepEqual(consensusOnly.flags.map((f) => f.code), ["vague_rules"]);
 });
 
-function setup(opts: { tags?: string[]; reply?: string } = {}) {
+function setup(opts: { tags?: string[]; reply?: string; modelDown?: boolean } = {}) {
   const store = new MemoryPaymentsStore();
   const settler = fakeSettler();
   const prompts: string[] = [];
@@ -93,11 +93,52 @@ function setup(opts: { tags?: string[]; reply?: string } = {}) {
     network, store,
     sellers: { pitch: { payTo: `0x${"c1".repeat(20)}` as Address, settle: settler.settle }, scout: { payTo: `0x${"c2".repeat(20)}` as Address, settle: settler.settle }, rules: { payTo: `0x${"c3".repeat(20)}` as Address, settle: settler.settle } },
     lookup: createMarketLookup({ fetchImpl: gammaFetch([gammaMarket(), gammaMarket({ slug: "closed-one", conditionId: `0x${"e0".repeat(32)}`, closed: true }), gammaMarket({ slug: "rules-one", conditionId: `0x${"d0".repeat(32)}`, description: RULES, umaResolutionStatuses: `["proposed", "disputed"]` })], opts.tags) }),
-    callModel: async (p) => { prompts.push(`${p.systemPrompt} ${p.userPrompt}`); return { text: opts.reply ?? '{"probability":0.6,"reasons":["Arsenal lead the table","Strong home record","Squad depth"]}' }; },
+    callModel: async (p) => {
+      prompts.push(`${p.systemPrompt} ${p.userPrompt}`);
+      if (opts.modelDown) throw new Error("model unavailable");
+      return { text: opts.reply ?? '{"probability":0.6,"reasons":["Arsenal lead the table","Strong home record","Squad depth"]}' };
+    },
   });
   const fetchImpl = ((url: string, init?: RequestInit) => app.request(url, init)) as typeof fetch;
   return { app, settler, prompts, fetchImpl };
 }
+
+// Audit H1 (2026-11-09): Pitch and Rules Check settled the payment first and
+// then answered 502 when the model failed, with nothing refunding the buyer.
+// The answer is now ready before the payment settles.
+test("pitch takes no money when the model answer cannot be read", async () => {
+  const { fetchImpl, settler } = setup({ reply: "I would rather not say." });
+  const out = await buyExact({ url: "http://api.test/pitch", init: json({ market: EPL_SLUG }), network, maxAmount: SPECIALISTS.pitch.price, signerFor: () => localSigner(buyer), fetchImpl });
+  assert.ok(!out.ok);
+  assert.equal(settler.calls.length, 0, "nothing settles");
+});
+
+test("pitch takes no money when the model is down", async () => {
+  const { fetchImpl, settler } = setup({ modelDown: true });
+  const out = await buyExact({ url: "http://api.test/pitch", init: json({ market: EPL_SLUG }), network, maxAmount: SPECIALISTS.pitch.price, signerFor: () => localSigner(buyer), fetchImpl });
+  assert.ok(!out.ok);
+  assert.equal(settler.calls.length, 0, "nothing settles");
+});
+
+test("rules check takes no money when the model is down", async () => {
+  const { fetchImpl, settler } = setup({ modelDown: true });
+  const out = await buyExact({ url: "http://api.test/rules", init: json({ market: "rules-one" }), network, maxAmount: SPECIALISTS.rules.price, signerFor: () => localSigner(buyer), fetchImpl });
+  assert.ok(!out.ok);
+  assert.equal(settler.calls.length, 0, "nothing settles");
+});
+
+test("a replayed payment does not buy a second model call", async () => {
+  const { fetchImpl, settler, prompts } = setup();
+  const sent: { url: string; init?: RequestInit }[] = [];
+  const recording = (async (u: string, i?: RequestInit) => { sent.push({ url: u, init: i }); return fetchImpl(u, i); }) as typeof fetch;
+  const out = await buyExact({ url: "http://api.test/pitch", init: json({ market: EPL_SLUG }), network, maxAmount: SPECIALISTS.pitch.price, signerFor: () => localSigner(buyer), fetchImpl: recording });
+  assert.ok(out.ok, show(out));
+  const paid = sent.at(-1)!;
+  const again = await fetchImpl(paid.url, paid.init);
+  assert.equal(again.status, 402, "the same signed payment is refused");
+  assert.equal(prompts.length, 1, "the model ran once");
+  assert.equal(settler.calls.length, 1);
+});
 
 test("pitch asks for payment at its price, then forecasts a football market against the crowd", async () => {
   const { app, fetchImpl, settler, prompts } = setup();
