@@ -117,7 +117,7 @@ export function WelcomeStory() {
 
   return (
     <div ref={root} data-motion="on" className="min-h-screen overflow-x-clip bg-canvas text-ink">
-      <AppHeader />
+      <AppHeader bare />
       <main>
         <section data-pin className="relative">
           <div data-hero className="mx-auto max-w-[1312px] px-4 pb-16 pt-20 sm:px-6 lg:min-h-[calc(100vh-88px)] lg:px-16 lg:pt-28">

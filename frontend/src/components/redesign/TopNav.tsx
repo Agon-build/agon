@@ -49,7 +49,8 @@ const LEGACY_ROUTES = [
 ];
 
 
-export function TopNav({ hideSignOut = false }: { hideSignOut?: boolean } = {}) {
+/// `bare` (the /welcome story) shows only the AGON logo: no routes, bell, network or account.
+export function TopNav({ hideSignOut = false, bare = false }: { hideSignOut?: boolean; bare?: boolean } = {}) {
   const pathname = usePathname() ?? "/";
   const isLogin = pathname === "/login";
   const isLegacyRoute = isLegacyArcRunRoute(pathname);
@@ -71,6 +72,16 @@ export function TopNav({ hideSignOut = false }: { hideSignOut?: boolean } = {}) 
   useEffect(() => {
     setOpen(false);
   }, [pathname]);
+
+  if (bare) return (
+    <header className="sticky top-0 z-20 border-b border-[color:var(--hairline)] bg-canvas">
+      <div className="mx-auto flex h-16 max-w-[1600px] items-center px-3 sm:px-6">
+        <Link href={logoDestination(isAgon)} className="inline-flex min-w-0 shrink-0 items-center text-ink" aria-label="Agon home">
+          {isAgon ? <AgonMark /> : <ArcRunMark />}
+        </Link>
+      </div>
+    </header>
+  );
 
   return (
     <>

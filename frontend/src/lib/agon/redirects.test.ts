@@ -362,3 +362,11 @@ test("the Lead quote does not claim a best-rated forecaster while no forecaster 
   const card = readFileSync(new URL("../../components/stage/QuoteCard.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(card, /best-rated/i);
 });
+
+test("the welcome story shows only the AGON logo in its header, no navigation", () => {
+  const read = (f: string) => readFileSync(new URL(`../../${f}`, import.meta.url), "utf8");
+  assert.match(read("components/landing/WelcomeStory.tsx"), /<AppHeader bare \/>/);
+  const nav = read("components/redesign/TopNav.tsx");
+  assert.match(nav, /bare = false/);
+  assert.match(nav, /if \(bare\) return/, "bare mode returns before the routes, bell, network and account");
+});
