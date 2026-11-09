@@ -21,6 +21,7 @@ const ASK: Record<string, string> = {
   provider_unreachable: "The lead agent did not answer. Try again in a moment.",
   service_unreachable: "That service did not answer. Nothing was charged. Try again or pick another.",
   service_refused: "That service turned the request down. Nothing was charged. Pick another service.",
+  service_terms_mismatch: "That service asks to be paid on another network, so Agon cannot pay it. Nothing was charged. Pick another.",
   no_matching_option: "The lead agent's payment terms do not match this network.",
   provider_free: "The lead agent answered without asking for payment. Try again in a moment.",
   rate_limited: "That was a lot of requests. Wait a minute, then ask again.",

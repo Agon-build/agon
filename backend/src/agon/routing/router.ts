@@ -86,6 +86,14 @@ export function createRouter(deps: {
     for (const [ref, until] of down) if (until <= t) down.delete(ref);
     return new Set(down.keys());
   };
+  // Services whose live 402 offers no USDC payment on the network they are listed on.
+  // Agon cannot pay them, so they leave the choices for a day.
+  const unpayable = new Map<string, number>();
+  const payable = (list: CatalogEntry[]) => {
+    const t = now().getTime();
+    for (const [ref, until] of unpayable) if (until <= t) unpayable.delete(ref);
+    return unpayable.size === 0 ? list : list.filter((e) => !unpayable.has(e.reference));
+  };
 
   // Each owner keeps their newest routes; expired ones go first, and a full map
   // drops its oldest entries rather than everyone's.
@@ -111,7 +119,7 @@ export function createRouter(deps: {
         const found = await Promise.all(deps.sources.map((s) => s.search(query).catch(() => [] as CatalogEntry[])));
         const sources = deps.sources.map((s) => ({ id: s.id, status: s.status() }));
         const lead = category === "prediction" && deps.leadEntry ? await deps.leadEntry().catch(() => null) : null;
-        const list = shortlist(found.flat(), intent, text);
+        const list = shortlist(payable(found.flat()), intent, text);
         const fitted = deps.judge ? await deps.judge(text, list).catch(() => null) : null;
         const groups = groupCandidates(lead ? [lead, ...list] : list, intent, {
           feeBps: deps.feeBps, feeMin: deps.feeMin, downranked: downranked(), feeBpsFor: (e) => (deps.feeAddress[e.network] ? deps.feeBps : 0), fitted, category,
@@ -127,7 +135,7 @@ export function createRouter(deps: {
       const query = { words: wordsOf(`${intent.query} ${text}`), agonCategories: ALL_AGON, circleCategories: ALL_CIRCLE };
       const found = await Promise.all(deps.sources.map((s) => s.search(query).catch(() => [] as CatalogEntry[])));
       const sources = deps.sources.map((s) => ({ id: s.id, status: s.status() }));
-      const list = shortlist(found.flat(), intent, text);
+      const list = shortlist(payable(found.flat()), intent, text);
       const fitted = deps.judge ? await deps.judge(text, list).catch(() => null) : null;
       const ranked = rankCandidates(list, intent, { feeBps: deps.feeBps, feeMin: deps.feeMin, downranked: downranked(), feeBpsFor: (e) => (deps.feeAddress[e.network] ? deps.feeBps : 0), fitted });
       if (!ranked.pick) return { kind: "none", sources };
@@ -144,7 +152,7 @@ export function createRouter(deps: {
       const sources = deps.sources.map((s) => ({ id: s.id, status: s.status() }));
       const found = await Promise.all(deps.sources.map((s) => (s.all ? s.all().catch(() => [] as CatalogEntry[]) : Promise.resolve([] as CatalogEntry[]))));
       const lead = category === "prediction" && deps.leadEntry ? await deps.leadEntry().catch(() => null) : null;
-      const inCategory = found.flat().filter((e) => e.source !== "agon" || (cat.agonCategories.includes(e.category) && !/\/agon\/agents\/lead\//.test(e.url)));
+      const inCategory = payable(found.flat()).filter((e) => e.source !== "agon" || (cat.agonCategories.includes(e.category) && !/\/agon\/agents\/lead\//.test(e.url)));
       const withProof = await Promise.all(inCategory.map(async (e) => (e.source === "agon" && deps.directEntry ? (await deps.directEntry(e.reference).catch(() => null)) ?? e : e)));
       const list = lead ? [lead, ...withProof] : withProof;
       const intent: Intent = { kind: "other", query: "", values: {} };
@@ -226,6 +234,11 @@ export function createRouter(deps: {
       if (!quoted.ok) {
         if (quoted.code === "insufficient_balance" && quoted.amount !== undefined && quoted.depositAddress) return { ok: false, code: "insufficient_balance", amount: quoted.amount, depositAddress: quoted.depositAddress, network: entry.network };
         // The chosen service, not the Lead, failed before asking for payment: a 4xx means it turned the request down.
+        // The service asked to be paid on another network or in another token: name the service, and stop offering it.
+        if (quoted.code === "no_matching_option" && entry.source !== "agon") {
+          unpayable.set(entry.reference, now().getTime() + DOWNRANK_MS);
+          return { ok: false, code: "service_terms_mismatch" };
+        }
         if (quoted.code === "provider_unreachable") {
           const refused = /^status 4\d\d$/.test(quoted.detail ?? "");
           return { ok: false, code: refused ? "service_refused" : "service_unreachable", ...(quoted.detail ? { detail: quoted.detail } : {}) };

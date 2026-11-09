@@ -86,3 +86,9 @@ test("outside services say before payment that Agon cannot refund them, and a re
   assert.match(OUTSIDE_PAYMENT_NOTE, /up front/);
   assert.match(RECENTLY_FAILED_MARK, /no answer/i);
 });
+
+test("a service that cannot be paid on Arc is named as the service, not the Lead", async () => {
+  const text = askRefusalText("service_terms_mismatch");
+  assert.doesNotMatch(text, /lead agent/i);
+  assert.match(text, /Nothing was charged/);
+});

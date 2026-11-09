@@ -18,11 +18,12 @@ const entry = (over: Partial<CatalogEntry>): CatalogEntry => ({
 });
 const circle = entry({ source: "circle", reference: "circle:ratings", name: "Analyst ratings", provider: "LoneStarOracle", category: "FINANCIAL_ANALYSIS", description: "Analyst ratings and price targets", url: "https://analyst.example/ratings", method: "GET", price: 10_000n, payTo: CIRCLE_PAY, network: "arc", rating: { tier: "unrated", score: null } });
 
-function fakeRuntime(network: "arc-testnet" | "arc", calls: string[], opts: { amount?: bigint; payTo?: Address; fail?: string } = {}): RouteRuntime {
+function fakeRuntime(network: "arc-testnet" | "arc", calls: string[], opts: { amount?: bigint; payTo?: Address; fail?: string; code?: string } = {}): RouteRuntime {
   return {
     network: agonNetwork(network),
     quoteHire: async (req) => {
       calls.push(`${network}:quote:${req.method}:${JSON.stringify(req.body)}:${req.feeBps}:${req.feeAddress}`);
+      if (opts.code) return { ok: false, code: opts.code, detail: "no plain USDC exact option on this network" };
       if (opts.fail) return { ok: false, code: "provider_unreachable", detail: opts.fail };
       const amount = opts.amount ?? (network === "arc" ? 10_000n : 100_000n);
       return { ok: true, quote: { jobId: `job-${network}`, amount, fee: 150n, total: amount + 150n, payTo: opts.payTo ?? CIRCLE_PAY, providerLabel: req.providerLabel, network: agonNetwork(network), expiresAt: new Date(Date.now() + 300_000), step: "confirm_code", code: "1234" } };
@@ -32,14 +33,14 @@ function fakeRuntime(network: "arc-testnet" | "arc", calls: string[], opts: { am
   };
 }
 
-function setup(opts: { kind?: Intent["kind"]; outside?: boolean; entries?: CatalogEntry[]; circleStatus?: "ok" | "unavailable"; quoteAmount?: bigint; quoteFail?: string } = {}) {
+function setup(opts: { kind?: Intent["kind"]; outside?: boolean; entries?: CatalogEntry[]; circleStatus?: "ok" | "unavailable"; quoteAmount?: bigint; quoteFail?: string; quoteCode?: string } = {}) {
   const calls: string[] = [];
   const store = new MemoryPaymentsStore();
   const src = (id: "agon" | "circle", rows: CatalogEntry[], status: "ok" | "unavailable" = "ok"): RouteSource => ({ id, status: () => status, search: async () => rows.filter((r) => r.source === id) });
   const rows = opts.entries ?? [entry({}), circle];
   const router = createRouter({
     sources: [src("agon", rows), src("circle", rows, opts.circleStatus)],
-    runtimes: { "arc-testnet": fakeRuntime("arc-testnet", calls), ...(opts.outside === false ? {} : { arc: fakeRuntime("arc", calls, { amount: opts.quoteAmount, fail: opts.quoteFail }) }) },
+    runtimes: { "arc-testnet": fakeRuntime("arc-testnet", calls), ...(opts.outside === false ? {} : { arc: fakeRuntime("arc", calls, { amount: opts.quoteAmount, fail: opts.quoteFail, code: opts.quoteCode }) }) },
     readIntent: async (text) => ({ kind: opts.kind ?? "analysis", query: text, values: {} }),
     fill: async (e) => (e.source === "circle" ? { ok: true as const, input: { symbol: "AAPL" } } : { ok: true as const, input: { market: "arsenal" } }),
     feeBps: 150,
@@ -324,4 +325,19 @@ test("an outside service that fails before asking for payment is named as the se
     assert.ok(r.kind === "pick");
     assert.deepEqual(await router.quote("op:x", r.routeId, "circle:ratings"), { ok: false, code, detail: fail });
   }
+});
+
+// 2026-11-09: a Circle listing on "arc" whose 402 asked for another network read
+// "The lead agent's payment terms do not match this network" and stayed on the list.
+test("a service whose payment terms do not fit Arc is named, then left off the choices for a day", async () => {
+  const { router } = setup({ entries: [circle], kind: "market_data", quoteCode: "no_matching_option" });
+  const first = await router.route("op:x", "analyst ratings AAPL");
+  assert.ok(first.kind === "pick");
+  assert.deepEqual(await router.quote("op:x", first.routeId, "circle:ratings"), { ok: false, code: "service_terms_mismatch" });
+  assert.equal((await router.route("op:x", "analyst ratings AAPL")).kind, "none", "the unpayable service is not offered again");
+  const choices = await router.route("op:x", "analyst ratings AAPL", { choices: true, category: "market_data" });
+  assert.ok(choices.kind === "choices");
+  assert.equal(choices.groups.outside.length, 0);
+  const browsed = await router.browse("op:x", "market_data");
+  assert.ok(!browsed.groups.outside.some((c) => c.reference === "circle:ratings"));
 });

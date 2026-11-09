@@ -374,7 +374,9 @@ public ArcRun routes answer 410; admin routes stay mounted for the console).
   (`frontend/src/lib/security-headers.mjs`).
 - Outside services are paid before they answer and Agon cannot refund them; the
   price step says so, and one that took payment without answering in the last
-  day is marked and listed last.
+  day is marked and listed last. One whose live 402 offers no USDC payment on
+  the network it is listed on is refused as `service_terms_mismatch` before any
+  job is written, and left off the choices for a day (`routing/router.ts`).
 - No secrets in code, logs, skills or chat; env values never printed.
 
 ---

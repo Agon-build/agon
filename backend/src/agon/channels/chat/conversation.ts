@@ -333,6 +333,7 @@ async function routeTask(deps: ConversationDeps, ownerRef: string, text: string)
     const why: Record<string, string> = {
       outside_off: "That service is on Circle and outside hires are switched off right now.",
       terms_changed: "That service changed its price or payee just now, so nothing was charged. Ask again.",
+      service_terms_mismatch: "That service asks to be paid on another network, so Agon cannot pay it. Nothing was charged. Pick another.",
       frozen: pick.network === "arc" ? "Your mainnet wallet is frozen. Reply unfreeze mainnet to get an approval link." : "Your wallet is frozen. Reply unfreeze to get an approval link.",
     };
     await deps.reply.send({ text: why[q.code] ?? "That service is not available right now. Try again in a moment." });
