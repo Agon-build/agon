@@ -1168,6 +1168,7 @@ if (config.agon.operationsAlerts.enabled && config.agon.operationsAlerts.workerE
     }),
     appUrl: config.auth.appUrl,
     retryBaseMs: config.agon.operationsAlerts.retryBaseMs,
+    log: (m) => console.log(m),
   }).catch((error) => {
     console.error("[agon-alerts] delivery worker stopped:", error instanceof Error ? error.message : error);
   });

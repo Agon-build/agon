@@ -4,6 +4,8 @@ import type { Pool, PoolClient } from "pg";
 import { redactDeep, redactSensitive } from "./redact.ts";
 
 export type AgonAlertSeverity = "info" | "warning" | "critical";
+/** A Telegram delivery still queued after this long is ended instead of sent. */
+export const STALE_DELIVERY_MS = 24 * 60 * 60_000;
 export type AgonAlertSource = "certification" | "arena" | "stage";
 export type AgonAlertStatus = "open" | "acknowledged" | "resolved";
 
@@ -498,6 +500,24 @@ export class PostgresAgonOperationsAlertRepository {
     );
   }
 
+  /// Ends queued Telegram deliveries that waited longer than `maxAgeMs`, unless the
+  /// alert is still open and critical (that one is still worth one message). The
+  /// bell keeps every alert either way. Returns how many were ended.
+  async expireStaleDeliveries(now: Date, maxAgeMs = STALE_DELIVERY_MS): Promise<number> {
+    const result = await this.pool.query(
+      `update agon_alert_delivery_outbox d
+          set status = 'dead', lease_expires_at = null, updated_at = $1,
+              last_error = 'expired: still queued after 24 hours, not sent to Telegram'
+         from agon_operations_alerts a
+        where a.alert_id = d.alert_id
+          and d.status in ('pending','retry')
+          and d.created_at < $2
+          and not (a.status = 'open' and a.severity = 'critical')`,
+      [now, new Date(now.getTime() - maxAgeMs)],
+    );
+    return result.rowCount ?? 0;
+  }
+
   async deferDelivery(deliveryId: string, error: string, input: { increment: boolean; nextAttemptAt: Date }): Promise<void> {
     await this.pool.query(
       `update agon_alert_delivery_outbox
@@ -614,14 +634,24 @@ export async function deliverAgonOperationsAlertOnce(input: {
 }
 
 export async function agonOperationsAlertWorkerLoop(input: {
-  repository: AgonOperationsAlertDeliveryRepository;
+  repository: AgonOperationsAlertDeliveryRepository & { expireStaleDeliveries?: (now: Date) => Promise<number> };
   sendTelegram: TelegramAlertSender;
   appUrl: string;
   retryBaseMs?: number;
+  log?: (message: string) => void;
 }, control: { once?: boolean; pollMs?: number } = {}): Promise<void> {
+  let lastExpiry = 0;
   do {
+    // Before sending, and every 10 minutes, end deliveries too old to be useful,
+    // so switching the worker on after a pause never floods Telegram (audit O1).
+    if (input.repository.expireStaleDeliveries && Date.now() - lastExpiry > 10 * 60_000) {
+      lastExpiry = Date.now();
+      const ended = await input.repository.expireStaleDeliveries(new Date()).catch(() => 0);
+      if (ended) input.log?.(`[agon-alerts] ended ${ended} Telegram deliveries queued for more than 24 hours; the bell still has them`);
+    }
     const result = await deliverAgonOperationsAlertOnce(input);
     if (control.once) return;
-    await new Promise((resolve) => setTimeout(resolve, result === "idle" ? control.pollMs ?? 5_000 : 100));
+    // Telegram allows about one message a second to one chat.
+    await new Promise((resolve) => setTimeout(resolve, result === "idle" ? control.pollMs ?? 5_000 : 1_100));
   } while (true);
 }

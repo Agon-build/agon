@@ -43,6 +43,12 @@ api.arcrun.xyz {
 # during the transition; both names reach the same services without redirecting
 # signed requests or changing existing clients underneath them.
 api.agon.surf {
+	# Audit O3 (2026-11-09): the API sent no HSTS and no nosniff; agon.surf already does.
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+	}
+
 	handle /api/bnb/* {
 		request_body {
 			max_size 16KB

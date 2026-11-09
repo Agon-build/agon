@@ -260,3 +260,27 @@ test("an alert never stores or delivers a raw RPC error: URL paths, request bodi
   }
   assert.match(stored.rows[0].body, /marketplace_state_write_failed/);
 });
+
+// Audit O1 (2026-11-09): the delivery worker is off on production with about 790
+// rows queued. Switching it on must not send weeks of old alerts to Telegram.
+test("stale queued deliveries expire before the worker sends, except open critical alerts", async () => {
+  const owner = `0x${"de".repeat(20)}`;
+  await database.pool.query("insert into operators (address, telegram_id) values ($1, $2)", [owner, "777"]);
+  const old = await repository.raise({ operator: owner, fingerprint: "stale:warning", source: "stage", severity: "warning", title: "Old warning", body: "From October." });
+  const keep = await repository.raise({ operator: owner, fingerprint: "stale:critical", source: "stage", severity: "critical", title: "Old critical", body: "Still open." });
+  const fresh = await repository.raise({ operator: owner, fingerprint: "fresh:warning", source: "stage", severity: "warning", title: "New warning", body: "Today." });
+  const now = new Date();
+  const longAgo = new Date(now.getTime() - 3 * 86_400_000);
+  await database.pool.query("update agon_alert_delivery_outbox set created_at = $2 where alert_id = any($1::uuid[])", [[old.alertId, keep.alertId], longAgo]);
+
+  assert.equal(await repository.expireStaleDeliveries(now), 1);
+  const { rows } = await database.pool.query<{ alert_id: string; status: string; last_error: string | null }>(
+    "select alert_id, status, last_error from agon_alert_delivery_outbox where alert_id = any($1::uuid[])", [[old.alertId, keep.alertId, fresh.alertId]],
+  );
+  const status = Object.fromEntries(rows.map((r) => [r.alert_id, r.status]));
+  assert.equal(status[old.alertId], "dead");
+  assert.equal(status[keep.alertId], "pending", "an open critical alert still goes out once");
+  assert.equal(status[fresh.alertId], "pending");
+  assert.match(rows.find((r) => r.alert_id === old.alertId)!.last_error ?? "", /expired/);
+  assert.equal(await repository.expireStaleDeliveries(now), 0, "running it again changes nothing");
+});

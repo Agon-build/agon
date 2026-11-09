@@ -60,4 +60,11 @@ class ReleaseBoundaryTests(unittest.TestCase):
             self.assertIn(host + ' {', caddy)
         self.assertIn('handle /api/bnb/*', caddy)
 
+    def test_agon_api_sends_hsts_and_nosniff(self):
+        # Audit O3 (2026-11-09): api.agon.surf sent neither header.
+        caddy = (ROOT / 'deploy/caddy/Caddyfile').read_text()
+        block = caddy.split('api.agon.surf {', 1)[1].split('\n}\n', 1)[0]
+        self.assertIn('Strict-Transport-Security "max-age=63072000; includeSubDomains"', block)
+        self.assertIn('X-Content-Type-Options "nosniff"', block)
+
 if __name__ == '__main__': unittest.main()

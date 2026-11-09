@@ -298,7 +298,12 @@ here.
   `npm run test:marketplace`, both type checks and `next build`.
 - **Monitoring**: the stage monitor raises alerts to the owner's bell for stuck
   payments, failed refunds, low wallet balances, a stale or ended Arena season;
-  Playground checks suspend a listing after repeated failures.
+  Playground checks suspend a listing after repeated failures. The Telegram
+  delivery worker (`AGON_OPERATIONS_ALERT_WORKER_ENABLED`) ends deliveries
+  queued for more than 24 hours, except open critical alerts, and sends about
+  one message a second; the bell keeps every alert.
+- **Ingress**: Caddy in `deploy/caddy/Caddyfile` serves api.agon.surf with HSTS
+  (two years, subdomains) and `nosniff`; `deploy/test_release.py` pins both.
 
 Env groups (names only): payments (`AGON_PAYMENT_*`, lead, stand-in, house and
 specialist seller wallets, prices and limits, routing fee), season
@@ -473,6 +478,7 @@ onboarding, business agents connected to a person's tools.
 | 2026-10-22 | Listing certification runs the Playground test family a Verification agent declares (Market rules or Settlement alerts) instead of manifest anchor | Resolution Watch was suspended for failing a task it was never built for; one test per declared input keeps certification and the Playground consistent |
 | 2026-10-22 | Agon's market agents check markets on the unpaid request and refuse with a reason before anything is signed; the paid request is checked again before settling | A refusal after signing cannot be told apart from a seller that may still settle, so the buyer must wait out the authorization |
 | 2026-10-23 | Deliveries go to the bell, email from deliveries@agon.surf and Telegram through the AGON bot only; ArcRun mission broadcasts are off | People must get the work they paid for where they already are; one bot and one sender keep Agon recognisable |
+| 2026-11-09 | The alert worker ends Telegram deliveries queued over 24 hours (open critical alerts excepted) and paces sends; api.agon.surf sends HSTS and nosniff | Audit O1 and O3: about 790 alerts were queued while the worker was off, and switching it on would have sent them all at once; the API lacked the headers the site already sends |
 | 2026-11-09 | Public ArcRun API off by default behind `ARCRUN_LEGACY_API`; admin routes kept; `POST /events` stays open to signed-out pages but is size capped, rate limited and pruned after 30 days | Audit B4 and B5: the old API shared the process, database and Circle credentials with Agon's agent wallets, and the events write was the cheapest way to fill the disk again. A session requirement would have lost error reports from sign-in pages |
 | 2026-11-09 | Telegram approvals need the chat to have connected the account first (Account, Connect Telegram); an approval link no longer links the first account that opens it | Audit B2: anyone holding a forwarded approval link could become that chat's approver for good and lock the owner out |
 | 2026-11-09 | Pitch and Rules Check answer before they settle; the automatic refund covers every Agon seller wallet; public copy promises an automatic refund only for the Lead and a refund by hand within 24 hours for other Agon agents until that job is Live | Audit H1: the docs said all of Agon's own agents refund automatically, but only the Lead did, and Pitch and Rules Check could take payment and then fail |
