@@ -298,9 +298,9 @@ export function LoginModal({ open, onClose }: { open: boolean; onClose: () => vo
     setOtpBusy(true);
     setError(null);
     try {
-      await verifyEmailOtp(trimmed, codeTrimmed);
+      const verificationToken = await verifyEmailOtp(trimmed, codeTrimmed);
       // OTP verified -> create the session directly, no WebAuthn ceremony.
-      const result = await sessionFromEmail(trimmed);
+      const result = await sessionFromEmail(trimmed, verificationToken);
       await refresh();
       reportEvent("login", {
         context: { method: "email", isNew: result.isNew, seeded: result.seeded, otp: true },

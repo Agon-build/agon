@@ -141,6 +141,22 @@ export class PostgresPaymentsStore implements PaymentsStore {
     );
   }
 
+  async takeConfirmationAttempt(codeHash: Hex, max: number): Promise<boolean> {
+    const { rowCount } = await this.pool.query(
+      "update agon_pay_confirmations set attempts = attempts + 1 where code_hash = $1 and attempts < $2",
+      [lower(codeHash), max],
+    );
+    return rowCount === 1;
+  }
+
+  async useConfirmation(codeHash: Hex, now: Date): Promise<boolean> {
+    const { rowCount } = await this.pool.query(
+      "update agon_pay_confirmations set used_at = $2 where code_hash = $1 and used_at is null",
+      [lower(codeHash), now],
+    );
+    return rowCount === 1;
+  }
+
   async insertApproval(a: Approval): Promise<void> {
     await this.pool.query(
       "insert into agon_wallet_approvals (token_hash, wallet_ref, action, payload, expires_at, used_at) values ($1, $2, $3, $4, $5, $6)",

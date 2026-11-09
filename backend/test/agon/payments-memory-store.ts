@@ -65,6 +65,18 @@ export class MemoryPaymentsStore implements PaymentsStore {
     if (patch.attempts !== undefined) c.attempts = patch.attempts;
     if (patch.usedAt !== undefined) c.usedAt = patch.usedAt;
   }
+  async takeConfirmationAttempt(codeHash: Hex, max: number) {
+    const c = this.confirmations.find((x) => x.codeHash === codeHash);
+    if (!c || c.attempts >= max) return false;
+    c.attempts += 1;
+    return true;
+  }
+  async useConfirmation(codeHash: Hex, now: Date) {
+    const c = this.confirmations.find((x) => x.codeHash === codeHash);
+    if (!c || c.usedAt) return false;
+    c.usedAt = now;
+    return true;
+  }
   async insertApproval(a: Approval) {
     this.approvals.set(a.tokenHash, { ...a });
   }

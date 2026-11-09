@@ -375,6 +375,9 @@ create table if not exists email_otp (
   verified_at  timestamptz,
   created_at   timestamptz not null default now()
 );
+-- sha256 of the one-time token returned to the client that typed the code.
+-- Sign-in needs the token, not just the email (audit B1, 2026-11-09).
+alter table email_otp add column if not exists verification_hash text;
 -- One row per code sent, for the daily caps per email and per address.
 create table if not exists email_otp_sends (
   email      text not null,

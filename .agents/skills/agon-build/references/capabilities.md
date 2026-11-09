@@ -106,6 +106,7 @@ the releases since; see git history for each.
 | Issue | Status | Evidence |
 | --- | --- | --- |
 | Operations alert delivery worker | Off | 2026-11-07 `/agon/health`: operationsAlerts.workerEnabled false, 687 deliveries pending (Telegram alerts to the operator are queued, not sent); the bell still shows them |
+| Email sign-in could be taken by racing the verified code (audit B1) and parallel guesses passed the 5-try cap (B3) | Fixed in code 2026-11-09; live after deploy | The code check returns a one-time token only to the client that typed it; session and passkey registration need it and use it up; tries and hire-code use are single atomic writes; per-address and per-email limits on the code, begin and session routes. Postgres race tests on node-services: 40 parallel guesses compared at most 5, a second client without the token refused, a token works once. Live check after deploy: sign in by email from two browsers, the second is refused. Backend and frontend must deploy together (the old frontend sends no token) |
 | Notifications showed a raw RPC error with the private RPC URL and key, the signed transaction and calldata | Fixed in code 2026-10-18; live after deploy | `redactSensitive` runs when an alert is raised (bell, Telegram, email) and when the bell reads rows. The exposed RPC key must be rotated by the owner |
 
 ## Network facts checked 2026-10-18 (Rule 3)

@@ -256,27 +256,29 @@ export async function startEmailOtp(email: string): Promise<void> {
   }
 }
 
-export async function verifyEmailOtp(email: string, code: string): Promise<void> {
+/// Returns the one-time token the server gives only to the client that typed
+/// the code. Sign-in sends it back; the email alone is not enough.
+export async function verifyEmailOtp(email: string, code: string): Promise<string> {
   const res = await fetch(`${AUTH_URL}/auth/email/otp/verify`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     credentials: "include",
     body: JSON.stringify({ email, code }),
   });
-  if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(body.error ?? "could not verify the code");
-  }
+  const body = (await res.json().catch(() => ({}))) as { error?: string; verificationToken?: unknown };
+  if (!res.ok) throw new Error(body.error ?? "could not verify the code");
+  if (typeof body.verificationToken !== "string") throw new Error("could not verify the code");
+  return body.verificationToken;
 }
 
-export async function signInWithEmail(email: string): Promise<EmailLoginResult> {
+export async function signInWithEmail(email: string, verificationToken?: string): Promise<EmailLoginResult> {
   const { startRegistration, startAuthentication } = await import("@simplewebauthn/browser");
 
   const beginRes = await fetch(`${AUTH_URL}/auth/email/begin`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({ email, verificationToken }),
   });
   const begin = (await beginRes.json().catch(() => ({}))) as {
     mode?: "register" | "login";
@@ -307,7 +309,7 @@ export async function signInWithEmail(email: string): Promise<EmailLoginResult> 
     method: "POST",
     headers: { "content-type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ email, mode: begin.mode, response: webauthnResponse }),
+    body: JSON.stringify({ email, mode: begin.mode, response: webauthnResponse, verificationToken }),
   });
   const finish = (await finishRes.json().catch(() => ({}))) as Partial<EmailLoginResult> & {
     error?: string;
@@ -328,12 +330,12 @@ export async function signInWithEmail(email: string): Promise<EmailLoginResult> 
 /// passkey ceremony. Call after verifyEmailOtp succeeds. Passkeys stay optional
 /// (added later from settings); returning users who have one are offered the
 /// passkey login automatically by signInWithEmail.
-export async function sessionFromEmail(email: string): Promise<EmailLoginResult> {
+export async function sessionFromEmail(email: string, verificationToken: string): Promise<EmailLoginResult> {
   const res = await fetch(`${AUTH_URL}/auth/email/session`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({ email, verificationToken }),
   });
   const data = (await res.json().catch(() => ({}))) as Partial<EmailLoginResult> & { error?: string };
   if (!res.ok) throw new Error(data.error ?? "could not complete sign-in");

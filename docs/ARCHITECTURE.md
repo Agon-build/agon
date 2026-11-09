@@ -32,7 +32,8 @@ A Hono service that owns identity and the HTTP API:
 - **Web3 login**: SIWE signature verification for EOAs and EIP-1271
   smart accounts, JWT sessions.
 - **Email login**: a 6-digit one-time code proves ownership of a new
-  email, and that alone opens a session (`POST /auth/email/session`). The
+  email; the one-time token the code check returns to that client opens a
+  session (`POST /auth/email/session`). The
   backend provisions a Circle Developer-Controlled wallet per operator and
   signs contract calls (enter, join, claim, transfer) through Circle's API.
   A WebAuthn passkey (`@simplewebauthn`, not a Circle product) is optional:

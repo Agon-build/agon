@@ -44,12 +44,13 @@ export async function redeemConfirmation(
   if (!latest) return { ok: false, code: "no_pending" };
   if (latest.usedAt) return { ok: false, code: "already_used" };
   if (latest.expiresAt <= input.now) return { ok: false, code: "expired" };
-  if (latest.attempts >= MAX_CODE_ATTEMPTS) return { ok: false, code: "too_many_attempts" };
+  // Every try, right or wrong, takes one of the five slots in one write before
+  // the code is compared, so parallel requests cannot share a slot.
+  if (!(await store.takeConfirmationAttempt(latest.codeHash, MAX_CODE_ATTEMPTS))) return { ok: false, code: "too_many_attempts" };
   if (!/^\d{4}$/.test(input.code) || codeHash(input.walletRef, latest.jobId, input.code) !== latest.codeHash) {
-    await store.updateConfirmation(latest.codeHash, { attempts: latest.attempts + 1 });
     return { ok: false, code: "wrong_code" };
   }
-  await store.updateConfirmation(latest.codeHash, { usedAt: input.now });
+  if (!(await store.useConfirmation(latest.codeHash, input.now))) return { ok: false, code: "already_used" };
   return { ok: true, jobId: latest.jobId, amount: latest.amount, payee: latest.payee };
 }
 

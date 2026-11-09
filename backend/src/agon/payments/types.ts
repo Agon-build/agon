@@ -108,6 +108,10 @@ export interface PaymentsStore {
   insertConfirmation(confirmation: Confirmation): Promise<void>;
   latestConfirmation(walletRef: string): Promise<Confirmation | null>;
   updateConfirmation(codeHash: Hex, patch: { attempts?: number; usedAt?: Date }): Promise<void>;
+  /** Takes one of `max` tries in a single write; false once they are spent. */
+  takeConfirmationAttempt(codeHash: Hex, max: number): Promise<boolean>;
+  /** True only for the first use of an unused code. */
+  useConfirmation(codeHash: Hex, now: Date): Promise<boolean>;
   insertApproval(approval: Approval): Promise<void>;
   getApproval(tokenHash: Hex): Promise<Approval | null>;
   /** True only for the first use of an unexpired approval. */

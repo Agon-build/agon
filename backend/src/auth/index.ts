@@ -182,12 +182,13 @@ import {
   finishAuthentication,
 } from "./webauthn.js";
 import {
-  consumeEmailVerification,
-  isEmailVerified,
+  claimEmailVerification,
+  hasEmailVerification,
   OtpError,
   startEmailOtp,
   verifyEmailOtp,
 } from "../lib/emailOtp.js";
+import { createEmailAuthGate } from "../lib/emailAuthLimits.ts";
 import {
   MAX_EQUIPPED,
   validateLoadout,
@@ -1282,11 +1283,16 @@ app.post("/auth/email/otp/start", async (c) => {
   }
 });
 
-/// Email OTP: step 2. Verify the 6-digit code. On success the email is
-/// flagged as verified for VERIFY_TTL (15 min); the next
-/// /auth/email/begin call within that window passes the first-time
-/// signup gate. The verification is consumed once /auth/email/finish
-/// completes so a token can't be replayed for two signups.
+/// Email sign-in calls (code check, begin, session) per address and email.
+const emailAuthGate = createEmailAuthGate();
+const emailAuthAllowed = (c: { req: { header: (name: string) => string | undefined } }, email: string) =>
+  emailAuthGate(clientAddress((name) => c.req.header(name)), email);
+
+/// Email OTP: step 2. Verify the 6-digit code. On success the response
+/// carries a one-time verificationToken, valid 15 minutes. Only that token
+/// lets /auth/email/session, /auth/email/begin (register) and
+/// /auth/email/finish (register) continue; the email alone does not
+/// (audit B1, 2026-11-09).
 app.post("/auth/email/otp/verify", async (c) => {
   if (!config.auth.emailOtp.enabled) {
     return c.json({ error: "email otp is disabled on this server" }, 503);
@@ -1296,9 +1302,10 @@ app.post("/auth/email/otp/verify", async (c) => {
   const email = readEmail(body);
   if (!email) return c.json({ error: "valid email required" }, 400);
   if (typeof body.code !== "string") return c.json({ error: "code required" }, 400);
+  if (!emailAuthAllowed(c, email)) return c.json({ error: "too many tries; wait a few minutes", code: "rate_limited" }, 429);
   try {
-    await verifyEmailOtp(email, body.code);
-    return c.json({ ok: true });
+    const { verificationToken } = await verifyEmailOtp(email, body.code);
+    return c.json({ ok: true, verificationToken });
   } catch (err) {
     if (err instanceof OtpError) return c.json({ error: err.message, code: err.code }, err.status as 400);
     const message = err instanceof Error ? err.message : String(err);
@@ -1323,6 +1330,7 @@ app.post("/auth/email/begin", async (c) => {
   try { body = await c.req.json(); } catch { return c.json({ error: "bad json" }, 400); }
   const email = readEmail(body);
   if (!email) return c.json({ error: "valid email required" }, 400);
+  if (!emailAuthAllowed(c, email)) return c.json({ error: "too many tries; wait a few minutes", code: "rate_limited" }, 429);
 
   try {
     const credentials = await listCredentialsForEmail(email);
@@ -1331,12 +1339,12 @@ app.post("/auth/email/begin", async (c) => {
       return c.json({ mode: "login", options });
     }
     // First-time signup gate. EMAIL_OTP_ENABLED=true requires the
-    // caller to have completed /auth/email/otp/verify within the past
-    // 15 minutes before we hand out a registration challenge. Once a
-    // passkey is enrolled this branch is unreachable on subsequent
-    // logins (the credentials check above catches them).
+    // verificationToken from /auth/email/otp/verify (15 minutes) before we
+    // hand out a registration challenge. The token is checked here and
+    // used up in /auth/email/finish. Once a passkey is enrolled this branch
+    // is unreachable (the credentials check above catches them).
     if (config.auth.emailOtp.enabled) {
-      const verified = await isEmailVerified(email);
+      const verified = await hasEmailVerification(email, (body as { verificationToken?: unknown }).verificationToken);
       if (!verified) {
         return c.json(
           {
@@ -1372,7 +1380,7 @@ app.post("/auth/email/finish", async (c) => {
     return c.json({ error: "email login is not configured on this server" }, 503);
   }
 
-  let body: { email?: string; mode?: string; response?: unknown };
+  let body: { email?: string; mode?: string; response?: unknown; verificationToken?: unknown };
   try { body = await c.req.json(); } catch { return c.json({ error: "bad json" }, 400); }
   const email = readEmail(body);
   if (!email) return c.json({ error: "valid email required" }, 400);
@@ -1384,6 +1392,13 @@ app.post("/auth/email/finish", async (c) => {
   }
 
   if (body.mode === "register") {
+    // Registering a passkey on an email needs the code token, used up here
+    // before any wallet or passkey is written. Without it, anyone naming a
+    // freshly verified email could enrol their own passkey on it (audit B1).
+    // A failed ceremony after this point means asking for a new code.
+    if (config.auth.emailOtp.enabled && !(await claimEmailVerification(email, body.verificationToken))) {
+      return c.json({ error: "verify your email code first", code: "otp_required" }, 401);
+    }
     // Either resume an existing operator row (e.g. they signed up under the
     // earlier passkey-less flow and are enrolling a passkey now) or mint a
     // fresh Circle wallet for a never-seen email.
@@ -1426,11 +1441,6 @@ app.post("/auth/email/finish", async (c) => {
       return c.json({ error: err instanceof Error ? err.message : "registration verification failed" }, 401);
     }
 
-    // Consume any verified OTP so the token can't be replayed against a
-    // second signup attempt. Safe to call when OTP wasn't used (the row
-    // doesn't exist and DELETE is a no-op).
-    await consumeEmailVerification(email).catch(() => {});
-
     const token = await issueToken(address);
     setSessionCookie(c, token);
     void logEvent({
@@ -1469,8 +1479,10 @@ app.post("/auth/email/finish", async (c) => {
 /// Email login WITHOUT a passkey: complete sign-in from a verified OTP alone.
 /// Signup is just email + code; passkeys become optional and are enrolled
 /// later from settings (and offered automatically on return once enrolled).
-/// Gated on a recent OTP verification so a session can't be claimed for an
-/// email the caller doesn't control.
+/// Needs the one-time verificationToken that /auth/email/otp/verify gave the
+/// client that typed the code, used up here. Knowing a freshly verified
+/// email is not enough (audit B1, 2026-11-09). If the wallet cannot be made
+/// after this point, the person asks for a new code.
 app.post("/auth/email/session", async (c) => {
   if (!circleDevConfigured()) {
     return c.json({ error: "email login is not configured on this server" }, 503);
@@ -1479,12 +1491,13 @@ app.post("/auth/email/session", async (c) => {
     return c.json({ error: "code-based email login is not enabled" }, 400);
   }
 
-  let body: { email?: string };
+  let body: { email?: string; verificationToken?: unknown };
   try { body = await c.req.json(); } catch { return c.json({ error: "bad json" }, 400); }
   const email = readEmail(body);
   if (!email) return c.json({ error: "valid email required" }, 400);
+  if (!emailAuthAllowed(c, email)) return c.json({ error: "too many tries; wait a few minutes", code: "rate_limited" }, 429);
 
-  if (!(await isEmailVerified(email))) {
+  if (!(await claimEmailVerification(email, body.verificationToken))) {
     return c.json({ error: "verify your email code first", code: "otp_required" }, 401);
   }
 
@@ -1519,7 +1532,6 @@ app.post("/auth/email/session", async (c) => {
     seeded = seed.requested;
   }
 
-  await consumeEmailVerification(email).catch(() => {});
   const token = await issueToken(address);
   setSessionCookie(c, token);
   void logEvent({

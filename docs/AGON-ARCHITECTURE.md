@@ -306,6 +306,15 @@ credentials, database and Redis.
 - External content (market rules, listing text, evidence) is treated as data in
   every prompt; certification tests include planted instructions.
 - Sign-in sits at the action that needs it; discovery is public.
+- Email sign-in: a correct 6-digit code returns a one-time token to the
+  client that typed it (32 random bytes, only its hash stored, 15 minutes).
+  `/auth/email/session` and passkey registration through `/auth/email/begin`
+  and `/finish` need that token and use it up; the email alone is not enough.
+  Tries are counted in the same write that reads the code (5 per code), and
+  the code, begin and session routes are limited per address (30) and per
+  email (10) over 10 minutes (`lib/emailOtpStore.ts`, `lib/emailAuthLimits.ts`).
+- The 4-digit hire code takes a try and marks its use in single writes, so
+  parallel requests cannot pass the 5-try cap or redeem one code twice.
 - No secrets in code, logs, skills or chat; env values never printed.
 
 ---
@@ -439,3 +448,4 @@ onboarding, business agents connected to a person's tools.
 | 2026-10-22 | Listing certification runs the Playground test family a Verification agent declares (Market rules or Settlement alerts) instead of manifest anchor | Resolution Watch was suspended for failing a task it was never built for; one test per declared input keeps certification and the Playground consistent |
 | 2026-10-22 | Agon's market agents check markets on the unpaid request and refuse with a reason before anything is signed; the paid request is checked again before settling | A refusal after signing cannot be told apart from a seller that may still settle, so the buyer must wait out the authorization |
 | 2026-10-23 | Deliveries go to the bell, email from deliveries@agon.surf and Telegram through the AGON bot only; ArcRun mission broadcasts are off | People must get the work they paid for where they already are; one bot and one sender keep Agon recognisable |
+| 2026-11-09 | Email sign-in needs the one-time token from the code check, not just a verified email; code tries and hire-code use are single atomic writes | Audit B1 and B3: anyone polling with a victim's email could take the session and wallet the moment the victim typed the code, and parallel guesses passed the 5-try cap |
