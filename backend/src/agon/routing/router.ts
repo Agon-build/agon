@@ -7,7 +7,7 @@ import type { HireOutcome, HireQuote, HireRequest } from "../payments/hire.ts";
 import type { BudgetWallet, PaymentsStore } from "../payments/types.ts";
 import type { AskResult } from "../stage/services.ts";
 import { wordsOf, type CatalogEntry, type RouteSource } from "./catalog.ts";
-import { cleanGiven, type fillInput } from "./fill-input.ts";
+import { cleanGiven, coinsFit, type fillInput } from "./fill-input.ts";
 import { fillPath } from "./path-params.ts";
 import { shortlist } from "./fit.ts";
 import { marketInText } from "./live-market.ts";
@@ -167,7 +167,8 @@ export function createRouter(deps: {
           .filter((e) => e.source === "agon" || circleFits(category, e));
         const pool = whole.length <= CATEGORY_POOL_MAX ? whole : whole.filter((e) => e.source === "agon");
         const seen = new Set<string>();
-        const candidates = [...found.flat(), ...pool].filter((e) => (seen.has(e.reference) ? false : (seen.add(e.reference), true)));
+        // A service that takes one coin is left out of a request that names several.
+        const candidates = [...found.flat(), ...pool].filter((e) => (seen.has(e.reference) ? false : (seen.add(e.reference), true)) && coinsFit(e, text));
         const listed = shortlist(payable(candidates), intent, text, new Set(pool.map((e) => e.reference)));
         // The fit check and the unpaid calls run side by side, so checking costs no extra wait.
         const [fitted, list] = await Promise.all([deps.judge ? deps.judge(text, listed).catch(() => null) : null, answering(listed)]);
@@ -184,7 +185,7 @@ export function createRouter(deps: {
       const query = { words: wordsOf(`${intent.query} ${text}`), agonCategories: ALL_AGON, circleCategories: ALL_CIRCLE };
       const found = await Promise.all(deps.sources.map((s) => s.search(query).catch(() => [] as CatalogEntry[])));
       const sources = deps.sources.map((s) => ({ id: s.id, status: s.status() }));
-      const listed = shortlist(payable(found.flat()), intent, text);
+      const listed = shortlist(payable(found.flat()).filter((e) => coinsFit(e, text)), intent, text);
       const [fitted, list] = await Promise.all([deps.judge ? deps.judge(text, listed).catch(() => null) : null, answering(listed)]);
       const ranked = rankCandidates(list, intent, { feeBps: deps.feeBps, feeMin: deps.feeMin, downranked: downranked(), feeBpsFor: (e) => (deps.feeAddress[e.network] ? deps.feeBps : 0), fitted });
       if (!ranked.pick) return { kind: "none", sources };

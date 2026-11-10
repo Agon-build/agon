@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { CatalogEntry } from "../../src/agon/routing/catalog.ts";
-import { fillInput } from "../../src/agon/routing/fill-input.ts";
+import { coinsFit, fillInput } from "../../src/agon/routing/fill-input.ts";
 
 const schema = { type: "object", required: ["symbol"], properties: { symbol: { type: "string", description: "Stock ticker" }, limit: { type: "integer" } } };
 const entry = (over: Partial<CatalogEntry> = {}): CatalogEntry => ({
@@ -90,4 +90,36 @@ test("a price lookup for coins Agon cannot name asks which coins, and never send
   assert.equal(!out.ok && out.question, "Which coins? Name them, such as BTC, ETH or SOL, or give DefiLlama ids like coingecko:pepe.");
   const given = await fillInput(PRICES, "Price of coingecko:pepe", intent, model('{"coins":"coingecko:pepe"}'), "m");
   assert.deepEqual(given, { ok: true, input: { coins: "coingecko:pepe" } }, "ids already in DefiLlama's form are kept");
+});
+
+// 2026-11-10 production: anchor-x402's token price service (fields chain, contract, symbol, none required)
+// was offered for "Price of ETH and SOL right now" and asked "What should I use for chain?". It takes a
+// symbol, so code fills the symbol; with no coin Agon knows, it asks for the token plainly.
+const SYMBOL_PRICE = entry({
+  reference: "circle:anchor-price", name: "Look up the current US dollar price of a token", provider: "anchor-x402", description: "Look up the current US dollar price of a token",
+  url: "https://api.anchor-x402.com/v1/price/token", method: "POST",
+  inputSchema: { type: "object", properties: {
+    chain: { type: "string", description: "Chain slug: base, ethereum, solana, polygon, arbitrum, optimism, bsc, avalanche. Use with contract." },
+    symbol: { type: "string", description: "Token symbol like 'ETH', 'BTC', 'SOL', 'USDC'." },
+    contract: { type: "string", description: "Token contract address. Use with chain." },
+  } },
+});
+
+test("a token price service that takes a symbol gets the coin's symbol from the request, and nothing else", async () => {
+  assert.deepEqual(await fillInput(SYMBOL_PRICE, "Price of ETH right now", intent, model('{"chain":"ethereum"}'), "m"), { ok: true, input: { symbol: "ETH" } });
+  assert.deepEqual(await fillInput(SYMBOL_PRICE, "What is bitcoin trading at?", intent, model("{}"), "m"), { ok: true, input: { symbol: "BTC" } });
+});
+
+test("a token price service with no coin Agon knows asks for the token, by symbol or by chain and contract", async () => {
+  const out = await fillInput(SYMBOL_PRICE, "How much is that new token worth?", intent, model("{}"), "m");
+  assert.equal(out.ok, false);
+  assert.equal(!out.ok && out.question, "Which token? Give its symbol, such as ETH or USDC, or its chain and contract address.");
+  assert.deepEqual(await fillInput(SYMBOL_PRICE, "Price of PEPE", intent, model('{"symbol":"PEPE"}'), "m"), { ok: true, input: { symbol: "PEPE" } }, "a symbol the model read is kept");
+});
+
+test("a service that takes one symbol does not fit a request naming several coins", () => {
+  assert.equal(coinsFit(SYMBOL_PRICE, "Price of ETH and SOL right now"), false);
+  assert.equal(coinsFit(SYMBOL_PRICE, "Price of ETH right now"), true);
+  assert.equal(coinsFit(PRICES, "Price of ETH and SOL right now"), true, "a service that takes a list fits");
+  assert.equal(coinsFit(entry(), "Price of ETH and SOL right now"), true, "a service with no coin field is not judged here");
 });

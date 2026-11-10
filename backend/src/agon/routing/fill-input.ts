@@ -11,6 +11,21 @@ const DEFILLAMA_IDS = /coingecko:[a-z]/i;
 const COIN_FIELD = /^(coins?|ids?|tokens?)$/i;
 const IDS = /^[a-z0-9-]+:[^,\s]+(,[a-z0-9-]+:[^,\s]+)*$/i;
 const COINS_QUESTION = "Which coins? Name them, such as BTC, ETH or SOL, or give DefiLlama ids like coingecko:pepe.";
+/// A token price service that takes one coin by its symbol ("Token symbol like 'ETH', 'BTC'").
+const SYMBOL_FIELD = /^(symbol|ticker)$/i;
+const TICKER = /^[A-Za-z0-9]{2,12}$/;
+const TICKERS: Record<string, string> = { "coingecko:bitcoin": "BTC", "coingecko:ethereum": "ETH", "coingecko:solana": "SOL", "coingecko:ripple": "XRP" };
+const SYMBOL_QUESTION = "Which token? Give its symbol, such as ETH or USDC, or its chain and contract address.";
+
+const symbolKey = (props: Record<string, Prop>): string | undefined =>
+  Object.keys(props).find((k) => SYMBOL_FIELD.test(k) && /symbol/i.test(props[k]?.description ?? ""));
+
+/// Whether a service can answer for every coin the request names. One that takes a single symbol
+/// cannot answer "ETH and SOL", so it does not fit; a service with no coin field is not judged here.
+export function coinsFit(entry: CatalogEntry, request: string): boolean {
+  const props = (entry.inputSchema as Schema | null)?.properties ?? {};
+  return !symbolKey(props) || coinIdsForQuestion(request).length <= 1;
+}
 
 /// The coins field of a price service, filled by code: the coins the request names, in DefiLlama's
 /// form. A value the model gave is kept only when it is already in that form. Null: not such a field.
@@ -73,6 +88,15 @@ export async function fillInput(
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) proposed = parsed as Record<string, unknown>;
   } catch {
     proposed = {};
+  }
+  // A symbol field is filled by code from the coin the request names; the service's other ways of
+  // naming a token (chain and contract) are then left out, so they are never guessed.
+  const symbol = symbolKey(props);
+  if (symbol) {
+    const named = coinIdsForQuestion(request).map((id) => TICKERS[id]).filter((t): t is string => Boolean(t));
+    const given = typeof proposed[symbol] === "string" ? (proposed[symbol] as string).trim() : "";
+    const value = named[0] ?? (TICKER.test(given) ? given.toUpperCase() : undefined);
+    return value ? { ok: true, input: { [symbol]: value } } : { ok: false, missing: [symbol], question: SYMBOL_QUESTION, partial: {} };
   }
   const input: Record<string, unknown> = {};
   for (const [key, prop] of Object.entries(props)) {

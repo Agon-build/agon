@@ -475,3 +475,17 @@ test("a category the person chose themselves is not swapped for another", async 
   assert.equal(out.category, "business");
   assert.deepEqual(out.groups.outside, []);
 });
+
+// 2026-11-10 production: the cheaper one-symbol price service became Agon's pick for "ETH and SOL".
+test("a price service that takes one coin is left out when the request names several", async () => {
+  const props = { symbol: { type: "string", description: "Token symbol like 'ETH', 'BTC', 'SOL', 'USDC'." }, chain: { type: "string" } };
+  const one = entry({ source: "circle", reference: "circle:one", name: "Price of a token", provider: "anchor-x402", category: "FINANCIAL_ANALYSIS", description: "Look up the current US dollar price of a token", url: "https://one.example/price", method: "POST", inputSchema: { type: "object", properties: props }, price: 1_000n, payTo: CIRCLE_PAY, network: "arc", rating: { tier: "unrated", score: null } });
+  const list = entry({ source: "circle", reference: "circle:list", name: "Token price lookup", provider: "BlockRun.AI", category: "FINANCIAL_ANALYSIS", description: "Token price lookup. Pass coin identifiers as coingecko:bitcoin. Supports comma-separated lists.", url: "https://list.example/prices/{coins}", method: "GET", inputSchema: { type: "object", required: ["coins"], properties: { coins: { type: "string" } } }, price: 2_000n, payTo: CIRCLE_PAY, network: "arc", rating: { tier: "unrated", score: null } });
+  const judge = async (_t: string, l: CatalogEntry[]) => l.map((e) => e.reference);
+  const both = await setup({ kind: "market_data", entries: [one, list], judge }).router.route("op:x", "Price of ETH and SOL right now", { choices: true });
+  assert.ok(both.kind === "choices");
+  assert.deepEqual(both.groups.outside.map((c) => c.reference), ["circle:list"]);
+  const single = await setup({ kind: "market_data", entries: [one, list], judge }).router.route("op:x", "Price of ETH right now", { choices: true });
+  assert.ok(single.kind === "choices");
+  assert.deepEqual(single.groups.outside.map((c) => c.reference), ["circle:one", "circle:list"]);
+});
