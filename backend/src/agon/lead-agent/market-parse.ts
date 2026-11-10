@@ -134,7 +134,7 @@ export function fallbackQueryFor(question: string): string | null {
   return first && first !== searchQueryFor(question) ? first : null;
 }
 
-type Scored = { m: MarketCandidate; score: number; positions: number[]; extra: number; rank: number };
+type Scored = { m: MarketCandidate; score: number; positions: number[]; extra: number; rank: number; titleExtra: number };
 
 const isNumber = (t: string) => /^\d/.test(t);
 // "Barcelona vs PSG", "Will City beat Liverpool": a market that names only one side answers something else.
@@ -172,12 +172,15 @@ function scoreMarket(m: MarketCandidate, want: string[], rank: number, matchup: 
   if (want.includes("win") && !inMarket.has("win")) score = 0;
   if (specific.size > 0 && ![...specific].some((t) => inMarket.has(t))) score = 0;
   if (score >= 2 && m.yesPriceBps !== null) score += 0.5;
-  return { m, score, positions, extra: [...inQuestion].filter((t) => !want.includes(t)).length, rank };
+  const inTitle = new Set(tokens(m.eventTitle ?? "").map(stem));
+  return { m, score, positions, extra: [...inQuestion].filter((t) => !want.includes(t)).length, rank, titleExtra: [...inTitle].filter((t) => !want.includes(t)).length };
 }
 
 /// Ties inside one event go to the market whose own question names what the
 /// person named first ("Barcelona and PSG" picks the Barcelona market). Ties
-/// across events go to the market whose own question covers more of the
+/// across events go first to the event whose title adds the fewest words to the
+/// question ("the Fed decision in December" is the "Fed Decision in December?" event,
+/// not "How many dissent at the December Fed meeting?"), then to the market whose own question covers more of the
 /// question, then to the one that adds the least to it (a combined "X and Y"
 /// market loses to plain X), then to the one the search ranked first, then
 /// the earlier end.
@@ -190,6 +193,7 @@ function better(a: Scored, b: Scored): boolean {
       if (x !== y) return x < y;
     }
   }
+  if (a.titleExtra !== b.titleExtra) return a.titleExtra < b.titleExtra;
   if (a.positions.length !== b.positions.length) return a.positions.length > b.positions.length;
   if (a.extra !== b.extra) return a.extra < b.extra;
   if (a.rank !== b.rank) return a.rank < b.rank;

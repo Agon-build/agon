@@ -172,3 +172,14 @@ test("words that ask for a check are not searched", () => {
   assert.equal(searchQueryFor("Please review and analyze the Arsenal market, tell me if it's safe"), "arsenal");
   assert.equal(searchQueryFor("Look at the Bitcoin $120k market for me"), "bitcoin 120000");
 });
+
+// 2026-11-10 production check: "the Fed decision in December" picked "Will no one dissent the December
+// Fed decision?" from the dissent-count event, because its own question happens to say "decision", over the
+// markets of the "Fed Decision in December?" event. The event the person named comes first.
+test("a market in the event the person named wins over one that only repeats its words", () => {
+  const ask = "Check the Polymarket market on the Fed decision in December, is it worth trading?";
+  const dissent = { conditionId: a as `0x${string}`, question: "Will no one dissent the December Fed decision?", slug: "", endDate: "2026-12-09T23:59:00Z", yesPriceBps: 4000, eventTitle: "How many dissent at the December Fed meeting?" };
+  const hold = { conditionId: b as `0x${string}`, question: "Will there be no change in Fed interest rates after the December 2026 meeting?", slug: "", endDate: "2026-12-09T23:59:00Z", yesPriceBps: 800, eventTitle: "Fed Decision in December?" };
+  assert.equal(matchMarket([dissent, hold], ask, now).market?.question, hold.question);
+  assert.equal(matchMarket([hold, dissent], ask, now).market?.question, hold.question);
+});
