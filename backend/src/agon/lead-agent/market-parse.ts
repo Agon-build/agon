@@ -75,6 +75,8 @@ const STOP = new Set([
   // Words about trading the market rather than its subject; Polymarket questions rarely contain them.
   "market", "markets", "polymarket", "worth", "trading", "trade", "bet", "betting", "odds", "likely", "probability", "should", "buy", "sell",
   "good", "now", "do", "does", "how", "you", "your", "my", "me", "can", "are",
+  // Words that ask for the check itself. Polymarket's search ranks "check" as a subject (2026-11-10: hockey's Checkers).
+  "check", "checks", "checking", "look", "looking", "review", "analyze", "analyse", "assess", "evaluate", "tell", "please", "safe", "risky",
   // Question words; Polymarket search treats them as subject words and drifts to unrelated events.
   "who", "whom", "which", "when", "where", "why", "between", "vs", "versus", "against", "than", "there", "game", "match", "happen", "happens",
   "did", "was", "were", "has", "have", "had", "get", "gets", "from", "with", "its", "if", "not", "about", "any", "tonight", "think", "going", "year",

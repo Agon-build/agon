@@ -162,3 +162,13 @@ test("a win question is not answered by a market about finishing places", () => 
 test("this season is not searched for: Polymarket names seasons by year", () => {
   assert.equal(searchQueryFor("Will Arsenal win the Premier League this season?"), "arsenal premier league");
 });
+
+// 2026-11-10 production check: "Check the Polymarket market on the Fed decision in December, is it worth
+// trading?" found no market. Polymarket's search ranks "check" as a subject (hockey's Charlotte Checkers),
+// and the wider search was "check" alone. Words that ask for the check are not the market's subject.
+test("words that ask for a check are not searched", () => {
+  assert.equal(searchQueryFor("Check the Polymarket market on the Fed decision in December, is it worth trading?"), "fed decision december");
+  assert.equal(fallbackQueryFor("Check the Polymarket market on the Fed decision in December, is it worth trading?"), "decision");
+  assert.equal(searchQueryFor("Please review and analyze the Arsenal market, tell me if it's safe"), "arsenal");
+  assert.equal(searchQueryFor("Look at the Bitcoin $120k market for me"), "bitcoin 120000");
+});
