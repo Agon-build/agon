@@ -49,8 +49,9 @@ export type ScoutAnswerView = {
 export type ForecastAnswerView = { kind: "forecast"; answer: StageAnswer; sources: { title: string; url: string; published: string | null }[]; readLine: string | null };
 /// An image a service made.
 export type ImageAnswerView = { kind: "image"; src: string; caption: string | null };
+export type PricesAnswerView = { kind: "prices"; prices: { label: string; value: string }[]; readLine: string | null };
 export type WatchAnswerView = { kind: "watch"; markets: { question: string; url: string }[]; until: string; watchPath: string };
-export type AnswerView = { kind: "text"; text: string } | { kind: "rows"; rows: { label: string; value: string }[] } | RulesAnswerView | WatchAnswerView | ScoutAnswerView | ForecastAnswerView | ImageAnswerView;
+export type AnswerView = { kind: "text"; text: string } | { kind: "rows"; rows: { label: string; value: string }[] } | RulesAnswerView | WatchAnswerView | ScoutAnswerView | ForecastAnswerView | ImageAnswerView | PricesAnswerView;
 
 /// A Resolution Watch purchase: the markets watched, until when, and its status link.
 function watchView(r: Record<string, unknown>): WatchAnswerView | null {
@@ -137,6 +138,22 @@ function imageView(r: Record<string, unknown>): ImageAnswerView | null {
   return src ? { kind: "image", src, caption: str(first?.revised_prompt) || null } : null;
 }
 
+const dollars = (n: number) => (n >= 1 ? `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `$${Number(n.toPrecision(3))}`);
+
+/// A DefiLlama price answer ({ coins: { "coingecko:ethereum": { price, symbol, timestamp } } }): one price per coin.
+function pricesView(r: Record<string, unknown>): PricesAnswerView | { kind: "text"; text: string } | null {
+  const coins = r.coins;
+  if (!coins || typeof coins !== "object" || Array.isArray(coins) || Object.keys(r).length !== 1) return null;
+  const rows = Object.entries(coins as Record<string, Record<string, unknown> | null>).flatMap(([id, c]) => {
+    const price = typeof c?.price === "number" && Number.isFinite(c.price) ? c.price : null;
+    return price === null ? [] : [{ label: str(c?.symbol) || id.replace(/^[a-z-]+:/i, ""), value: dollars(price), at: typeof c?.timestamp === "number" ? c.timestamp : null }];
+  });
+  if (Object.keys(coins).length === 0) return { kind: "text", text: "The service sent no price for those coins." };
+  if (rows.length === 0) return null;
+  const at = rows.map((x) => x.at).find((x): x is number => x !== null);
+  return { kind: "prices", prices: rows.map(({ label, value }) => ({ label, value })), readLine: at ? `Read at ${new Date(at * 1000).toISOString().slice(11, 19)} UTC` : null };
+}
+
 /// What a routed service returned, readable: text as text, a flat object as rows, a file by type and size.
 export function answerView(result: unknown): AnswerView | null {
   if (result === null || result === undefined) return null;
@@ -150,7 +167,7 @@ export function answerView(result: unknown): AnswerView | null {
   if (rules) return rules;
   const watch = watchView(result as Record<string, unknown>);
   if (watch) return watch;
-  const made = scoutView(result as Record<string, unknown>) ?? forecastView(result as Record<string, unknown>) ?? imageView(result as Record<string, unknown>);
+  const made = scoutView(result as Record<string, unknown>) ?? forecastView(result as Record<string, unknown>) ?? imageView(result as Record<string, unknown>) ?? pricesView(result as Record<string, unknown>);
   if (made) return made;
   return { kind: "rows", rows: inputRows(result as Record<string, unknown>) };
 }

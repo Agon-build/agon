@@ -1,9 +1,26 @@
 import type { ModelCaller } from "../playground/seasons/house-agents.ts";
+import { coinIdsForQuestion } from "../router/data-services.ts";
 import type { CatalogEntry } from "./catalog.ts";
 import type { Intent } from "./intent.ts";
 
 type Prop = { type?: string | string[]; description?: string; title?: string; enum?: unknown[]; default?: unknown };
 type Schema = { required?: string[]; properties?: Record<string, Prop> };
+
+/// A DefiLlama-style price service: it says in its listing that coins are named like coingecko:bitcoin.
+const DEFILLAMA_IDS = /coingecko:[a-z]/i;
+const COIN_FIELD = /^(coins?|ids?|tokens?)$/i;
+const IDS = /^[a-z0-9-]+:[^,\s]+(,[a-z0-9-]+:[^,\s]+)*$/i;
+const COINS_QUESTION = "Which coins? Name them, such as BTC, ETH or SOL, or give DefiLlama ids like coingecko:pepe.";
+
+/// The coins field of a price service, filled by code: the coins the request names, in DefiLlama's
+/// form. A value the model gave is kept only when it is already in that form. Null: not such a field.
+function coinField(entry: CatalogEntry, key: string, request: string, proposed: unknown): { value: string | undefined } | null {
+  if (!COIN_FIELD.test(key) || !DEFILLAMA_IDS.test(entry.description)) return null;
+  const named = coinIdsForQuestion(request);
+  if (named.length > 0) return { value: named.join(",") };
+  const given = typeof proposed === "string" ? proposed.replace(/\s+/g, "") : "";
+  return { value: IDS.test(given) ? given : undefined };
+}
 
 /// A field limited to a list of options: its default, else the first option. The
 /// catalog price is read for that request, so a model never picks a dearer option.
@@ -60,7 +77,8 @@ export async function fillInput(
   const input: Record<string, unknown> = {};
   for (const [key, prop] of Object.entries(props)) {
     // Some services reject a request without an option they list as optional (BlockRun's image model, 2026-11-06).
-    const v = fixedChoice(prop) ?? coerce(proposed[key], prop);
+    const coins = coinField(entry, key, request, proposed[key]);
+    const v = coins ? coins.value : fixedChoice(prop) ?? coerce(proposed[key], prop);
     if (v !== undefined) input[key] = v;
   }
   // A schema with no required list still needs something: an empty fill (options aside) asks about the first open field.
@@ -72,6 +90,7 @@ export async function fillInput(
   if (missing.length > 0) {
     const first = props[missing[0]!] ?? {};
     const hint = first.description ?? first.title;
+    if (coinField(entry, missing[0]!, request, undefined)) return { ok: false, missing, question: COINS_QUESTION, partial: input };
     return { ok: false, missing, question: `What should I use for ${missing[0]}${hint ? ` (${hint})` : ""}?`, partial: input };
   }
   return { ok: true, input };

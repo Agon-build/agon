@@ -1,4 +1,4 @@
-import { answerView, type AnswerView, type ForecastAnswerView, type ImageAnswerView, type RulesAnswerView, type ScoutAnswerView, type WatchAnswerView } from "@/lib/agon/route-view";
+import { answerView, type AnswerView, type ForecastAnswerView, type ImageAnswerView, type PricesAnswerView, type RulesAnswerView, type ScoutAnswerView, type WatchAnswerView } from "@/lib/agon/route-view";
 import type { LiveView } from "@/lib/agon/stage-types";
 import { failureText } from "@/lib/agon/stage-copy";
 import { isTerminal, ledgerRows, moneyFlow, workingNotice } from "@/lib/agon/stage-view";
@@ -155,12 +155,31 @@ function ImageAnswer({ view }: { view: ImageAnswerView }) {
   );
 }
 
+function PricesAnswer({ view }: { view: PricesAnswerView }) {
+  return (
+    <section aria-labelledby="answer-heading" className="stage-print border border-[color:var(--hairline-strong)] bg-canvas-2 p-5 sm:p-7">
+      <p className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-ink"><span aria-hidden className="inline-block size-2 bg-[color:var(--ok)]" />Delivered</p>
+      <h2 id="answer-heading" className="mt-3 text-3xl font-medium leading-tight tracking-[-.03em] text-ink sm:text-4xl">Prices</h2>
+      <dl className="mt-5 divide-y divide-[color:var(--hairline)] border-y border-[color:var(--hairline)]">
+        {view.prices.map((p) => (
+          <div key={p.label} className="flex items-baseline justify-between gap-4 py-3">
+            <dt className="font-mono text-[12px] uppercase tracking-[0.12em] text-ink-2">{p.label}</dt>
+            <dd className="font-mono text-2xl tabular-nums text-ink">{p.value}</dd>
+          </div>
+        ))}
+      </dl>
+      {view.readLine ? <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">{view.readLine}, from DefiLlama</p> : null}
+    </section>
+  );
+}
+
 function RoutedAnswer({ view }: { view: AnswerView }) {
   if (view.kind === "rules") return <RulesAnswer view={view} />;
   if (view.kind === "watch") return <WatchAnswer view={view} />;
   if (view.kind === "scout") return <ScoutAnswer view={view} />;
   if (view.kind === "forecast") return <ForecastAnswer view={view} />;
   if (view.kind === "image") return <ImageAnswer view={view} />;
+  if (view.kind === "prices") return <PricesAnswer view={view} />;
   return (
     <section aria-labelledby="answer-heading" className="stage-print border border-[color:var(--hairline-strong)] bg-canvas-2 p-5 sm:p-7">
       <p className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-ink"><span aria-hidden className="inline-block size-2 bg-[color:var(--ok)]" />Delivered</p>

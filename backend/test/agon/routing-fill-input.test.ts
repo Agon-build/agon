@@ -65,3 +65,29 @@ test("an option field gets its default or first option, never the model's pick, 
   const empty = await fillInput(entry({ inputSchema: loose }), "hi", intent, model("{}"), "m");
   assert.deepEqual(empty, { ok: false, missing: ["prompt"], question: "What should I use for prompt?", partial: { model: "a" } });
 });
+
+// 2026-11-10 production: "Price of ETH and SOL right now" paid BlockRun's DefiLlama price lookup 0.002 USDC
+// and got {"coins":{}}. The address takes DefiLlama ids (coingecko:ethereum); the model only saw the field
+// name "coins" and sent the tickers. Code now names the coins from the request.
+const PRICES = entry({
+  reference: "circle:prices", name: "Token price lookup", provider: "BlockRun.AI",
+  description: "Token price lookup. Pass coin identifiers as `/v1/defillama/prices/{coins}` (e.g. `coingecko:bitcoin`, `ethereum:0xC02a`). Supports comma-separated lists.",
+  url: "https://arc.blockrun.ai/api/v1/defillama/prices/{coins}", method: "GET",
+  inputSchema: { type: "object", required: ["coins"], properties: { coins: { type: "string", description: "coins, part of the service address" } } },
+});
+
+test("a DefiLlama price lookup gets the coins in DefiLlama's form, named by code, not by the model", async () => {
+  const out = await fillInput(PRICES, "Price of ETH and SOL right now", intent, model('{"coins":"ETH,SOL"}'), "m");
+  assert.deepEqual(out, { ok: true, input: { coins: "coingecko:ethereum,coingecko:solana" } });
+  const btc = await fillInput(PRICES, "What is bitcoin trading at?", intent, model("{}"), "m");
+  assert.deepEqual(btc, { ok: true, input: { coins: "coingecko:bitcoin" } });
+});
+
+test("a price lookup for coins Agon cannot name asks which coins, and never sends a bare ticker", async () => {
+  const out = await fillInput(PRICES, "Price of PEPE right now", intent, model('{"coins":"PEPE"}'), "m");
+  assert.equal(out.ok, false);
+  assert.deepEqual(!out.ok && out.missing, ["coins"]);
+  assert.equal(!out.ok && out.question, "Which coins? Name them, such as BTC, ETH or SOL, or give DefiLlama ids like coingecko:pepe.");
+  const given = await fillInput(PRICES, "Price of coingecko:pepe", intent, model('{"coins":"coingecko:pepe"}'), "m");
+  assert.deepEqual(given, { ok: true, input: { coins: "coingecko:pepe" } }, "ids already in DefiLlama's form are kept");
+});

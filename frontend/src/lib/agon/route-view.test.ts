@@ -133,3 +133,18 @@ test("an image a service made is shown as an image, from a link or from its data
   const unsafe = answerView({ data: [{ url: "javascript:alert(1)" }] });
   assert.ok(unsafe && unsafe.kind === "rows", "only https links and image data are shown as images");
 });
+
+// 2026-11-10 production: a price lookup read as "coins {}". Prices now read as prices, and an
+// empty answer says that no price came back.
+test("a DefiLlama price answer reads as one price per coin, with when it was read", () => {
+  const view = answerView({ coins: {
+    "coingecko:ethereum": { price: 2091.5489015999997, symbol: "ETH", timestamp: 1794313356, confidence: 0.999 },
+    "coingecko:solana": { price: 84.73, symbol: "SOL", timestamp: 1794313356, confidence: 0.999 },
+  } });
+  assert.deepEqual(view, { kind: "prices", prices: [{ label: "ETH", value: "$2,091.55" }, { label: "SOL", value: "$84.73" }], readLine: "Read at 12:22:36 UTC" });
+  assert.deepEqual(answerView({ coins: { "coingecko:pepe": { price: 0.0000123, symbol: "PEPE", timestamp: 1794313356 } } }), { kind: "prices", prices: [{ label: "PEPE", value: "$0.0000123" }], readLine: "Read at 12:22:36 UTC" });
+});
+
+test("an empty price answer says no price came back", () => {
+  assert.deepEqual(answerView({ coins: {} }), { kind: "text", text: "The service sent no price for those coins." });
+});
