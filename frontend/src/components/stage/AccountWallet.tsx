@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 
 import { TagButton } from "@/components/redesign/TagButton";
 import { AddFunds } from "@/components/stage/AddFunds";
+import { outsideWalletCopy } from "@/lib/agon/account-layout";
 import { moneyLine } from "@/lib/agon/hire-layout";
 import { freezeWallet, lowerLimits, requestUnfreeze, requestWithdraw, StageApiError } from "@/lib/agon/stage";
 import { walletRefusalText } from "@/lib/agon/stage-copy";
@@ -24,7 +25,8 @@ function Box({ title, line, children }: { title: string; line: string; children:
 }
 
 /// Account, Wallet: add funds, withdraw, limits, freeze, and the sign-in wallet.
-export function AccountWallet({ wallet, signInWallet, onChanged }: { wallet: StageWallet; signInWallet: string | null; onChanged: () => void }) {
+export function AccountWallet({ wallet, mainnet, signInWallet, onChanged, onMainnetChanged }: { wallet: StageWallet; mainnet: StageWallet | null; signInWallet: string | null; onChanged: () => void; onMainnetChanged: () => void }) {
+  const outside = outsideWalletCopy(mainnet);
   const router = useRouter();
   const money = moneyLine(wallet.networkId) ?? moneyLine(wallet.network) ?? `USDC on ${wallet.network}`;
   const [to, setTo] = useState("");
@@ -50,6 +52,9 @@ export function AccountWallet({ wallet, signInWallet, onChanged }: { wallet: Sta
         <div className="grid gap-4">
           <Box title="Add funds" line={`Send ${money} to this address. The balance updates when it lands.`}>
             <AddFunds wallet={wallet} onDone={onChanged} compact />
+          </Box>
+          <Box title={outside.title} line={outside.line}>
+            {mainnet ? <AddFunds wallet={mainnet} onDone={onMainnetChanged} suggested="0.50" compact /> : <TagButton href="/" size="sm" variant="ghost">Go to Hire</TagButton>}
           </Box>
           <Box title="Withdraw" line="Move USDC out to any Arc address. You approve every withdrawal on the next page.">
             <form className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]" onSubmit={(e) => { e.preventDefault(); void run("withdraw", async () => { const out = await requestWithdraw(to.trim(), amount.trim()); if (out.ok && out.approvalUrl) router.push(path(out.approvalUrl)); else setNote({ box: "withdraw", text: walletRefusalText(out.code, out.max) }); }); }}>

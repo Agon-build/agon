@@ -64,6 +64,8 @@ export function AccountClient() {
   const { me, loading } = useAuth();
   const signedIn = Boolean(me) || AGON_PREVIEW_MODE;
   const [wallet, setWallet] = useState<WalletState>({ kind: "loading" });
+  // The Arc mainnet wallet that pays outside services; null until one exists.
+  const [mainnet, setMainnet] = useState<StageWallet | null>(null);
   const [deliveries, setDeliveries] = useState<Deliveries | null>(null);
   const [hires, setHires] = useState<HistoryItem[] | null>(null);
   const [page, setPage] = useState(1);
@@ -81,7 +83,8 @@ export function AccountClient() {
       .then((w) => setWallet({ kind: "ready", wallet: w }))
       .catch((e) => setWallet(e instanceof StageApiError && e.code === "no_wallet" ? { kind: "none" } : { kind: "error" }));
   }, []);
-  useEffect(() => { if (signedIn) loadWallet(); }, [loadWallet, signedIn]);
+  const loadMainnet = useCallback(() => { getWallet("arc").then(setMainnet).catch(() => setMainnet(null)); }, []);
+  useEffect(() => { if (signedIn) { loadWallet(); loadMainnet(); } }, [loadWallet, loadMainnet, signedIn]);
   useEffect(() => { if (signedIn) void getDeliveries().then(setDeliveries).catch(() => setDeliveries(null)); }, [signedIn, tab]);
   useEffect(() => {
     if (!signedIn) return;
@@ -193,7 +196,7 @@ export function AccountClient() {
               ) : null}
 
               {tab === "wallet" ? (
-                wallet.kind === "ready" ? <AccountWallet wallet={wallet.wallet} signInWallet={me?.walletKind === "circle" ? me.address : null} onChanged={loadWallet} />
+                wallet.kind === "ready" ? <AccountWallet wallet={wallet.wallet} mainnet={mainnet} signInWallet={me?.walletKind === "circle" ? me.address : null} onChanged={loadWallet} onMainnetChanged={loadMainnet} />
                   : wallet.kind === "loading" ? <p className="text-sm text-ink-3">Loading your wallet.</p>
                     : wallet.kind === "none" ? (
                       <div className="border border-[color:var(--hairline-strong)] bg-canvas-2 p-6">

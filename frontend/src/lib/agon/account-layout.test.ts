@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { hireAction, leftFraction, resultsLine, telegramLine } from "./account-layout.ts";
+import { readFileSync } from "node:fs";
+
+import { hireAction, leftFraction, outsideWalletCopy, resultsLine, telegramLine } from "./account-layout.ts";
 
 const settings = (email: boolean, telegram: boolean) => ({ email: { on: email, address: email ? "a…@x.com" : null }, telegram: { available: true, connected: telegram } });
 
@@ -32,4 +34,23 @@ test("each hire row offers the next useful step", () => {
   assert.equal(hireAction("refunded"), "Receipt");
   assert.equal(hireAction("failed"), "Receipt");
   assert.equal(hireAction("quoted"), "Retry");
+});
+
+// 2026-11-10: outside services are paid in real USDC from a second wallet on Arc mainnet, and
+// the only place to fund it was the Hire page, after choosing one. Account now shows it too.
+test("Account names the mainnet wallet that pays outside services, with what it holds", () => {
+  assert.deepEqual(outsideWalletCopy({ balance: "0.10" }), {
+    title: "Add funds for outside services",
+    line: "Outside services are paid in real USDC on Arc mainnet, from a wallet of its own. It holds 0.10 USDC.",
+  });
+  assert.equal(outsideWalletCopy({ balance: null }).line, "Outside services are paid in real USDC on Arc mainnet, from a wallet of its own. Its balance could not be read.");
+  assert.equal(outsideWalletCopy(null).line, "Outside services are paid in real USDC on Arc mainnet, from a wallet of its own. It is created the first time you choose one on Hire.");
+});
+
+test("the Account wallet tab loads the mainnet wallet and offers to fund it", () => {
+  const read = (p: string) => readFileSync(new URL(p, import.meta.url), "utf8");
+  assert.match(read("../../app/account/AccountClient.tsx"), /getWallet\("arc"\)/);
+  const tab = read("../../components/stage/AccountWallet.tsx");
+  assert.match(tab, /outsideWalletCopy\(mainnet\)/);
+  assert.match(tab, /<AddFunds wallet=\{mainnet\}/);
 });

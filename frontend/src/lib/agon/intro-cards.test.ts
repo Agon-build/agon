@@ -76,7 +76,5 @@ test("having entered Agon is remembered for the browser session, through a reloa
 
 test("any Agon page, the welcome story and the intro itself all count as having entered", () => {
   const read = (p: string) => readFileSync(new URL(p, import.meta.url), "utf8");
-  assert.match(read("../../components/redesign/TopNav.tsx"), /markEntered()/);
-  assert.match(read("../../components/landing/WelcomeStory.tsx"), /markEntered()/);
-  assert.match(read("../../components/agon/IntroGate.tsx"), /markEntered()/);
+  for (const file of ["redesign/TopNav.tsx", "landing/WelcomeStory.tsx", "agon/IntroGate.tsx"]) assert.ok(read(`../../components/${file}`).includes("markEntered()"), file);
 });

@@ -90,18 +90,18 @@ test("the layer that carries the sliding card lets presses through to the hero",
   assert.equal(PINNED_CARD_WRAP.pointerEvents, "none");
   assert.equal(PINNED_CARD.pointerEvents, "auto", "the card itself can still be pressed");
   const story = readFileSync(new URL("../../components/landing/WelcomeStory.tsx", import.meta.url), "utf8");
-  assert.match(story, /gsap.set("[data-card-wrap]", PINNED_CARD_WRAP)/);
-  assert.match(story, /gsap.set("[data-card]", PINNED_CARD)/);
+  assert.ok(story.includes('gsap.set("[data-card-wrap]", PINNED_CARD_WRAP)'));
+  assert.ok(story.includes('gsap.set("[data-card]", PINNED_CARD)'));
 });
 
 // 2026-11-10: the welcome story had the mark and nothing else in its header, so the only way
 // into the app was to scroll to a button.
 test("the welcome story's header always offers the way into Hire", () => {
   const nav = readFileSync(new URL("../../components/redesign/TopNav.tsx", import.meta.url), "utf8");
-  const bare = nav.slice(nav.indexOf("if (bare) return ("), nav.indexOf("return (
-    <>"));
-  assert.match(bare, /href="/"/);
-  assert.match(bare, /Start hiring/);
+  const from = nav.indexOf("if (bare) return (");
+  const bare = nav.slice(from, nav.indexOf("</header>", from));
+  assert.ok(from > 0 && bare.includes('<Link href="/"'), "a link to Hire");
+  assert.ok(bare.includes("Start hiring"));
 });
 
 // 2026-11-10: the phone menu listed Sign out twice and the profile under it.

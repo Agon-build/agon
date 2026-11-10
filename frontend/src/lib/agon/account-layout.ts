@@ -29,3 +29,10 @@ export function hireAction(state: string): "Watch" | "Receipt" | "Retry" {
   if (state === "quoted") return "Retry";
   return "Receipt";
 }
+
+/// Account, Wallet: the second wallet, on Arc mainnet, that pays services from outside Agon.
+/// Null means it does not exist yet; reading never creates one.
+export function outsideWalletCopy(wallet: { balance: string | null } | null): { title: string; line: string } {
+  const state = !wallet ? "It is created the first time you choose one on Hire." : wallet.balance === null ? "Its balance could not be read." : `It holds ${wallet.balance} USDC.`;
+  return { title: "Add funds for outside services", line: `Outside services are paid in real USDC on Arc mainnet, from a wallet of its own. ${state}` };
+}
