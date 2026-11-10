@@ -10,7 +10,7 @@ import { wordsOf, type CatalogEntry, type RouteSource } from "./catalog.ts";
 import { cleanGiven, coinsFit, type fillInput } from "./fill-input.ts";
 import { fillPath } from "./path-params.ts";
 import { shortlist } from "./fit.ts";
-import { marketInText } from "./live-market.ts";
+import { eventLinkIn, marketInText, outcomeIn, outcomeQuestion, type EventMarkets } from "./live-market.ts";
 import { ALL_AGON, ALL_CIRCLE, type Intent } from "./intent.ts";
 import { groupCandidates, rankCandidates, type Groups, type Ranked } from "./rank.ts";
 import { categoryForKind, circleFits, HIRE_CATEGORIES, hireCategory, type HireCategoryId } from "./categories.ts";
@@ -82,6 +82,8 @@ export function createRouter(deps: {
   directEntry?: (reference: string) => Promise<CatalogEntry | null>;
   /** The open Polymarket market a request is about, found on Polymarket itself; null when none matches. */
   findMarket?: (text: string) => Promise<{ ref: string; question: string } | null>;
+  /** A Polymarket event by its slug, with its open markets; null when it cannot be read. */
+  readEvent?: (slug: string) => Promise<EventMarkets | null>;
   /** Whether a service answers an unpaid call now. Unset means no check is made. */
   alive?: (entry: CatalogEntry) => Promise<boolean>;
   /** The Lead as a choice in Prediction markets; choosing it runs leadAsk. */
@@ -120,6 +122,17 @@ export function createRouter(deps: {
     if (known.length > 1 && ups.every((up) => !up)) return known;
     known.forEach((e, i) => { if (!ups[i]) silent.set(e.reference, t + SILENT_MS); });
     return known.filter((_, i) => ups[i]);
+  };
+
+  // A link to a whole Polymarket event becomes the link to one of its markets: the only one, or
+  // the one the person named. With several and none named, the person is asked which.
+  const resolveEvent = async (text: string, answer = ""): Promise<{ text: string } | { ask: string }> => {
+    const found = eventLinkIn(text);
+    if (!found || !deps.readEvent) return { text };
+    const event = await deps.readEvent(found.slug).catch(() => null);
+    if (!event || event.markets.length === 0) return { text };
+    const one = event.markets.length === 1 ? event.markets[0]! : outcomeIn(event, `${answer} ${text.replace(found.link, " ")}`);
+    return one ? { text: text.replace(found.link, one.ref) } : { ask: outcomeQuestion(event) };
   };
 
   // Each owner keeps their newest routes; expired ones go first, and a full map
@@ -236,7 +249,17 @@ export function createRouter(deps: {
       const entry = deps.directEntry ? await deps.directEntry(reference) : null;
       if (!entry) return { kind: "not_hireable" };
       // The Lead runs its own hire, with its data purchases and forecaster.
-      if (/\/agon\/agents\/lead\//.test(entry.url)) return { kind: "lead", ask: await deps.leadAsk(ownerRef, text) };
+      if (/\/agon\/agents\/lead\//.test(entry.url)) {
+        const resolved = await resolveEvent(text);
+        if ("text" in resolved) return { kind: "lead", ask: await deps.leadAsk(ownerRef, resolved.text) };
+        // An event link with several markets: the Lead waits as a pick, and its quote asks which market.
+        const intent: Intent = { kind: "forecast", query: text, values: {} };
+        const pick: Ranked = { ...entry, fee: 0n, total: entry.price, reason: "You chose this agent" };
+        const routeId = (deps.newId ?? randomUUID)();
+        keepRoom(ownerRef);
+        routes.set(routeId, { ownerRef, text, intent, entries: [pick], expiresAt: now().getTime() + ROUTE_TTL_MS, direct: true, lead: entry.reference });
+        return { kind: "pick", routeId, intent, pick, alternatives: [], sources: [{ id: "agon", status: "ok" }] };
+      }
       const intent: Intent = { kind: "other", query: text, values: {} };
       const pick: Ranked = { ...entry, fee: 0n, total: entry.price, reason: "You chose this agent" };
       const routeId = (deps.newId ?? randomUUID)();
@@ -253,9 +276,12 @@ export function createRouter(deps: {
       // The Lead runs its own hire, with its data purchases and forecaster.
       if (route.lead === reference) {
         // Browsing typed no question, so the Lead asks for one first.
-        const question = route.browse ? (typeof given?.question === "string" ? given.question.trim() : "") : route.text;
+        const answer = typeof given?.question === "string" ? given.question.trim() : "";
+        const question = route.browse ? answer : route.text;
         if (!question) return { ok: false, code: "missing_input", question: "What do you want forecast? Paste a Polymarket link or ask about an event.", missing: ["question"] };
-        return { ok: true, lead: await deps.leadAsk(ownerRef, question) };
+        const resolved = await resolveEvent(question, route.browse ? "" : answer);
+        if ("ask" in resolved) return { ok: false, code: "missing_input", question: resolved.ask, missing: ["question"] };
+        return { ok: true, lead: await deps.leadAsk(ownerRef, resolved.text) };
       }
       const runtime = deps.runtimes[entry.network];
       if (!runtime) return { ok: false, code: "outside_off" };
@@ -273,7 +299,14 @@ export function createRouter(deps: {
       // found open on Polymarket for the request, is sent; a value the model proposed is not.
       const props = (entry.inputSchema as { properties?: Record<string, unknown> } | null)?.properties ?? {};
       const marketKey = entry.source === "agon" ? MARKET_FIELDS.find((k) => k in props) : undefined;
-      if (marketKey && own[marketKey] === undefined) {
+      const answered = marketKey && typeof own[marketKey] === "string" ? (own[marketKey] as string) : "";
+      if (marketKey && !route.browse && eventLinkIn(route.text) && deps.readEvent && (!answered || !marketInText(answered))) {
+        // The person pasted a whole event: its one market, or the one they named, or ask which.
+        const resolved = await resolveEvent(route.text, answered);
+        if ("ask" in resolved) return { ok: false, code: "missing_input", question: resolved.ask, missing: [marketKey] };
+        const ref = marketInText(resolved.text);
+        if (ref) { input[marketKey] = ref; missing = missing.filter((k) => k !== marketKey); }
+      } else if (marketKey && own[marketKey] === undefined) {
         const typed = route.browse ? null : marketInText(route.text);
         const live = typed ?? (route.browse || !deps.findMarket ? null : (await deps.findMarket(route.text).catch(() => null))?.ref ?? null);
         if (live) {

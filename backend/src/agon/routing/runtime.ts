@@ -13,7 +13,7 @@ import type { Proof } from "./catalog.ts";
 import { createCircleSource } from "./circle-source.ts";
 import { fillInput } from "./fill-input.ts";
 import { judgeFit } from "./fit.ts";
-import { createMarketFinder } from "./live-market.ts";
+import { createEventReader, createMarketFinder } from "./live-market.ts";
 import { readIntent } from "./intent.ts";
 import { createRouter, type Router } from "./router.ts";
 
@@ -96,6 +96,7 @@ export function startRouting(deps: {
     judge: (text, list) => judgeFit(text, list, deps.callModel, deps.model),
     fill: (entry, text, intent) => fillInput(entry, text, intent, deps.callModel, deps.model),
     findMarket: (text) => findLiveMarket(text, new Date()),
+    readEvent: createEventReader(),
     feeBps: deps.feeBps,
     feeMin: deps.feeMin,
     feeAddress: { "arc-testnet": deps.testnetFeeAddress, arc: deps.outside?.feeAddress ?? null },

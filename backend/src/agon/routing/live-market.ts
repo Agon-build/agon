@@ -91,3 +91,73 @@ export function createMarketFinder(options: { fetchImpl?: typeof fetch; baseUrl?
     }
   };
 }
+
+/// A Polymarket event: a group of markets, such as one per person in "Who will leave the Trump
+/// administration before 2027?". Its link names only the event, so it is not one market.
+export type EventMarket = { label: string; question: string; ref: string; yesBps: number; volume24h: number };
+export type EventMarkets = { title: string; markets: EventMarket[] };
+
+const EVENT_LINK = /https:\/\/(?:www\.)?polymarket\.com\/event\/([a-z0-9-]+)\/?(?=[\s"'<>)?.,;!]|$)/i;
+
+/// A link to a whole event (polymarket.com/event/<event>, with no market after it), or null.
+export function eventLinkIn(text: string): { link: string; slug: string } | null {
+  const m = text.match(EVENT_LINK);
+  return m ? { link: m[0], slug: m[1]!.toLowerCase() } : null;
+}
+
+const eventMarket = z.object({
+  question: z.string().min(1), slug: z.string().min(1), groupItemTitle: z.string().optional(), outcomes: z.unknown(), outcomePrices: z.unknown(),
+  volume24hr: z.coerce.number().catch(0).optional(), closed: z.boolean().optional(),
+});
+
+/// Reads an event from Polymarket (Gamma, keyless): its open Yes or No markets, busiest first.
+/// Any failure is null, never an error.
+export function createEventReader(options: { fetchImpl?: typeof fetch; baseUrl?: string } = {}): (slug: string) => Promise<EventMarkets | null> {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const base = options.baseUrl ?? "https://gamma-api.polymarket.com";
+  return async (slug) => {
+    try {
+      const res = await fetchImpl(`${base}/events?slug=${encodeURIComponent(slug)}`, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(8_000) });
+      if (!res.ok) return null;
+      const body = (await res.json()) as { title?: unknown; closed?: unknown; markets?: unknown[] }[];
+      const event = Array.isArray(body) ? body.find((e) => e.closed !== true) : undefined;
+      if (!event) return null;
+      const markets: EventMarket[] = [];
+      for (const raw of event.markets ?? []) {
+        const m = eventMarket.safeParse(raw);
+        if (!m.success || m.data.closed === true) continue;
+        const outcomes = strings(m.data.outcomes);
+        const prices = strings(m.data.outcomePrices)?.map(Number);
+        if (!outcomes || outcomes[0] !== "Yes" || outcomes[1] !== "No" || !prices || !Number.isFinite(prices[0])) continue;
+        markets.push({ label: m.data.groupItemTitle?.trim() || m.data.question, question: m.data.question, ref: `https://polymarket.com/event/${slug}/${m.data.slug}`, yesBps: Math.round(prices[0]! * 10_000), volume24h: m.data.volume24hr ?? 0 });
+      }
+      markets.sort((a, b) => b.volume24h - a.volume24h);
+      return { title: typeof event.title === "string" ? event.title : "", markets };
+    } catch {
+      return null;
+    }
+  };
+}
+
+const LABEL_SKIP = new Set(["will", "the", "and", "for", "before", "after", "more", "less", "than", "yes", "not"]);
+const wordsIn = (text: string) => text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(Boolean);
+
+/// The market whose name the person used ("Hegseth" picks "Pete Hegseth"). Null when none
+/// is named or two are named equally.
+export function outcomeIn(event: EventMarkets, text: string): EventMarket | null {
+  const said = new Set(wordsIn(text));
+  let best: EventMarket | null = null;
+  let top = 0;
+  let tie = false;
+  for (const m of event.markets) {
+    const score = wordsIn(m.label).filter((w) => w.length >= 3 && !LABEL_SKIP.has(w) && said.has(w)).length;
+    if (score > top) { best = m; top = score; tie = false; } else if (score === top && score > 0) tie = true;
+  }
+  return top > 0 && !tie ? best : null;
+}
+
+/// Asked when an event link holds several markets: the busiest five with their Yes price.
+export function outcomeQuestion(event: EventMarkets): string {
+  const top = event.markets.slice(0, 5).map((m) => `${m.label} ${Math.round(m.yesBps / 100)}%`).join(", ");
+  return `That link is a group of ${event.markets.length} markets. Which one? ${top}. Name one, or paste its own link.`;
+}

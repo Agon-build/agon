@@ -8,6 +8,7 @@ import { resolveOutsideSettings } from "../../src/agon/payments/settings.ts";
 import type { CatalogEntry, RouteSource } from "../../src/agon/routing/catalog.ts";
 import type { Intent } from "../../src/agon/routing/intent.ts";
 import { createRouter, type RouteRuntime } from "../../src/agon/routing/router.ts";
+import type { EventMarkets } from "../../src/agon/routing/live-market.ts";
 import { MemoryPaymentsStore } from "./payments-memory-store.ts";
 
 const CIRCLE_PAY = `0x${"c1".repeat(20)}` as Address;
@@ -33,8 +34,9 @@ function fakeRuntime(network: "arc-testnet" | "arc", calls: string[], opts: { am
   };
 }
 
-function setup(opts: { fill?: Parameters<typeof createRouter>[0]["fill"]; findMarket?: (text: string) => Promise<{ ref: string; question: string } | null>; judge?: (text: string, list: CatalogEntry[]) => Promise<string[] | null>; kind?: Intent["kind"]; outside?: boolean; entries?: CatalogEntry[]; circleStatus?: "ok" | "unavailable"; quoteAmount?: bigint; quoteFail?: string; quoteCode?: string; alive?: (e: CatalogEntry) => Promise<boolean> } = {}) {
+function setup(opts: { fill?: Parameters<typeof createRouter>[0]["fill"]; findMarket?: (text: string) => Promise<{ ref: string; question: string } | null>; judge?: (text: string, list: CatalogEntry[]) => Promise<string[] | null>; kind?: Intent["kind"]; outside?: boolean; entries?: CatalogEntry[]; circleStatus?: "ok" | "unavailable"; quoteAmount?: bigint; quoteFail?: string; quoteCode?: string; alive?: (e: CatalogEntry) => Promise<boolean>; readEvent?: (slug: string) => Promise<EventMarkets | null> } = {}) {
   const calls: string[] = [];
+  const asked: string[] = [];
   const store = new MemoryPaymentsStore();
   const src = (id: "agon" | "circle", rows: CatalogEntry[], status: "ok" | "unavailable" = "ok"): RouteSource => ({ id, status: () => status, search: async () => rows.filter((r) => r.source === id), all: async () => rows.filter((r) => r.source === id) });
   const rows = opts.entries ?? [entry({}), circle];
@@ -46,15 +48,16 @@ function setup(opts: { fill?: Parameters<typeof createRouter>[0]["fill"]; findMa
     fill: opts.fill ?? (async (e) => (e.source === "circle" ? { ok: true as const, input: { symbol: "AAPL" } } : { ok: true as const, input: { market: "arsenal" } })),
     ...(opts.findMarket ? { findMarket: opts.findMarket } : {}),
     ...(opts.alive ? { alive: opts.alive } : {}),
+    ...(opts.readEvent ? { readEvent: opts.readEvent } : {}),
     feeBps: 150,
     feeAddress: { "arc-testnet": `0x${"fe".repeat(20)}` as Address, arc: `0x${"ef".repeat(20)}` as Address },
-    leadAsk: async () => { calls.push("lead"); return { ok: false, code: "invalid_question" }; },
+    leadAsk: async (_owner, question) => { calls.push("lead"); asked.push(question); return { ok: false, code: "invalid_question" }; },
     store,
     balanceOf: async () => 10_000_000n,
     approvalUrl: (t) => `https://agon.surf/approve?t=${t}`,
     directEntry: async (ref) => (ref === "agon:drift" ? DRIFT : ref === "agon:lead" ? entry({ reference: "agon:lead", name: "Agon Lead Agent", url: "https://api.agon.surf/agon/agents/lead/forecast" }) : null),
   });
-  return { router, calls, store };
+  return { router, calls, store, asked };
 }
 
 const DRIFT = entry({ reference: "agon:drift", name: "Drift", url: "https://api.agon.surf/agon/agents/house/drift/forecast", price: 100_000n });
@@ -488,4 +491,43 @@ test("a price service that takes one coin is left out when the request names sev
   const single = await setup({ kind: "market_data", entries: [one, list], judge }).router.route("op:x", "Price of ETH right now", { choices: true });
   assert.ok(single.kind === "choices");
   assert.deepEqual(single.groups.outside.map((c) => c.reference), ["circle:one", "circle:list"]);
+});
+
+// 2026-11-10 production: a Polymarket event link (a group of markets) was refused as "not found".
+const TRUMP_EVENT = "https://polymarket.com/event/who-will-leave-trump-administration-before-2027";
+const GROUP: EventMarkets = { title: "Who will leave Trump Administration before 2027?", markets: [
+  { label: "Pete Hegseth", question: "Will Pete Hegseth leave?", ref: `${TRUMP_EVENT}/will-pete-hegseth-leave`, yesBps: 2750, volume24h: 43620 },
+  { label: "Kash Patel", question: "Will Kash Patel leave?", ref: `${TRUMP_EVENT}/will-kash-patel-leave`, yesBps: 2000, volume24h: 1478 },
+] };
+const ONE: EventMarkets = { title: "Fed decision", markets: [{ label: "", question: "Will the Fed cut?", ref: "https://polymarket.com/event/fed/will-the-fed-cut", yesBps: 6200, volume24h: 9 }] };
+
+test("the Lead hired with an event link asks which market, then forecasts the one named", async () => {
+  const { router, asked } = setup({ readEvent: async () => GROUP });
+  const out = await router.direct("op:x", "agon:lead", TRUMP_EVENT);
+  assert.ok(out.kind === "pick", "the Lead waits for the market instead of failing");
+  const q = await router.quote("op:x", out.routeId, "agon:lead");
+  assert.deepEqual(q, { ok: false, code: "missing_input", question: "That link is a group of 2 markets. Which one? Pete Hegseth 28%, Kash Patel 20%. Name one, or paste its own link.", missing: ["question"] });
+  await router.quote("op:x", out.routeId, "agon:lead", { question: "Hegseth" });
+  assert.deepEqual(asked, [`${TRUMP_EVENT}/will-pete-hegseth-leave`]);
+});
+
+test("an event link that names its outcome, or holds one market, goes straight to that market", async () => {
+  const named = setup({ readEvent: async () => GROUP });
+  assert.equal((await named.router.direct("op:x", "agon:lead", `Will Kash Patel leave? ${TRUMP_EVENT}`)).kind, "lead");
+  assert.deepEqual(named.asked, [`Will Kash Patel leave? ${TRUMP_EVENT}/will-kash-patel-leave`]);
+  const single = setup({ readEvent: async () => ONE });
+  await single.router.direct("op:x", "agon:lead", "https://polymarket.com/event/fed");
+  assert.deepEqual(single.asked, ["https://polymarket.com/event/fed/will-the-fed-cut"]);
+});
+
+test("a market agent given an event link gets the market the person names", async () => {
+  const { router, calls } = setup({ entries: [scout], readEvent: async () => GROUP, fill: async () => ({ ok: true as const, input: {} }) });
+  const r = await router.route("op:x", `Is this worth trading? ${TRUMP_EVENT}`, { choices: true, category: "prediction" });
+  assert.ok(r.kind === "choices");
+  const asks = await router.quote("op:x", r.routeId, "agon:scout");
+  assert.equal(!asks.ok && "question" in asks && asks.question, "That link is a group of 2 markets. Which one? Pete Hegseth 28%, Kash Patel 20%. Name one, or paste its own link.");
+  const q = await router.quote("op:x", r.routeId, "agon:scout", { market: "Kash Patel" });
+  assert.ok(q.ok && "input" in q, JSON.stringify(q, (_k, v) => (typeof v === "bigint" ? v.toString() : v)));
+  assert.deepEqual(q.input, { market: `${TRUMP_EVENT}/will-kash-patel-leave` });
+  assert.ok(calls.some((c) => c.includes("will-kash-patel-leave")));
 });
