@@ -33,17 +33,18 @@ function fakeRuntime(network: "arc-testnet" | "arc", calls: string[], opts: { am
   };
 }
 
-function setup(opts: { judge?: (text: string, list: CatalogEntry[]) => Promise<string[] | null>; kind?: Intent["kind"]; outside?: boolean; entries?: CatalogEntry[]; circleStatus?: "ok" | "unavailable"; quoteAmount?: bigint; quoteFail?: string; quoteCode?: string } = {}) {
+function setup(opts: { fill?: Parameters<typeof createRouter>[0]["fill"]; findMarket?: (text: string) => Promise<{ ref: string; question: string } | null>; judge?: (text: string, list: CatalogEntry[]) => Promise<string[] | null>; kind?: Intent["kind"]; outside?: boolean; entries?: CatalogEntry[]; circleStatus?: "ok" | "unavailable"; quoteAmount?: bigint; quoteFail?: string; quoteCode?: string } = {}) {
   const calls: string[] = [];
   const store = new MemoryPaymentsStore();
-  const src = (id: "agon" | "circle", rows: CatalogEntry[], status: "ok" | "unavailable" = "ok"): RouteSource => ({ id, status: () => status, search: async () => rows.filter((r) => r.source === id) });
+  const src = (id: "agon" | "circle", rows: CatalogEntry[], status: "ok" | "unavailable" = "ok"): RouteSource => ({ id, status: () => status, search: async () => rows.filter((r) => r.source === id), all: async () => rows.filter((r) => r.source === id) });
   const rows = opts.entries ?? [entry({}), circle];
   const router = createRouter({
     sources: [src("agon", rows), src("circle", rows, opts.circleStatus)],
     runtimes: { "arc-testnet": fakeRuntime("arc-testnet", calls), ...(opts.outside === false ? {} : { arc: fakeRuntime("arc", calls, { amount: opts.quoteAmount, fail: opts.quoteFail, code: opts.quoteCode }) }) },
     readIntent: async (text) => ({ kind: opts.kind ?? "analysis", query: text, values: {} }),
     ...(opts.judge ? { judge: opts.judge } : {}),
-    fill: async (e) => (e.source === "circle" ? { ok: true as const, input: { symbol: "AAPL" } } : { ok: true as const, input: { market: "arsenal" } }),
+    fill: opts.fill ?? (async (e) => (e.source === "circle" ? { ok: true as const, input: { symbol: "AAPL" } } : { ok: true as const, input: { market: "arsenal" } })),
+    ...(opts.findMarket ? { findMarket: opts.findMarket } : {}),
     feeBps: 150,
     feeAddress: { "arc-testnet": `0x${"fe".repeat(20)}` as Address, arc: `0x${"ef".repeat(20)}` as Address },
     leadAsk: async () => { calls.push("lead"); return { ok: false, code: "invalid_question" }; },
@@ -368,4 +369,61 @@ test("outside a market check, the fit model still decides which Agon agents show
   const out = await router.route("op:x", "Research Polymarket market news", { choices: true });
   assert.ok(out.kind === "choices");
   assert.equal(out.groups.ranked.length + out.groups.fresh.length, 0);
+});
+
+// 2026-11-10 rehearsal: "I need a logo for my coffee shop" found nothing although an image service was listed,
+// because a service was only considered when its description shared a word with the request.
+const IMAGES = entry({ source: "circle", reference: "circle:images", name: "Generate images with GPT Image 1", provider: "BlockRun", category: "INFERENCE", description: "Generate images with GPT Image 1, Nano Banana and more.", url: "https://img.example/generate", price: 22_000n, payTo: CIRCLE_PAY, network: "arc", rating: { tier: "unrated", score: null } });
+const CHAT = entry({ source: "circle", reference: "circle:chat", name: "Chat completions", provider: "BlockRun", category: "INFERENCE", description: "Chat with large language models.", url: "https://chat.example/v1", price: 1_000n, payTo: CIRCLE_PAY, network: "arc", rating: { tier: "unrated", score: null } });
+
+test("every service in a small category reaches the fit check, so a logo request finds the image service", async () => {
+  const seen: string[][] = [];
+  const { router } = setup({ kind: "content", entries: [IMAGES, CHAT], judge: async (_t, list) => { seen.push(list.map((e) => e.reference)); return ["circle:images"]; } });
+  const out = await router.route("op:x", "I need a logo for my coffee shop", { choices: true });
+  assert.ok(out.kind === "choices");
+  assert.equal(out.category, "creative");
+  assert.ok(seen[0]!.includes("circle:images"), "the image service was put to the fit check");
+  assert.deepEqual(out.groups.outside.map((c) => c.reference), ["circle:images"]);
+});
+
+const MARKET_SCHEMA = { type: "object", properties: { market: { type: "string", description: "a Polymarket market link, slug or condition id" } }, required: ["market"] };
+const scout = entry({ inputSchema: MARKET_SCHEMA });
+const LIVE = "https://polymarket.com/event/fed-decision-in-december/will-the-fed-cut-rates-in-december";
+
+// 2026-11-10 rehearsal: Agon's market agents asked for a link, or were sent a market the model made up.
+test("a market agent gets the live market Agon found, never one the model made up", async () => {
+  const asked: string[] = [];
+  const { router, calls } = setup({
+    entries: [scout],
+    fill: async () => ({ ok: true as const, input: { market: "fed-rate-cut-december-2026" } }),
+    findMarket: async (text) => { asked.push(text); return { ref: LIVE, question: "Will the Fed cut rates in December?" }; },
+  });
+  const r = await router.route("op:x", "Check the Polymarket market on a Fed rate cut in December", { choices: true });
+  assert.ok(r.kind === "choices");
+  const q = await router.quote("op:x", r.routeId, "agon:scout");
+  assert.ok(q.ok && "input" in q, JSON.stringify(q, (_k, v) => (typeof v === "bigint" ? v.toString() : v)));
+  assert.deepEqual(q.input, { market: LIVE });
+  assert.deepEqual(asked, ["Check the Polymarket market on a Fed rate cut in December"]);
+  assert.match(calls[0]!, new RegExp(`"market":"${LIVE.replace(/[/.]/g, "\\$&")}"`));
+});
+
+test("a market link the person typed or answered with is used as it is; no live match asks for the market", async () => {
+  const none = async () => null;
+  const typed = setup({ entries: [scout], fill: async () => ({ ok: true as const, input: { market: "made-up" } }), findMarket: async () => { throw new Error("not searched"); } });
+  const r1 = await typed.router.route("op:x", "Is https://polymarket.com/event/btc/will-bitcoin-reach-150k worth trading?", { choices: true });
+  assert.ok(r1.kind === "choices");
+  const q1 = await typed.router.quote("op:x", r1.routeId, "agon:scout");
+  assert.ok(q1.ok && "input" in q1);
+  assert.deepEqual(q1.input, { market: "https://polymarket.com/event/btc/will-bitcoin-reach-150k" });
+
+  const missing = setup({ entries: [scout], fill: async () => ({ ok: true as const, input: { market: "made-up" } }), findMarket: none });
+  const r2 = await missing.router.route("op:x", "Check the market on the thing nobody lists", { choices: true });
+  assert.ok(r2.kind === "choices");
+  const q2 = await missing.router.quote("op:x", r2.routeId, "agon:scout");
+  assert.ok(!q2.ok && q2.code === "missing_input" && "missing" in q2);
+  assert.deepEqual(q2.missing, ["market"]);
+  assert.equal(missing.calls.length, 0, "nothing was quoted");
+  const q3 = await missing.router.quote("op:x", r2.routeId, "agon:scout", { market: "will-bitcoin-reach-150k" });
+  assert.ok(q3.ok && "input" in q3);
+  assert.deepEqual(q3.input, { market: "will-bitcoin-reach-150k" });
 });

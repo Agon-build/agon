@@ -1,4 +1,4 @@
-import { answerView, type AnswerView, type RulesAnswerView, type WatchAnswerView } from "@/lib/agon/route-view";
+import { answerView, type AnswerView, type ForecastAnswerView, type ImageAnswerView, type RulesAnswerView, type ScoutAnswerView, type WatchAnswerView } from "@/lib/agon/route-view";
 import type { LiveView } from "@/lib/agon/stage-types";
 import { failureText } from "@/lib/agon/stage-copy";
 import { isTerminal, ledgerRows, moneyFlow, workingNotice } from "@/lib/agon/stage-view";
@@ -77,9 +77,90 @@ function WatchAnswer({ view }: { view: WatchAnswerView }) {
   );
 }
 
+const VERDICT_DOT = { tradeable: "bg-[color:var(--ok)]", watch: "bg-[color:var(--warn)]", avoid: "bg-[color:var(--err)]" } as const;
+
+function ScoutAnswer({ view }: { view: ScoutAnswerView }) {
+  return (
+    <section aria-labelledby="answer-heading" className="stage-print border border-[color:var(--hairline-strong)] bg-canvas-2 p-5 sm:p-7">
+      <p className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-ink"><span aria-hidden className="inline-block size-2 bg-[color:var(--ok)]" />Market check</p>
+      <h2 id="answer-heading" className="mt-3 flex items-center gap-3 text-4xl font-medium leading-none tracking-[-.04em] text-ink sm:text-6xl">
+        <span aria-hidden className={`inline-block size-3 ${VERDICT_DOT[view.verdict]}`} />{view.verdictText}
+      </h2>
+      {view.marketQuestion ? (
+        <p className="mt-4 break-words text-base leading-7 text-ink">
+          {view.marketUrl ? <a href={view.marketUrl} target="_blank" rel="noreferrer" className="underline decoration-[color:var(--hairline-strong)] underline-offset-4 hover:text-accent">{view.marketQuestion}</a> : view.marketQuestion}
+        </p>
+      ) : null}
+      {view.readLine ? <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">{view.readLine}</p> : null}
+      <dl className="mt-5 grid grid-cols-2 gap-px border border-[color:var(--hairline)] bg-[color:var(--hairline)] sm:grid-cols-3">
+        {view.metrics.map((m) => (
+          <div key={m.label} className="bg-canvas-2 p-4">
+            <dt className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3">{m.label}</dt>
+            <dd className="mt-2 font-mono text-lg tabular-nums text-ink">{m.value}</dd>
+          </div>
+        ))}
+      </dl>
+      {view.flags.length > 0 ? (
+        <ul className="mt-5 space-y-2">
+          {view.flags.map((f) => (
+            <li key={f} className="flex gap-3 text-sm leading-6 text-ink"><span aria-hidden className="mt-2 inline-block size-2 shrink-0 bg-[color:var(--warn)]" />{f}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-5 text-sm leading-6 text-ink-2">No flags: the price, spread, liquidity and rules all pass Scout's checks.</p>
+      )}
+      {view.rulesNote ? <p className="mt-5 border-l-2 border-accent pl-3 text-sm leading-6 text-ink-2">{view.rulesNote}</p> : null}
+      <p className="mt-5 text-xs leading-5 text-ink-3">A market check, not financial advice.</p>
+    </section>
+  );
+}
+
+function ForecastAnswer({ view }: { view: ForecastAnswerView }) {
+  return (
+    <div className="grid gap-4">
+      <ProbabilityDuel answer={view.answer} />
+      {view.readLine || view.sources.length > 0 ? (
+        <section className="stage-print border border-[color:var(--hairline-strong)] bg-canvas-2 p-5 sm:p-6">
+          {view.readLine ? <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">{view.readLine}</p> : null}
+          {view.sources.length > 0 ? (
+            <>
+              <h3 className="mt-3 font-mono text-[10px] uppercase tracking-[0.16em] text-accent">News it read</h3>
+              <ul className="mt-3 divide-y divide-[color:var(--hairline)] border-y border-[color:var(--hairline)]">
+                {view.sources.map((s) => (
+                  <li key={s.url} className="flex flex-wrap items-baseline justify-between gap-x-4 py-2.5 text-sm leading-6">
+                    <a href={s.url} target="_blank" rel="noreferrer" className="min-w-0 break-words text-ink underline decoration-[color:var(--hairline-strong)] underline-offset-4 hover:text-accent">{s.title}</a>
+                    {s.published ? <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3">{s.published}</span> : null}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+function ImageAnswer({ view }: { view: ImageAnswerView }) {
+  return (
+    <section aria-labelledby="answer-heading" className="stage-print border border-[color:var(--hairline-strong)] bg-canvas-2 p-5 sm:p-7">
+      <p className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-ink"><span aria-hidden className="inline-block size-2 bg-[color:var(--ok)]" />Delivered</p>
+      <h2 id="answer-heading" className="mt-3 text-3xl font-medium leading-tight tracking-[-.03em] text-ink sm:text-4xl">Your image</h2>
+      {/* The image comes from the service that was paid; it is shown as it was sent. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={view.src} alt={view.caption ?? "The image the service made"} className="mt-5 max-h-[32rem] w-full border border-[color:var(--hairline)] bg-canvas object-contain" />
+      {view.caption ? <p className="mt-3 text-sm leading-6 text-ink-2">{view.caption}</p> : null}
+      {view.src.startsWith("https://") ? <a href={view.src} target="_blank" rel="noreferrer" className="mt-3 inline-flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.13em] text-ink hover:text-accent">Open full size →</a> : null}
+    </section>
+  );
+}
+
 function RoutedAnswer({ view }: { view: AnswerView }) {
   if (view.kind === "rules") return <RulesAnswer view={view} />;
   if (view.kind === "watch") return <WatchAnswer view={view} />;
+  if (view.kind === "scout") return <ScoutAnswer view={view} />;
+  if (view.kind === "forecast") return <ForecastAnswer view={view} />;
+  if (view.kind === "image") return <ImageAnswer view={view} />;
   return (
     <section aria-labelledby="answer-heading" className="stage-print border border-[color:var(--hairline-strong)] bg-canvas-2 p-5 sm:p-7">
       <p className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-ink"><span aria-hidden className="inline-block size-2 bg-[color:var(--ok)]" />Delivered</p>

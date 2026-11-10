@@ -27,11 +27,11 @@ function fakeTerms(acceptedByDefault: boolean): CustodyTerms & { accepted: Set<s
   };
 }
 
-function setup(opts: { off?: boolean; askLimit?: (key: string) => boolean; termsAccepted?: boolean; router?: Router; outside?: StageServices } = {}) {
+function setup(opts: { liveMarkets?: () => Promise<{ readAt: string; markets: unknown[] } | null>; off?: boolean; askLimit?: (key: string) => boolean; termsAccepted?: boolean; router?: Router; outside?: StageServices } = {}) {
   const world = stageWorld();
   const terms = fakeTerms(opts.termsAccepted ?? true);
   const app = new Hono();
-  app.route("/agon/app", createAppRoutes({ services: world.services, requireAuth, off: () => opts.off ?? false, askLimit: opts.askLimit, terms, router: opts.router, outside: opts.outside }));
+  app.route("/agon/app", createAppRoutes({ services: world.services, requireAuth, off: () => opts.off ?? false, askLimit: opts.askLimit, terms, router: opts.router, outside: opts.outside, ...(opts.liveMarkets ? { liveMarkets: opts.liveMarkets as never } : {}) }));
   const call = (path: string, init: { method?: string; body?: unknown; as?: string | null } = {}) =>
     app.request(`/agon/app${path}`, {
       method: init.method ?? (init.body === undefined ? "GET" : "POST"),
@@ -273,4 +273,16 @@ test("a category with nothing typed is browsed, and a request with neither is re
   const out = (await (await call("/route", { body: { category: "creative" } })).json()) as { kind: string; category: string };
   assert.deepEqual([out.kind, out.category, seen[0]], ["choices", "creative", "creative"]);
   assert.equal((await call("/route", { body: {} })).status, 400);
+});
+
+test("live Polymarket markets are public, never cached by the browser, and say so when they cannot be read", async () => {
+  const live = { readAt: "2026-11-10T09:00:00.000Z", markets: [{ question: "Will the Fed cut rates in December?", url: "https://polymarket.com/event/fed/will-the-fed-cut", yesBps: 6200, volume24h: 900000, liquidity: 120000, endsAt: "2026-12-16T19:00:00Z" }] };
+  const up = setup({ liveMarkets: async () => live });
+  const res = await up.app.request("http://api.test/agon/app/markets/live");
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("cache-control"), "no-store");
+  assert.deepEqual(await res.json(), live);
+  const down = setup({ liveMarkets: async () => null });
+  assert.equal((await down.app.request("http://api.test/agon/app/markets/live")).status, 503);
+  assert.equal((await setup().app.request("http://api.test/agon/app/markets/live")).status, 404);
 });

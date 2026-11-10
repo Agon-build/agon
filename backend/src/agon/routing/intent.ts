@@ -26,6 +26,18 @@ const CHANCE = /\b(chances?|probability|probable|odds|likely|likelihood|forecast
 // A question about a market itself: whether to trade it, how it trades, how it resolves.
 const MARKET_CHECK = /\b(worth (trading|it|betting|a bet)|trad(e|ing) it|tradeable|tradable|liquidity|liquid|spreads?|volume|order ?book|resolution|resolves?|rules?|avoid|red flags?|safe to (trade|bet)|check (the |this |a |my )?(polymarket |kalshi )?markets?|settle(ment|d)?|disputes?|challenged?|(watch|monitor)\w* .*\bmarkets?)\b/i;
 
+/// What a request needs made, in the words service listings use for it. A listing for an
+/// image service never says "logo", so the person's own words would not find it.
+const CAPABILITIES: { pattern: RegExp; words: string; kind: IntentKind }[] = [
+  { pattern: /\b(video|clip|animation|reel|trailer)s?\b/i, words: "video generate", kind: "content" },
+  { pattern: /\b(logo|poster|banner|flyer|illustration|icon|artwork|drawing|thumbnail|wallpaper|avatar|mascot|sticker|picture|image|photo)s?\b/i, words: "image generate", kind: "content" },
+];
+
+export function capabilityOf(text: string): { kind: IntentKind; words: string } | null {
+  const hit = CAPABILITIES.find((c) => c.pattern.test(text));
+  return hit ? { kind: hit.kind, words: hit.words } : null;
+}
+
 /// Code reads the clear cases so they never depend on a model's answer.
 export function kindFromWords(text: string): "forecast" | "analysis" | null {
   if (CHANCE.test(text)) return "forecast";
@@ -40,7 +52,10 @@ const answer = z.object({ kind: z.enum(INTENT_KINDS), query: z.string().min(1).m
 export async function readIntent(text: string, callModel: ModelCaller, model: string): Promise<Intent> {
   const read = await readWithModel(text, callModel, model);
   const kind = kindFromWords(text);
-  return kind ? { ...read, kind } : read;
+  if (kind) return { ...read, kind };
+  // The capability joins the search words, so the service is found whatever words the model chose.
+  const made = capabilityOf(text);
+  return made ? { ...read, kind: made.kind, query: `${read.query} ${made.words}` } : read;
 }
 
 async function readWithModel(text: string, callModel: ModelCaller, model: string): Promise<Intent> {
@@ -53,6 +68,7 @@ async function readWithModel(text: string, callModel: ModelCaller, model: string
         `kind is one of: ${INTENT_KINDS.join(", ")}. forecast means the request asks how likely a future event is. ` +
         "analysis means it asks about a market or asset itself, such as whether a market is worth trading, its liquidity or its rules. " +
         "business means office and sales work, such as CRM, company or contact lookup, lead enrichment, email, SMS, documents or scheduling. " +
+        "The query names what a service that does this job would call itself, not only the person's words: image generation for a logo, web search for looking something up. " +
         'Answer with JSON only: {"kind": "...", "query": "<3 to 8 search words>", "values": {"<name>": "<value the person gave, such as a ticker, URL, address or date>"}}.',
       userPrompt: text.slice(0, 600),
       maxTokens: 300,

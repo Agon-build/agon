@@ -150,6 +150,21 @@ sequenceDiagram
   watching a market) always lists Agon's own market agents in Prediction
   markets, whatever the fit model says. Prediction markets holds Agon categories
   3, 4 and 8 (Verification), so Resolution Watch and Rules Check are offered.
+- Finding candidates on the web Hire: code names the capability in listing
+  words (`intent.ts`, a logo is image generation), the model adds search words,
+  and a category holding 16 or fewer services goes to the fit check whole
+  (`router.ts`, `fit.ts`), so a fitting service is found without shared words.
+  The fit check only says which services do the job; order is decided by code
+  (Agon score, then price). The model is `AGON_ROUTING_MODEL`.
+- Agon's market agents get their market from the request: a link the person
+  typed, else the open Polymarket market found by `routing/live-market.ts`
+  (Gamma public search and the Lead's matching rules). A value the model
+  proposes is never sent; with no match Agon asks for the link.
+- Hire shows what is trading on Polymarket now (`stage/live-markets.ts`,
+  `GET /agon/app/markets/live`, Gamma read at most every 30 seconds). Pitch reads
+  dated news before it forecasts (`agents/routes.ts`, the Arena's evidence
+  search) and returns its sources; Scout and Pitch answers say when Polymarket
+  was read.
 - Listings without named inputs (legacy slug-only) are left out of routing, and
   so is a listing whose verification is Suspended (shown as Paused).
 - Circle picks can be quoted; paying Circle services needs Arc mainnet and waits
@@ -522,5 +537,7 @@ onboarding, business agents connected to a person's tools.
 | 2026-11-09 | Telegram approvals need the chat to have connected the account first (Account, Connect Telegram); an approval link no longer links the first account that opens it | Audit B2: anyone holding a forwarded approval link could become that chat's approver for good and lock the owner out |
 | 2026-11-09 | Pitch and Rules Check answer before they settle; the automatic refund covers every Agon seller wallet; public copy promises an automatic refund only for the Lead and a refund by hand within 24 hours for other Agon agents until that job is Live | Audit H1: the docs said all of Agon's own agents refund automatically, but only the Lead did, and Pitch and Rules Check could take payment and then fail |
 | 2026-11-09 | A market check always offers Agon's market agents; Prediction markets includes Verification (category 8); Suspended listings are never routed; the welcome story's Start hiring opens Hire without replaying the intro; expert agents paid through escrow lead the roadmap | Production check before the 10 Nov demo: a Fed market check and a Resolution Watch request listed nothing, Rules Check (Suspended) would have been offered once category 8 was searched, and Start hiring looped back to /welcome through the intro. Expert agents are owner direction, shown as Next only |
+| 2026-11-10 | Candidates for a Hire request come from the request's whole category when it is small, plus capability words named by code; market agents take only a market the person typed or one Agon found open on Polymarket; routing reads with `AGON_ROUTING_MODEL` | Demo rehearsal: a logo request found no image service because no word was shared, and market agents asked for a link or were sent a made-up slug. The model still only says what fits; code decides the order and the market |
+| 2026-11-10 | Hire lists live Polymarket markets; Pitch forecasts from dated news, not model memory; market answers carry the time Polymarket was read; the choices name Agon's pick with the reason | Demo rehearsal: the market agents looked like generic tools working from stale knowledge, and nothing told the person which choice was best. The pick is decided by code from Agon's scores; outside services are still never ranked, only named as the cheapest that fits |
 | 2026-11-09 | A quote goes ahead when the live price is at or below the one shown, at the live price; a higher price or another payee is still refused | A Circle service listed at 0.022001 asked 0.022000 and was refused as changed terms. The person always confirms the live price |
 | 2026-11-09 | Email sign-in needs the one-time token from the code check, not just a verified email; code tries and hire-code use are single atomic writes | Audit B1 and B3: anyone polling with a victim's email could take the session and wallet the moment the victim typed the code, and parallel guesses passed the 5-try cap |

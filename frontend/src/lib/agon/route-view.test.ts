@@ -90,3 +90,46 @@ test("a Resolution Watch answer reads as the markets watched, until when, and wh
   assert.equal(view.until, "21 December");
   assert.equal(view.watchPath, "/watch/w-1", "the watch opens on agon.surf, not the raw API");
 });
+
+// 2026-11-10 rehearsal: Scout and Pitch answers read as a flat list of field names, and an image as a link.
+test("a Scout answer reads as a verdict, live numbers, flags and when Polymarket was read", () => {
+  const view = answerView({
+    agent: "Scout", market: { question: "Will the Fed cut rates in December?", url: "https://polymarket.com/event/fed/will-the-fed-cut", slug: "will-the-fed-cut", closesAt: "2026-12-16T19:00:00Z", crowdBps: 6350 },
+    verdict: "watch", flags: [{ code: "wide_spread", detail: "The spread is 4 cents, so entering and leaving costs that much." }],
+    metrics: { yesPct: 63.5, spreadCents: 4, liquidityUsd: 123709, volume24hUsd: 3784, weekMovePts: -2, hoursLeft: 30.5 },
+    rulesNote: "The Fed's own statement decides it.", readAt: "2026-11-10T09:41:07.000Z",
+  });
+  assert.ok(view && view.kind === "scout");
+  assert.deepEqual([view.verdict, view.verdictText, view.marketQuestion, view.marketUrl], ["watch", "Trade with care", "Will the Fed cut rates in December?", "https://polymarket.com/event/fed/will-the-fed-cut"]);
+  assert.deepEqual(view.metrics, [
+    { label: "Yes price", value: "63.5%" }, { label: "Spread", value: "4 cents" }, { label: "Liquidity", value: "$123,709" },
+    { label: "Traded in 24 hours", value: "$3,784" }, { label: "Move this week", value: "-2 points" }, { label: "Closes in", value: "31 hours" },
+  ]);
+  assert.deepEqual(view.flags, ["The spread is 4 cents, so entering and leaving costs that much."]);
+  assert.equal(view.rulesNote, "The Fed's own statement decides it.");
+  assert.equal(view.readLine, "Read from Polymarket at 09:41:07 UTC");
+  const days = answerView({ agent: "Scout", market: { question: "Q", url: "" }, verdict: "tradeable", flags: [], metrics: { yesPct: 50, spreadCents: 1, liquidityUsd: 50000, volume24hUsd: 9000, weekMovePts: 3.5, hoursLeft: 5411.98 }, rulesNote: "" });
+  assert.ok(days && days.kind === "scout");
+  assert.deepEqual([days.verdictText, days.metrics[4]!.value, days.metrics[5]!.value, days.readLine, days.marketUrl, days.rulesNote], ["Tradeable", "+3.5 points", "225 days", null, null, null]);
+});
+
+test("a Pitch answer reads as a forecast against the crowd price, with its reasons and sources", () => {
+  const view = answerView({
+    agent: "Pitch", market: { question: "Will Arsenal win on Saturday?", url: "https://polymarket.com/event/ars/will-arsenal-win", slug: "will-arsenal-win", closesAt: "2026-11-14T15:00:00Z", crowdBps: 6350 },
+    probabilityBps: 6000, crowdBps: 6350, edgePts: -3.5, reasons: ["a", "b", "c"], model: "m", readAt: "2026-11-10T09:41:07.000Z",
+    sources: [{ title: "Saka ruled out", url: "https://news.example/saka", published: "2026-11-09T08:00:00Z" }, { title: "bad", url: "javascript:alert(1)" }],
+  });
+  assert.ok(view && view.kind === "forecast");
+  assert.deepEqual([view.answer.probabilityBps, view.answer.marketPriceBps, view.answer.marketQuestion, view.answer.forecaster.name], [6000, 6350, "Will Arsenal win on Saturday?", "Pitch"]);
+  assert.deepEqual(view.answer.reasons, ["a", "b", "c"]);
+  assert.deepEqual(view.sources, [{ title: "Saka ruled out", url: "https://news.example/saka", published: "9 November" }]);
+  assert.equal(view.readLine, "Read from Polymarket at 09:41:07 UTC");
+});
+
+test("an image a service made is shown as an image, from a link or from its data", () => {
+  assert.deepEqual(answerView({ created: 1, data: [{ url: "https://img.example/logo.png", revised_prompt: "A warm coffee logo" }] }), { kind: "image", src: "https://img.example/logo.png", caption: "A warm coffee logo" });
+  assert.deepEqual(answerView({ data: [{ b64_json: "iVBORw0KGgo=" }] }), { kind: "image", src: "data:image/png;base64,iVBORw0KGgo=", caption: null });
+  assert.deepEqual(answerView({ images: ["https://img.example/a.webp"] }), { kind: "image", src: "https://img.example/a.webp", caption: null });
+  const unsafe = answerView({ data: [{ url: "javascript:alert(1)" }] });
+  assert.ok(unsafe && unsafe.kind === "rows", "only https links and image data are shown as images");
+});

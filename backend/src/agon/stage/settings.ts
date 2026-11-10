@@ -9,6 +9,8 @@ export type StageSettings = {
   channelsOff: Record<StageChannel, boolean>;
   providerBlocklist: ReadonlySet<string>;
   classifierModel: string;
+  /** Reads Hire requests and judges which services fit; the classifier model unless AGON_ROUTING_MODEL is set. */
+  routingModel: string;
   leadBalanceFloor: bigint;
   sellerBalanceFloor: bigint;
   alertOperator: Address | null;
@@ -49,6 +51,7 @@ export function resolveStageSettings(env: Record<string, string | undefined>): {
 
   const providerBlocklist: ReadonlySet<string> = new Set(list(env.AGON_PROVIDER_BLOCKLIST));
   const classifierModel = (env.AGON_CLASSIFIER_MODEL ?? "").trim() || DEFAULT_CLASSIFIER_MODEL;
+  const routingModel = (env.AGON_ROUTING_MODEL ?? "").trim() || classifierModel;
 
   let leadBalanceFloor = atomic(env.AGON_LEAD_BALANCE_FLOOR, 500_000n);
   if (leadBalanceFloor === null) {
@@ -79,7 +82,7 @@ export function resolveStageSettings(env: Record<string, string | undefined>): {
   }
 
   return {
-    settings: { siteUrl, chatIdPepper, channelsOff, providerBlocklist, classifierModel, leadBalanceFloor, sellerBalanceFloor, alertOperator, telegram },
+    settings: { siteUrl, chatIdPepper, channelsOff, providerBlocklist, classifierModel, routingModel, leadBalanceFloor, sellerBalanceFloor, alertOperator, telegram },
     problems,
   };
 }

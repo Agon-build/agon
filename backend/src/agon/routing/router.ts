@@ -10,6 +10,7 @@ import { wordsOf, type CatalogEntry, type RouteSource } from "./catalog.ts";
 import { cleanGiven, type fillInput } from "./fill-input.ts";
 import { fillPath } from "./path-params.ts";
 import { shortlist } from "./fit.ts";
+import { marketInText } from "./live-market.ts";
 import { ALL_AGON, ALL_CIRCLE, type Intent } from "./intent.ts";
 import { groupCandidates, rankCandidates, type Groups, type Ranked } from "./rank.ts";
 import { categoryForKind, circleFits, HIRE_CATEGORIES, hireCategory, type HireCategoryId } from "./categories.ts";
@@ -47,6 +48,11 @@ export const FEE_GAS_RESERVE = 5_000n;
 const DOWNRANK_MS = 24 * 60 * 60_000;
 const ROUTES_PER_OWNER = 20;
 const MAX_ROUTES = 5_000;
+/// A category this small goes to the fit check whole; a larger one is narrowed by shared words first.
+const CATEGORY_POOL_MAX = 16;
+/// The input Agon's market agents take: one Polymarket market, or a list for a watch.
+const MARKET_FIELDS = ["market", "markets"];
+const MARKET_QUESTION = "Which Polymarket market? Paste its link, or name the event more exactly.";
 
 /// The aggregator: reads the request once, searches every source, ranks by the
 /// owner's rule, and quotes on the runtime of the chosen service's network.
@@ -72,6 +78,8 @@ export function createRouter(deps: {
   approvalUrl: (token: string) => string;
   /** One Agon listing a person chose themselves (listed, verified, with named inputs), or null. */
   directEntry?: (reference: string) => Promise<CatalogEntry | null>;
+  /** The open Polymarket market a request is about, found on Polymarket itself; null when none matches. */
+  findMarket?: (text: string) => Promise<{ ref: string; question: string } | null>;
   /** The Lead as a choice in Prediction markets; choosing it runs leadAsk. */
   leadEntry?: () => Promise<CatalogEntry | null>;
   now?: () => Date;
@@ -119,13 +127,20 @@ export function createRouter(deps: {
         const found = await Promise.all(deps.sources.map((s) => s.search(query).catch(() => [] as CatalogEntry[])));
         const sources = deps.sources.map((s) => ({ id: s.id, status: s.status() }));
         const lead = category === "prediction" && deps.leadEntry ? await deps.leadEntry().catch(() => null) : null;
-        const list = shortlist(payable(found.flat()), intent, text);
+        // Every service held in a small category reaches the fit check, shared words or not:
+        // a listing rarely uses the person's words (an image service never says "logo").
+        const whole = (await Promise.all(deps.sources.map((s) => s.search({ ...query, whole: true }).catch(() => [] as CatalogEntry[])))).flat()
+          .filter((e) => e.source === "agon" || circleFits(category, e));
+        const pool = whole.length <= CATEGORY_POOL_MAX ? whole : whole.filter((e) => e.source === "agon");
+        const seen = new Set<string>();
+        const candidates = [...found.flat(), ...pool].filter((e) => (seen.has(e.reference) ? false : (seen.add(e.reference), true)));
+        const list = shortlist(payable(candidates), intent, text, new Set(pool.map((e) => e.reference)));
         const fitted = deps.judge ? await deps.judge(text, list).catch(() => null) : null;
         const groups = groupCandidates(lead ? [lead, ...list] : list, intent, {
           feeBps: deps.feeBps, feeMin: deps.feeMin, downranked: downranked(), feeBpsFor: (e) => (deps.feeAddress[e.network] ? deps.feeBps : 0), fitted, category,
           // A forecast always offers the Lead; a market check always offers Agon's own market agents,
           // because the fit model can drop them for a market it was not shown.
-          always: intent.kind === "forecast" ? (lead ? [lead.reference] : []) : intent.kind === "analysis" ? list.filter((e) => e.source === "agon").map((e) => e.reference) : [],
+          always: intent.kind === "forecast" ? (lead ? [lead.reference] : []) : intent.kind === "analysis" && category === "prediction" ? list.filter((e) => e.source === "agon").map((e) => e.reference) : [],
         });
         const routeId = (deps.newId ?? randomUUID)();
         keepRoom(ownerRef);
@@ -218,10 +233,28 @@ export function createRouter(deps: {
       // The person's answers are laid over what was filled from the request.
       const filled = await deps.fill(entry, route.text, route.intent);
       const base = filled.ok ? filled.input : filled.partial;
-      input = { ...base, ...cleanGiven(entry, given) };
-      if (!filled.ok) {
-        const stillMissing = filled.missing.filter((k) => input[k] === undefined || input[k] === "");
-        if (stillMissing.length > 0) return { ok: false, code: "missing_input", question: stillMissing[0] === filled.missing[0] ? filled.question : `What should I use for ${stillMissing[0]}?`, missing: stillMissing };
+      const own = cleanGiven(entry, given);
+      input = { ...base, ...own };
+      let missing = filled.ok ? [] : filled.missing;
+      // Agon's market agents take a Polymarket market. Only one the person typed, or one Agon
+      // found open on Polymarket for the request, is sent; a value the model proposed is not.
+      const props = (entry.inputSchema as { properties?: Record<string, unknown> } | null)?.properties ?? {};
+      const marketKey = entry.source === "agon" ? MARKET_FIELDS.find((k) => k in props) : undefined;
+      if (marketKey && own[marketKey] === undefined) {
+        const typed = route.browse ? null : marketInText(route.text);
+        const live = typed ?? (route.browse || !deps.findMarket ? null : (await deps.findMarket(route.text).catch(() => null))?.ref ?? null);
+        if (live) {
+          input[marketKey] = live;
+          missing = missing.filter((k) => k !== marketKey);
+        } else if (deps.findMarket) {
+          delete input[marketKey];
+          if (!missing.includes(marketKey)) missing = [marketKey, ...missing];
+        }
+      }
+      const stillMissing = missing.filter((k) => input[k] === undefined || input[k] === "");
+      if (stillMissing.length > 0) {
+        const question = stillMissing[0] === marketKey ? MARKET_QUESTION : !filled.ok && stillMissing[0] === filled.missing[0] ? filled.question : `What should I use for ${stillMissing[0]}?`;
+        return { ok: false, code: "missing_input", question, missing: stillMissing };
       }
       // An input that belongs in the service address goes there, never left as {name}.
       const path = fillPath(entry.url, input);

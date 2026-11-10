@@ -37,6 +37,7 @@ import type { Router } from "../agon/routing/router.ts";
 import { PostgresChannelStore } from "../agon/channels/store.ts";
 import { createApprovalRoutes } from "../agon/stage/approval-routes.ts";
 import { createAppRoutes } from "../agon/stage/app-routes.ts";
+import { createLiveMarkets } from "../agon/stage/live-markets.ts";
 import { createLeaderboardReader } from "../agon/stage/leaderboard.ts";
 import { createRateLimiter } from "../agon/stage/rate-limit.ts";
 import { createStageServices, type StageServices } from "../agon/stage/services.ts";
@@ -938,7 +939,7 @@ if (agonPayments) {
     feeBps: agonPayments.settings.routingFeeBps,
     feeMin: agonPayments.settings.routingFeeMin,
     callModel: async (p) => ({ text: (await callModel(p)).text }),
-    model: stage.settings.classifierModel,
+    model: stage.settings.routingModel,
     store: agonPayments.store,
     approvalUrl: (token) => leadServices.approvalUrl(token),
     newWalletAllowed,
@@ -952,7 +953,7 @@ if (agonPayments) {
     ...(deliveryFrom ? { sendCode: (to: string, code: string) => sendEmail({ to, ...deliveryCodeEmail(code), from: deliveryFrom }) } : {}),
     emailOn: Boolean(process.env.AGON_DELIVERY_EMAIL_FROM?.trim()), botUsername: stage.settings.telegram?.botUsername ?? null,
   }));
-  app.route("/agon/app", createAppRoutes({ services: stageServices, requireAuth, off: () => stage.settings.channelsOff.web, terms: custodyTerms, router: agonRouter, outside: outsideServices, ratings: agonRatings }));
+  app.route("/agon/app", createAppRoutes({ services: stageServices, requireAuth, off: () => stage.settings.channelsOff.web, terms: custodyTerms, router: agonRouter, outside: outsideServices, ratings: agonRatings, liveMarkets: createLiveMarkets() }));
   app.route("/agon", createApprovalRoutes({
     gate: { payments: agonPayments.store, channels: channelStore, chatIdPepper: stage.settings.chatIdPepper, network: agonPayments.settings.network, now: () => new Date(), deliveryChatOf: (op) => telegramLinks.chatOf(op) },
     hire: approvalsByNetwork(agonPayments.hire, outsideRuntime?.hire ?? null, agonPayments.store),

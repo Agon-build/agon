@@ -10,6 +10,7 @@ import type { PaymentsStore } from "../payments/types.ts";
 import { FORECAST_MAX_TOKENS, parseProbability, type ModelCaller } from "../playground/seasons/house-agents.ts";
 import type { MarketLookup, MarketSnapshot } from "./market-lookup.ts";
 import { isFootballMarket, pitchPrompt } from "./pitch.ts";
+import type { EvidenceSearch } from "../playground/seasons/evidence.ts";
 import { randomBytes } from "node:crypto";
 
 import { MAX_WATCH_MARKETS, alertsBetween, parseMarketRefs, stateFromGamma, type WatchState } from "./resolution-watch.ts";
@@ -57,6 +58,8 @@ export function createSpecialistRoutes(deps: {
   store: PaymentsStore;
   lookup: MarketLookup;
   callModel: ModelCaller;
+  /** Recent dated news for a question; Pitch reads it so it never argues from the model's memory. */
+  evidence?: EvidenceSearch;
   /** Resolution Watch: where watches are kept and how a payer maps to an Agon account. */
   watch?: { store: Pick<WatchStore, "createWatch" | "getWatch">; ownerOf: (payer: Address) => Promise<string | null>; statusBase: string; newId?: () => string };
   now?: () => Date;
@@ -71,13 +74,16 @@ export function createSpecialistRoutes(deps: {
   const answerFor = async (key: SpecialistKey, m: MarketSnapshot): Promise<{ ok: true; body: Record<string, unknown> } | { ok: false; code: string }> => {
     const spec = SPECIALISTS[key];
     if (key === "pitch") {
-      const reply = await deps.callModel({ model: spec.model, ...pitchPrompt(m, now()), maxTokens: FORECAST_MAX_TOKENS, temperature: 0.2 }).catch(() => null);
+      // A failed or empty news search is no news, never a failed forecast.
+      const news = deps.evidence ? (await deps.evidence(m.question, now()).catch(() => [])).slice(0, 5) : [];
+      const reply = await deps.callModel({ model: spec.model, ...pitchPrompt(m, now(), news), maxTokens: FORECAST_MAX_TOKENS, temperature: 0.2 }).catch(() => null);
       if (!reply) return { ok: false, code: "model_unavailable" };
       const parsed = parseProbability(reply.text);
       if (!parsed) return { ok: false, code: "model_unparseable" };
       return { ok: true, body: {
         agent: spec.name, market: marketView(m), probabilityBps: parsed.probabilityBps, crowdBps: m.yesBps,
         edgePts: (parsed.probabilityBps - m.yesBps) / 100, reasons: parsed.reasons.slice(0, 3), model: spec.model,
+        sources: news.map((n) => ({ title: n.title, url: n.url, published: n.published })), readAt: now().toISOString(),
       } };
     }
     // The model reads the rules; code keeps only quotes found in them and decides the risk. No price is sent or returned.
@@ -209,7 +215,7 @@ export function createSpecialistRoutes(deps: {
       const note = await deps.callModel({ model: spec.model, ...scoutRulesPrompt(m), maxTokens: 200, temperature: 0 })
         .then((r) => r.text.trim().split("\n")[0]!.slice(0, 240))
         .catch(() => "");
-      return c.json({ agent: spec.name, market: marketView(m), ...report, rulesNote: note || "Read the market's rules on Polymarket before trading." });
+      return c.json({ agent: spec.name, market: marketView(m), ...report, rulesNote: note || "Read the market's rules on Polymarket before trading.", readAt: now().toISOString() });
     },
   );
   return app as unknown as Hono;

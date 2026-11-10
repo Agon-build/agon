@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { ALL_CIRCLE, INTENT_KINDS, KIND_SOURCES, kindFromWords, readIntent } from "../../src/agon/routing/intent.ts";
+import { ALL_CIRCLE, capabilityOf, INTENT_KINDS, KIND_SOURCES, kindFromWords, readIntent } from "../../src/agon/routing/intent.ts";
 
 test("code reads market checks and chances before the model does", () => {
   assert.equal(kindFromWords("Is this Polymarket market worth trading? polymarket.com/event/fed-cut"), "analysis");
@@ -51,4 +51,18 @@ test("every kind maps to at least one source category", () => {
 
 test("Circle's category names are the ones its live catalog uses (read 2026-11-05)", () => {
   assert.deepEqual([...ALL_CIRCLE].sort(), ["COMMUNICATION", "DATA_ENRICHMENT", "FINANCIAL_ANALYSIS", "INFERENCE", "INFRASTRUCTURE", "MAPS_WEATHER", "SOCIAL_INTELLIGENCE", "WEB_SEARCH_RESEARCH"]);
+});
+
+// 2026-11-10: a logo is made by an image service, whose listing never says "logo".
+test("code names the capability a request needs in the words listings use", async () => {
+  assert.deepEqual(capabilityOf("I need a logo for my coffee shop"), { kind: "content", words: "image generate" });
+  assert.deepEqual(capabilityOf("Make a poster for our launch party"), { kind: "content", words: "image generate" });
+  assert.deepEqual(capabilityOf("Create a short video clip of a sunrise"), { kind: "content", words: "video generate" });
+  assert.equal(capabilityOf("What is the price of ETH?"), null);
+  const model = async () => ({ text: '{"kind":"other","query":"logo coffee shop","values":{}}' });
+  const intent = await readIntent("I need a logo for my coffee shop", model, "m");
+  assert.equal(intent.kind, "content", "the capability decides the kind when the model is unsure");
+  assert.match(intent.query, /image generate/);
+  const forecast = await readIntent("Will this logo win the design award?", model, "m");
+  assert.equal(forecast.kind, "forecast", "a chance question stays a forecast");
 });

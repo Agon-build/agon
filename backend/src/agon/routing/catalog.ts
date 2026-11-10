@@ -33,7 +33,8 @@ export type CatalogEntry = {
 
 /// What the router asks a source for: words from the request and the
 /// categories that fit the task, in each source's own category names.
-export type RouteQuery = { words: string[]; agonCategories: string[]; circleCategories: string[] };
+/// whole asks for every service in the categories, shared words or not, so the fit check sees them all.
+export type RouteQuery = { words: string[]; agonCategories: string[]; circleCategories: string[]; whole?: boolean };
 
 export interface RouteSource {
   id: "agon" | "circle";

@@ -12,6 +12,7 @@ import type { Proof } from "./catalog.ts";
 import { createCircleSource } from "./circle-source.ts";
 import { fillInput } from "./fill-input.ts";
 import { judgeFit } from "./fit.ts";
+import { createMarketFinder } from "./live-market.ts";
 import { readIntent } from "./intent.ts";
 import { createRouter, type Router } from "./router.ts";
 
@@ -81,6 +82,7 @@ export function startRouting(deps: {
     proofFor: deps.proofFor,
   });
   const circle = createCircleSource();
+  const findLiveMarket = createMarketFinder();
   if (deps.startLoops !== false) {
     void circle.refresh();
     setInterval(() => { void circle.refresh(); }, 60 * 60_000).unref();
@@ -91,6 +93,7 @@ export function startRouting(deps: {
     readIntent: (text) => readIntent(text, deps.callModel, deps.model),
     judge: (text, list) => judgeFit(text, list, deps.callModel, deps.model),
     fill: (entry, text, intent) => fillInput(entry, text, intent, deps.callModel, deps.model),
+    findMarket: (text) => findLiveMarket(text, new Date()),
     feeBps: deps.feeBps,
     feeMin: deps.feeMin,
     feeAddress: { "arc-testnet": deps.testnetFeeAddress, arc: deps.outside?.feeAddress ?? null },

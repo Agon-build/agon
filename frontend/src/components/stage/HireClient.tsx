@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { CategorySelect } from "@/components/stage/CategorySelect";
+import { LiveMarkets } from "@/components/stage/LiveMarkets";
 import { ChoiceList } from "@/components/stage/ChoiceList";
 import { Composer } from "@/components/stage/Composer";
 import { PhaseRail } from "@/components/stage/PhaseRail";
@@ -269,6 +270,7 @@ export function HireClient() {
             ) : null}
           </div>
         ) : null}
+        {start && !agentRef ? <LiveMarkets disabled={mode.kind === "quoting" || !canAct} onPick={(request) => void ask(request, null, "prediction")} /> : null}
         {start && !agentRef ? <CategorySelect categories={categories} disabled={mode.kind === "quoting" || !canAct} onPick={(id) => browse(id)} /> : null}
 
         {!start && mode.kind !== "run" ? (

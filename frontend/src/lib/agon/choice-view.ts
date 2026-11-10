@@ -27,6 +27,18 @@ export function networkWords(p: RoutePick): string {
   return p.network === "arc" ? `${source}, real USDC on Arc mainnet` : `${source}, test USDC on Arc Testnet`;
 }
 
+/// Agon's pick among the choices, and why: the top ranked agent, else the top new one, else the
+/// best-fitting outside service. A service that just took payment without answering is never the pick.
+export function bestChoice(groups: { ranked: RoutePick[]; fresh: RoutePick[]; outside: RoutePick[] }): { reference: string; why: string } | null {
+  const first = (list: RoutePick[]) => list.find((p) => !p.recentlyFailed);
+  const ranked = first(groups.ranked);
+  if (ranked) return { reference: ranked.reference, why: "Highest Agon score among the agents that fit" };
+  const fresh = first(groups.fresh);
+  if (fresh) return { reference: fresh.reference, why: "Verified on Agon, no score yet" };
+  const outside = first(groups.outside);
+  return outside ? { reference: outside.reference, why: "Lowest price among the services that fit. Agon has not tested it" } : null;
+}
+
 export function groupHeading(g: ChoiceGroup): string {
   return g === "ranked" ? "Ranked on Agon" : g === "new" ? "New on Agon, not yet proven" : "Outside market";
 }

@@ -82,3 +82,9 @@ test("owner references round-trip and chat ids hash with the pepper only", () =>
   assert.equal(parseOwnerRef("wa:abc"), null);
   assert.equal(parseOwnerRef("op:0x123"), null);
 });
+
+test("routing reads requests with AGON_ROUTING_MODEL, or the classifier model when unset", () => {
+  assert.equal(resolveStageSettings({}).settings.routingModel, DEFAULT_CLASSIFIER_MODEL);
+  assert.equal(resolveStageSettings({ AGON_CLASSIFIER_MODEL: "c" }).settings.routingModel, "c");
+  assert.equal(resolveStageSettings({ AGON_ROUTING_MODEL: " claude-sonnet-5-5 " }).settings.routingModel, "claude-sonnet-5-5");
+});

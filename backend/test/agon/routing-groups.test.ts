@@ -62,3 +62,11 @@ test("the model's fit judgement decides what is shown when given", () => {
   const g = groupCandidates([agon("a", 90), agon("b", 50)], intent, { ...opts, fitted: ["b"] });
   assert.deepEqual(g.ranked.map((c) => c.reference), ["b"]);
 });
+
+// 2026-11-10: "is this market worth trading" listed Resolution Watch first, because only the score ordered Agon agents.
+test("among Agon agents, one the fit check named comes before one that is only shown as a market agent", () => {
+  const g = groupCandidates([agon("watch", 90), agon("scout", 70)], intent, { ...opts, fitted: ["scout"], always: ["watch", "scout"] });
+  assert.deepEqual(g.ranked.map((c) => c.reference), ["scout", "watch"]);
+  const none = groupCandidates([agon("watch", 90), agon("scout", 70)], intent, { ...opts, fitted: [], always: ["watch", "scout"] });
+  assert.deepEqual(none.ranked.map((c) => c.reference), ["watch", "scout"], "with no fit named, the score decides");
+});

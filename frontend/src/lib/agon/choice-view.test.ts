@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { categoryCountText, groupHeading, networkWords, proofLines } from "./choice-view.ts";
+import { bestChoice, categoryCountText, groupHeading, networkWords, proofLines } from "./choice-view.ts";
 import type { ProofPart, RoutePick } from "./stage-types.ts";
 
 const part = (status: ProofPart["status"], value: number | null = null, count = 0): ProofPart => ({ value, count, status });
@@ -38,4 +38,17 @@ test("group headings and category counts read plainly", () => {
   assert.equal(categoryCountText({ ...c, agon: 1, outside: null }), "1 Agon agent");
   assert.equal(categoryCountText({ ...c, agon: 0, outside: 0 }), "No agents yet");
   assert.equal(categoryCountText({ ...c, agon: null, outside: null }), "");
+});
+
+// 2026-11-10: Agon's promise is the best agent for the job, so the choices name one.
+test("Agon names its pick: the top ranked agent, else the top new one, else the best-fitting outside service", () => {
+  const ranked = pick({ reference: "a", group: "ranked" });
+  const fresh = pick({ reference: "b", group: "new" });
+  const outside = pick({ reference: "c", group: "outside", source: "circle" });
+  assert.deepEqual(bestChoice({ ranked: [ranked], fresh: [fresh], outside: [outside] }), { reference: "a", why: "Highest Agon score among the agents that fit" });
+  assert.deepEqual(bestChoice({ ranked: [], fresh: [fresh], outside: [outside] }), { reference: "b", why: "Verified on Agon, no score yet" });
+  assert.deepEqual(bestChoice({ ranked: [], fresh: [], outside: [outside] }), { reference: "c", why: "Lowest price among the services that fit. Agon has not tested it" });
+  assert.equal(bestChoice({ ranked: [], fresh: [], outside: [] }), null);
+  const failed = pick({ reference: "d", group: "ranked", recentlyFailed: true });
+  assert.equal(bestChoice({ ranked: [failed], fresh: [], outside: [outside] })!.reference, "c", "a service that just failed is never the pick");
 });

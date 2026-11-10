@@ -10,6 +10,7 @@ import { parseFirstPartyAgents, providerRefFor } from "../first-party.ts";
 import { createHouseSellerRoutes } from "../playground/seasons/house-seller.ts";
 import { createMarketLookup } from "../agents/market-lookup.ts";
 import { createSpecialistRoutes } from "../agents/routes.ts";
+import { createEvidenceSearch } from "../playground/seasons/evidence.ts";
 import { PostgresWatchStore } from "../agents/watch-store.ts";
 import { createGammaWatchReader, startWatchWorker } from "../agents/watch-worker.ts";
 import { parseOwnerRef } from "../stage/settings.ts";
@@ -194,6 +195,8 @@ export function startPaymentsRuntime(input: {
         sellers: Object.fromEntries(Object.entries(s.specialistSellers).map(([key, w]) => [key, { payTo: w.address, settle: settler(w) }])),
         lookup: lookupMarket,
         callModel: async (p) => ({ text: (await callModel(p)).text }),
+        // Pitch reads recent news with the same search the Arena's evidence forecaster uses.
+        ...((input.env ?? process.env).EXA_API_KEY?.trim() ? { evidence: createEvidenceSearch({ apiKey: (input.env ?? process.env).EXA_API_KEY!.trim(), log: (m) => console.warn(`[agon-pitch] ${m}`) }) } : {}),
         watch: { store: watchStore, ownerOf: ownerOfWallet, statusBase: input.siteUrl ? `${input.siteUrl}/watch` : `${s.publicApiUrl}/agon/agents/specialists/watch` },
       }) as unknown as Hono,
       standin: s.standin ? (createStandinRoutes({ network, payTo: s.standin.address, settle: settler(s.standin), claimNonce }) as unknown as Hono) : null,

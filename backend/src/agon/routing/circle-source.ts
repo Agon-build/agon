@@ -131,6 +131,7 @@ export function createCircleSource(opts: { fetchImpl?: typeof fetch; baseUrl?: s
     all: async () => catalog,
     status: () => (healthy ? "ok" : "unavailable"),
     async search(q: RouteQuery) {
+      if (q.whole) return catalog.filter((e) => q.circleCategories.includes(e.category));
       return catalog
         .filter((e) => q.circleCategories.includes(e.category))
         .map((e) => ({ e, hits: matchCount(e, q.words) }))

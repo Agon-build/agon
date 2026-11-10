@@ -8,9 +8,9 @@ export const HIRE_STEPS_RAIL = ["Ask", "Choose", "Pay", "Answer"] as const;
 /// Example jobs under the question box, one per category that has services today.
 export const HIRE_EXAMPLES = [
   "Price of ETH and SOL right now",
+  "A logo for my coffee shop, warm and simple",
   "Find recent papers on solid-state batteries",
-  "Read the latest block on Base",
-  "Will Bitcoin be above $76,000 on Friday?",
+  "Will the Fed raise rates in December?",
 ] as const;
 
 /// Which money a record uses, read from its own network id or name. An unknown network

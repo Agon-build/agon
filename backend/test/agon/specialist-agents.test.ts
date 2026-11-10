@@ -85,7 +85,7 @@ test("scout scores a market from its numbers and names every flag", () => {
   assert.deepEqual(consensusOnly.flags.map((f) => f.code), ["vague_rules"]);
 });
 
-function setup(opts: { tags?: string[]; reply?: string; modelDown?: boolean } = {}) {
+function setup(opts: { tags?: string[]; reply?: string; modelDown?: boolean; evidence?: (question: string, now: Date) => Promise<{ n: number; title: string; url: string; published: string | null; text: string }[]> } = {}) {
   const store = new MemoryPaymentsStore();
   const settler = fakeSettler();
   const prompts: string[] = [];
@@ -93,6 +93,7 @@ function setup(opts: { tags?: string[]; reply?: string; modelDown?: boolean } = 
     network, store,
     sellers: { pitch: { payTo: `0x${"c1".repeat(20)}` as Address, settle: settler.settle }, scout: { payTo: `0x${"c2".repeat(20)}` as Address, settle: settler.settle }, rules: { payTo: `0x${"c3".repeat(20)}` as Address, settle: settler.settle } },
     lookup: createMarketLookup({ fetchImpl: gammaFetch([gammaMarket(), gammaMarket({ slug: "closed-one", conditionId: `0x${"e0".repeat(32)}`, closed: true }), gammaMarket({ slug: "rules-one", conditionId: `0x${"d0".repeat(32)}`, description: RULES, umaResolutionStatuses: `["proposed", "disputed"]` })], opts.tags) }),
+    ...(opts.evidence ? { evidence: opts.evidence } : {}),
     callModel: async (p) => {
       prompts.push(`${p.systemPrompt} ${p.userPrompt}`);
       if (opts.modelDown) throw new Error("model unavailable");
@@ -344,4 +345,36 @@ test("the resolution watch endpoint answers the settlement-alerts test with its 
   const body = await res.json() as { output: { alerts: { step: number; kind: string }[] } };
   assert.deepEqual(body.output.alerts, [{ step: 1, kind: "settlement_started" }, { step: 2, kind: "settled" }]);
   assert.equal(settler.calls.length, 0);
+});
+
+// 2026-11-10 rehearsal: Pitch argued from the model's memory of football, which is months old.
+test("pitch reads this week's news before it forecasts, and names what it read and when Polymarket was read", async () => {
+  const asked: string[] = [];
+  const { fetchImpl, prompts } = setup({ evidence: async (question) => {
+    asked.push(question);
+    return [{ n: 1, title: "Saka ruled out for a month", url: "https://news.example/saka", published: "2026-11-09T08:00:00.000Z", text: "Arsenal confirmed the winger will miss four weeks." }];
+  } });
+  const out = await buyExact({ url: "http://api.test/pitch", init: json({ market: EPL_SLUG }), network, maxAmount: SPECIALISTS.pitch.price, signerFor: () => localSigner(buyer), fetchImpl });
+  assert.ok(out.ok, show(out));
+  const data = out.data as { sources: unknown[]; readAt: string };
+  assert.deepEqual(data.sources, [{ title: "Saka ruled out for a month", url: "https://news.example/saka", published: "2026-11-09T08:00:00.000Z" }]);
+  assert.ok(Math.abs(new Date(data.readAt).getTime() - Date.now()) < 60_000, "read at the time of the request");
+  assert.equal(asked.length, 1);
+  assert.match(prompts[0]!, /Saka ruled out for a month/);
+  assert.match(prompts[0]!, /2026-11-09/);
+  assert.match(prompts[0]!, /not from memory/i);
+});
+
+test("pitch still forecasts when the news search fails, and says it read none", async () => {
+  const { fetchImpl } = setup({ evidence: async () => { throw new Error("search down"); } });
+  const out = await buyExact({ url: "http://api.test/pitch", init: json({ market: EPL_SLUG }), network, maxAmount: SPECIALISTS.pitch.price, signerFor: () => localSigner(buyer), fetchImpl });
+  assert.ok(out.ok, show(out));
+  assert.deepEqual((out.data as { sources: unknown[] }).sources, []);
+});
+
+test("a scout check says when Polymarket was read", async () => {
+  const { fetchImpl } = setup({ reply: "One clear source." });
+  const out = await buyExact({ url: "http://api.test/scout", init: json({ market: EPL_SLUG }), network, maxAmount: SPECIALISTS.scout.price, signerFor: () => localSigner(buyer), fetchImpl });
+  assert.ok(out.ok, show(out));
+  assert.ok(Math.abs(new Date((out.data as { readAt: string }).readAt).getTime() - Date.now()) < 60_000, "read at the time of the request");
 });

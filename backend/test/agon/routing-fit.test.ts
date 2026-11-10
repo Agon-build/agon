@@ -39,3 +39,9 @@ test("the model names the services that do the job; code keeps only shortlisted 
   assert.equal(await judgeFit("x", list, async () => { throw new Error("down"); }, "m"), null);
   assert.deepEqual(await judgeFit("x", [], reply('{"fits":[1]}'), "m"), [], "an empty shortlist is never sent to the model");
 });
+
+test("a service held in the request's category stays on the shortlist without a shared word", () => {
+  const logo: Intent = { kind: "content", query: "logo coffee shop", values: {} };
+  const out = shortlist([images, ratings], logo, "I need a logo for my coffee shop", new Set(["circle:images"]));
+  assert.deepEqual(out.map((e) => e.reference), ["circle:images"]);
+});

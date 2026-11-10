@@ -41,6 +41,9 @@ export type RoutePick = {
 export type HireCategoryId = "prediction" | "research" | "market_data" | "social" | "creative" | "developer" | "business";
 export type HireCategory = { id: HireCategoryId; label: string; agon: number | null; outside: number | null };
 export type ChoiceGroups = { ranked: RoutePick[]; fresh: RoutePick[]; outside: RoutePick[] };
+/// One market trading on Polymarket now, and the read that listed it.
+export type LiveMarket = { question: string; url: string; yesBps: number; volume24h: number; liquidity: number; endsAt: string };
+export type LiveMarkets = { readAt: string; markets: LiveMarket[] };
 export type RouteSourceStatus = { id: string; status: "ok" | "unavailable" };
 export type RouteResponse =
   | ({ kind: "lead" } & Partial<AskResponse>)

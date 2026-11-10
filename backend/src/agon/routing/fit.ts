@@ -3,12 +3,14 @@ import { matchCount, wordsOf, type CatalogEntry } from "./catalog.ts";
 import { formatUsdc } from "../payments/bargain.ts";
 import { KIND_SOURCES, type Intent } from "./intent.ts";
 
-const SHORTLIST = 20;
+const SHORTLIST = 24;
 
 /// The services worth showing the model: every source and category, scored by
 /// the words they share with the request. A category that fits Agon's reading
 /// of the request counts for half a word, so it orders equals but never blocks.
-export function shortlist(entries: CatalogEntry[], intent: Intent, text: string): CatalogEntry[] {
+/// `keep` names services held in the request's own category: they stay without a shared
+/// word, because a listing rarely uses the person's words (an image service never says "logo").
+export function shortlist(entries: CatalogEntry[], intent: Intent, text: string, keep?: ReadonlySet<string>): CatalogEntry[] {
   const words = wordsOf(`${intent.query} ${text}`);
   const fits = KIND_SOURCES[intent.kind];
   return entries
@@ -17,7 +19,7 @@ export function shortlist(entries: CatalogEntry[], intent: Intent, text: string)
       const inKind = (e.source === "agon" ? fits.agonCategories : fits.circleCategories).includes(e.category) ? 0.5 : 0;
       return { e, i, hits, score: hits + inKind };
     })
-    .filter((x) => x.hits > 0)
+    .filter((x) => x.hits > 0 || keep?.has(x.e.reference))
     .sort((a, b) => b.score - a.score || a.i - b.i)
     .slice(0, SHORTLIST)
     .map((x) => x.e);
@@ -34,7 +36,8 @@ export async function judgeFit(text: string, list: CatalogEntry[], callModel: Mo
       model,
       systemPrompt:
         "You match a person's request to paid services. A service fits only if calling it once directly does what the person asked, " +
-        "not if it is merely about the same topic. Answer with JSON only: {\"fits\": [<numbers of the services that fit, best first>]}. " +
+        "not if it is merely about the same topic. A general tool fits when the request is one plain use of it: an image generator fits a request for a logo or a poster, " +
+        "a web search fits a request to look something up, a price lookup fits a request for a coin's price. Answer with JSON only: {\"fits\": [<numbers of the services that fit, best first>]}. " +
         "Answer {\"fits\": []} when none of them does the job.",
       userPrompt: `Request: ${text.slice(0, 600)}\n\nServices:\n${lines.join("\n")}`,
       // Room to answer: the classifier model can spend over 100 tokens before the JSON.

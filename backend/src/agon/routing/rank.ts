@@ -75,7 +75,8 @@ export function groupCandidates(entries: CatalogEntry[], intent: Intent, opts: G
   const fitting = entries.filter((e) => always.has(e.reference) || (fitted ? fitted.has(e.reference) : words.length > 0 && matchCount(e, words) >= needed));
   const priced = fitting.map((e) => {
     const fee = feeFor(e.price, opts.feeBpsFor ? opts.feeBpsFor(e) : opts.feeBps, opts.feeMin ?? 0n);
-    return { e, fee, total: e.price + fee, down: opts.downranked.has(e.reference) ? 1 : 0 };
+    // Shown without being named by the fit check (a market agent on a market check): after the ones that were named.
+    return { e, fee, total: e.price + fee, down: opts.downranked.has(e.reference) ? 1 : 0, unnamed: intent.kind === "analysis" && fitted && fitted.size > 0 && !fitted.has(e.reference) ? 1 : 0 };
   });
   type P = (typeof priced)[number];
   const byTotal = (a: P, b: P) => (a.total < b.total ? -1 : a.total > b.total ? 1 : 0) || (a.e.latencyMs ?? Number.MAX_SAFE_INTEGER) - (b.e.latencyMs ?? Number.MAX_SAFE_INTEGER);
@@ -84,7 +85,7 @@ export function groupCandidates(entries: CatalogEntry[], intent: Intent, opts: G
   const done = (list: P[], group: Group, sort: (a: P, b: P) => number): Choice[] => {
     const minPrice = list.reduce((m, r) => (r.e.price < m ? r.e.price : m), list[0]?.e.price ?? 0n);
     return list
-      .sort((a, b) => a.down - b.down || sort(a, b))
+      .sort((a, b) => a.down - b.down || a.unnamed - b.unnamed || sort(a, b))
       .slice(0, GROUP_MAX)
       .map(({ e, fee, total, down }) => ({ ...e, fee, total, group, ...(down ? { reason: RECENT_FAILURE_REASON, recentlyFailed: true as const } : { reason: group === "outside" ? OUTSIDE_REASON : reasonFor(e, e.price === minPrice && list.length > 1) }) }));
   };

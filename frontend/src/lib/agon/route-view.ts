@@ -1,3 +1,5 @@
+import type { StageAnswer } from "./stage-types.ts";
+
 /// Words for a routed hire: where the agent comes from, how far Agon trusts it,
 /// what it costs with the routing fee, and which money it uses.
 export type RouteRating = { tier: "scored" | "verified" | "listed" | "unrated"; score: number | null };
@@ -38,8 +40,17 @@ export type RulesAnswerView = {
   kind: "rules"; risk: "low" | "medium" | "high"; riskText: string; marketQuestion: string | null; marketUrl: string | null;
   decides: { label: string; text: string; quote: string }[]; traps: { label: string; explain: string; quote: string }[];
 };
+/// A Scout market check: the verdict, Polymarket's own numbers read at that moment, and each flag.
+export type ScoutAnswerView = {
+  kind: "scout"; verdict: "tradeable" | "watch" | "avoid"; verdictText: string; marketQuestion: string; marketUrl: string | null;
+  metrics: { label: string; value: string }[]; flags: string[]; rulesNote: string | null; readLine: string | null;
+};
+/// A forecast from one of Agon's market agents, shown against the crowd price like a Lead forecast.
+export type ForecastAnswerView = { kind: "forecast"; answer: StageAnswer; sources: { title: string; url: string; published: string | null }[]; readLine: string | null };
+/// An image a service made.
+export type ImageAnswerView = { kind: "image"; src: string; caption: string | null };
 export type WatchAnswerView = { kind: "watch"; markets: { question: string; url: string }[]; until: string; watchPath: string };
-export type AnswerView = { kind: "text"; text: string } | { kind: "rows"; rows: { label: string; value: string }[] } | RulesAnswerView | WatchAnswerView;
+export type AnswerView = { kind: "text"; text: string } | { kind: "rows"; rows: { label: string; value: string }[] } | RulesAnswerView | WatchAnswerView | ScoutAnswerView | ForecastAnswerView | ImageAnswerView;
 
 /// A Resolution Watch purchase: the markets watched, until when, and its status link.
 function watchView(r: Record<string, unknown>): WatchAnswerView | null {
@@ -67,6 +78,65 @@ function rulesView(r: Record<string, unknown>): RulesAnswerView | null {
   };
 }
 
+const httpsUrl = (v: unknown): string | null => (typeof v === "string" && /^https:\/\/[^\s]+$/.test(v) ? v : null);
+const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+const usd = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
+
+/// "Read from Polymarket at 09:41:07 UTC": the agents read the market when asked, never from memory.
+function readLine(at: unknown): string | null {
+  const d = typeof at === "string" ? new Date(at) : null;
+  return d && !Number.isNaN(d.getTime()) ? `Read from Polymarket at ${d.toISOString().slice(11, 19)} UTC` : null;
+}
+
+const VERDICT_TEXT = { tradeable: "Tradeable", watch: "Trade with care", avoid: "Avoid" } as const;
+
+function scoutView(r: Record<string, unknown>): ScoutAnswerView | null {
+  if ((r.verdict !== "tradeable" && r.verdict !== "watch" && r.verdict !== "avoid") || !Array.isArray(r.flags) || !r.metrics || typeof r.metrics !== "object") return null;
+  const market = (r.market ?? {}) as { question?: unknown; url?: unknown };
+  const m = r.metrics as Record<string, unknown>;
+  const metrics: { label: string; value: string }[] = [];
+  const add = (label: string, v: unknown, text: (n: number) => string) => { const n = num(v); if (n !== null) metrics.push({ label, value: text(n) }); };
+  add("Yes price", m.yesPct, (n) => `${n}%`);
+  add("Spread", m.spreadCents, (n) => (n === 1 ? "1 cent" : `${n} cents`));
+  add("Liquidity", m.liquidityUsd, usd);
+  add("Traded in 24 hours", m.volume24hUsd, usd);
+  add("Move this week", m.weekMovePts, (n) => `${n > 0 ? "+" : ""}${n} points`);
+  add("Closes in", m.hoursLeft, (n) => (n < 48 ? `${Math.max(0, Math.round(n))} hours` : `${Math.round(n / 24)} days`));
+  return {
+    kind: "scout", verdict: r.verdict, verdictText: VERDICT_TEXT[r.verdict], marketQuestion: str(market.question), marketUrl: httpsUrl(market.url),
+    metrics, flags: (r.flags as Record<string, unknown>[]).map((f) => str(f?.detail)).filter(Boolean), rulesNote: str(r.rulesNote) || null, readLine: readLine(r.readAt),
+  };
+}
+
+function forecastView(r: Record<string, unknown>): ForecastAnswerView | null {
+  const probabilityBps = num(r.probabilityBps);
+  const market = r.market as { question?: unknown; slug?: unknown; closesAt?: unknown } | undefined;
+  if (probabilityBps === null || !market || !str(market.question) || !Array.isArray(r.reasons)) return null;
+  const agent = str(r.agent) || "Agon agent";
+  const sources = (Array.isArray(r.sources) ? (r.sources as Record<string, unknown>[]) : []).flatMap((s) => {
+    const url = httpsUrl(s?.url);
+    const when = typeof s?.published === "string" ? new Date(s.published) : null;
+    return url && str(s.title) ? [{ title: str(s.title), url, published: when && !Number.isNaN(when.getTime()) ? when.toLocaleDateString("en-GB", { day: "numeric", month: "long", timeZone: "UTC" }) : null }] : [];
+  });
+  return {
+    kind: "forecast", sources, readLine: readLine(r.readAt),
+    answer: {
+      probabilityBps, marketPriceBps: num(r.crowdBps), reasons: (r.reasons as unknown[]).filter((x): x is string => typeof x === "string"),
+      marketQuestion: str(market.question), marketEndsAt: str(market.closesAt) || null, marketSlug: str(market.slug) || null,
+      forecaster: { name: agent, reason: sources.length > 0 ? "It read this week's news before forecasting" : "An Agon market agent", asked: "", agreed: "" },
+    },
+  };
+}
+
+/// An image a service made: an https link or the image data itself. Nothing else is shown as an image.
+function imageView(r: Record<string, unknown>): ImageAnswerView | null {
+  const first = Array.isArray(r.data) ? (r.data[0] as Record<string, unknown> | undefined) : undefined;
+  const listed = Array.isArray(r.images) ? r.images[0] : undefined;
+  const b64 = first && typeof first.b64_json === "string" && /^[A-Za-z0-9+/=]+$/.test(first.b64_json) ? `data:image/png;base64,${first.b64_json}` : null;
+  const src = httpsUrl(first?.url) ?? b64 ?? httpsUrl(listed) ?? httpsUrl((listed as { url?: unknown } | undefined)?.url) ?? httpsUrl(r.image_url);
+  return src ? { kind: "image", src, caption: str(first?.revised_prompt) || null } : null;
+}
+
 /// What a routed service returned, readable: text as text, a flat object as rows, a file by type and size.
 export function answerView(result: unknown): AnswerView | null {
   if (result === null || result === undefined) return null;
@@ -80,6 +150,8 @@ export function answerView(result: unknown): AnswerView | null {
   if (rules) return rules;
   const watch = watchView(result as Record<string, unknown>);
   if (watch) return watch;
+  const made = scoutView(result as Record<string, unknown>) ?? forecastView(result as Record<string, unknown>) ?? imageView(result as Record<string, unknown>);
+  if (made) return made;
   return { kind: "rows", rows: inputRows(result as Record<string, unknown>) };
 }
 

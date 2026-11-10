@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 
-import { groupHeading, proofLines } from "@/lib/agon/choice-view";
+import { bestChoice, groupHeading, proofLines } from "@/lib/agon/choice-view";
 import { moneyLine } from "@/lib/agon/hire-layout";
 import { CHOICES_COPY, RECENTLY_FAILED_MARK } from "@/lib/agon/stage-copy";
 import type { ChoiceGroup, ChoiceGroups, HireCategory, HireCategoryId, RoutePick, RouteSourceStatus } from "@/lib/agon/stage-types";
@@ -28,6 +28,8 @@ export function ChoiceList({ category, categories, groups, sources, busy, select
 }) {
   const circleDown = sources.some((s) => s.id === "circle" && s.status === "unavailable");
   const empty = groups.ranked.length + groups.fresh.length + groups.outside.length === 0;
+  const best = bestChoice(groups);
+  const bestName = best ? [...groups.ranked, ...groups.fresh, ...groups.outside].find((p) => p.reference === best.reference)?.name ?? null : null;
   return (
     <section aria-label="Choices" className="stage-print">
       <div className="flex flex-wrap items-center justify-end gap-2">
@@ -55,16 +57,23 @@ export function ChoiceList({ category, categories, groups, sources, busy, select
         </div>
       ) : (
         <div role="radiogroup" aria-label="Pick an agent">
-          <Group group="ranked" items={groups.ranked} busy={busy} selected={selected} onChoose={onChoose} />
-          <Group group="new" items={groups.fresh} busy={busy} selected={selected} onChoose={onChoose} />
-          <Group group="outside" items={groups.outside} busy={busy} selected={selected} onChoose={onChoose} down={circleDown} />
+          {best && bestName ? (
+            <p className="mt-6 border-l-2 border-accent pl-3 text-sm leading-6 text-ink">
+              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Agon's pick</span>
+              <span className="ml-2 font-medium">{bestName}</span>
+              <span className="ml-2 text-ink-2">{best.why}.</span>
+            </p>
+          ) : null}
+          <Group group="ranked" items={groups.ranked} busy={busy} selected={selected} onChoose={onChoose} best={best?.reference ?? null} />
+          <Group group="new" items={groups.fresh} busy={busy} selected={selected} onChoose={onChoose} best={best?.reference ?? null} />
+          <Group group="outside" items={groups.outside} busy={busy} selected={selected} onChoose={onChoose} down={circleDown} best={best?.reference ?? null} />
         </div>
       )}
     </section>
   );
 }
 
-function Group({ group, items, busy, selected, onChoose, down }: { group: ChoiceGroup; items: RoutePick[]; busy: boolean; selected: string | null; onChoose: (p: RoutePick) => void; down?: boolean }) {
+function Group({ group, items, busy, selected, onChoose, down, best }: { group: ChoiceGroup; items: RoutePick[]; busy: boolean; selected: string | null; onChoose: (p: RoutePick) => void; down?: boolean; best: string | null }) {
   const [all, setAll] = useState(false);
   if (items.length === 0 && !down) return null;
   // The chosen card stays in view even when it sits past the first three.
@@ -78,7 +87,7 @@ function Group({ group, items, busy, selected, onChoose, down }: { group: Choice
       </h3>
       {down && items.length === 0 ? <p className="mt-2 text-sm text-ink-2">{CHOICES_COPY.circleDown}</p> : null}
       <ul className="mt-3 grid gap-2">
-        {shown.map((p) => <ChoiceCard key={p.reference} pick={p} busy={busy} checked={p.reference === selected} onChoose={onChoose} />)}
+        {shown.map((p) => <ChoiceCard key={p.reference} pick={p} busy={busy} checked={p.reference === selected} onChoose={onChoose} best={p.reference === best} />)}
       </ul>
       {items.length > shown.length && !all ? (
         <button type="button" onClick={() => setAll(true)} className="mt-2 min-h-11 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2 underline underline-offset-4 hover:text-accent">
@@ -101,7 +110,7 @@ function under(pick: RoutePick): string {
   return score !== null ? `Agon score ${Math.round(score * 10) / 10}` : "Not scored yet";
 }
 
-function ChoiceCard({ pick, busy, checked, onChoose }: { pick: RoutePick; busy: boolean; checked: boolean; onChoose: (p: RoutePick) => void }) {
+function ChoiceCard({ pick, busy, checked, onChoose, best }: { pick: RoutePick; busy: boolean; checked: boolean; onChoose: (p: RoutePick) => void; best: boolean }) {
   const lines = pick.group === "ranked" ? proofLines(pick).filter((l) => !l.startsWith("Agon score")) : [];
   return (
     <li>
@@ -116,6 +125,7 @@ function ChoiceCard({ pick, busy, checked, onChoose }: { pick: RoutePick; busy: 
           <span className="flex flex-wrap items-baseline gap-x-2">
             <span className="break-words text-base font-medium leading-6 text-ink">{pick.name}</span>
             <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3">{badge(pick)}</span>
+            {best ? <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-accent">Agon's pick</span> : null}
           </span>
           {pick.description ? <span className="mt-1 line-clamp-2 block text-sm leading-6 text-ink-2">{pick.description}</span> : null}
           {lines.length > 0 ? <span className="mt-1 block font-mono text-[10px] tabular-nums text-ink-3">{lines.join(" · ")}</span> : null}

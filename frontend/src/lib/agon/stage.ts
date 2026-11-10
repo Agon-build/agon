@@ -4,7 +4,7 @@ import {
   PREVIEW_JOB_ID, previewApproval, previewAsk, previewCategories, previewChoices, previewRoute, previewRouteQuote, previewConfig, previewEntries, previewLeaderboard, previewLive, previewRatings, previewRounds, previewSeason, previewWallet,
 } from "./stage-fixtures.ts";
 import type {
-  ApprovalResult, ApprovalView, AskResponse, ConfirmResponse, HireCategory, HireCategoryId, RouteResponse, HistoryItem, LeaderboardResponse, LiveView, RatingsResponse, SeasonEntry, SeasonInfo, SeasonRoundSummary, StageConfig, StageWallet,
+  ApprovalResult, ApprovalView, AskResponse, ConfirmResponse, HireCategory, HireCategoryId, RouteResponse, HistoryItem, LeaderboardResponse, LiveMarkets, LiveView, RatingsResponse, SeasonEntry, SeasonInfo, SeasonRoundSummary, StageConfig, StageWallet,
 } from "./stage-types.ts";
 
 /// Which Season the site shows: 9001 for the testnet dry run, 1 from the mainnet start.
@@ -82,6 +82,11 @@ export async function routeRequest(request: string | null, category?: HireCatego
 export async function getCategories(): Promise<HireCategory[]> {
   if (AGON_PREVIEW_MODE) return previewCategories();
   return (await call<{ items: HireCategory[] }>("/agon/app/categories")).items;
+}
+/// What is trading on Polymarket now, read by Agon. Public; null when it cannot be read.
+export async function getLiveMarkets(): Promise<LiveMarkets | null> {
+  if (AGON_PREVIEW_MODE) return null;
+  return call<LiveMarkets>("/agon/app/markets/live").catch(() => null);
 }
 /// The person chose this agent on its page: Agon makes the pick card for it, with no routing fee.
 export async function routeDirect(reference: string, request: string): Promise<RouteResponse> {

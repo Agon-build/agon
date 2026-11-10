@@ -86,3 +86,9 @@ test("an agent with no rated part has no ranked proof, and a failed proof read l
   assert.equal(hasRatedPart(none), false);
   assert.equal(hasRatedPart(null), false);
 });
+
+test("a whole-category read returns every routable agent in it, with or without shared words", async () => {
+  const s = source([listing({ reference: "r:1" }), listing({ reference: "r:other", category: "7" }), listing({ reference: "r:sus", verified: false, suspended: true })]);
+  const out = await s.search({ words: ["weather"], agonCategories: ["3"], circleCategories: [], whole: true });
+  assert.deepEqual(out.map((e) => e.reference), ["r:1"]);
+});

@@ -17,12 +17,17 @@ export function isFootballMarket(m: Pick<MarketSnapshot, "question" | "tags">): 
 
 /// Pitch's reasoning step. The market numbers are fetched, not guessed; the
 /// model only weighs football specifics against the crowd price.
-export function pitchPrompt(m: MarketSnapshot, now: Date): { systemPrompt: string; userPrompt: string } {
+/// One dated news item Pitch reads before it forecasts.
+export type PitchNews = { title: string; published: string | null; text: string };
+
+export function pitchPrompt(m: MarketSnapshot, now: Date, news: PitchNews[] = []): { systemPrompt: string; userPrompt: string } {
   return {
     systemPrompt:
       "You are Pitch, a football (soccer) forecasting agent. Estimate the probability that the market resolves Yes. " +
       "Reason like a football analyst: in a single match a draw is common (often 25 to 30 percent), so a team to win needs more than being the better side; " +
-      "weigh home advantage, recent form, injuries and suspensions you know of, fixture congestion and, for season-long markets, the points gap and games left. " +
+      "weigh home advantage, recent form, injuries and suspensions, fixture congestion and, for season-long markets, the points gap and games left. " +
+      "Take form, injuries, suspensions and results from the dated news given, not from memory: what you remember is months old. " +
+      "With no news given, say in a reason that you had none and stay close to the crowd price. " +
       "Start from the crowd price and move away only for a concrete football reason. " +
       'Answer with JSON only: {"probability": <number between 0 and 1>, "reasons": [<three short reasons>]}.',
     userPrompt: [
@@ -32,6 +37,7 @@ export function pitchPrompt(m: MarketSnapshot, now: Date): { systemPrompt: strin
       `Crowd price for Yes: ${(m.yesBps / 100).toFixed(1)}%`,
       `Move over the last week: ${(m.weekChange * 100).toFixed(1)} points`,
       `Rules: ${m.description.slice(0, 600)}`,
+      news.length > 0 ? `News from the last 30 days:\n${news.map((n, i) => `[${i + 1}] ${n.published ? n.published.slice(0, 10) : "undated"} ${n.title}: ${n.text.slice(0, 400)}`).join("\n")}` : "News from the last 30 days: none found.",
     ].join("\n"),
   };
 }

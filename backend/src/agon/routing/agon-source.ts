@@ -76,7 +76,7 @@ export function createAgonSource(deps: {
       const fits = rows.filter((l) => l.status === "Listed" && !l.suspended && l.inputSchema && q.agonCategories.includes(l.category) && !NOT_ROUTED.some((r) => r.test(l.endpoint)));
       const out: CatalogEntry[] = [];
       for (const l of fits) {
-        if (matchCount({ name: l.name, description: l.description, provider: "Agon", tags: [] }, q.words) === 0) continue;
+        if (!q.whole && matchCount({ name: l.name, description: l.description, provider: "Agon", tags: [] }, q.words) === 0) continue;
         out.push(await entryOf(l));
       }
       return out;

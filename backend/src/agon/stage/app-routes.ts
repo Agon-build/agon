@@ -1,3 +1,4 @@
+import type { LiveMarkets } from "./live-markets.ts";
 import { Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
 import type { Address } from "viem";
@@ -90,6 +91,8 @@ export function createAppRoutes(deps: {
   router?: Router;
   /** The Arc mainnet wallet services for outside routes (?network=arc). */
   outside?: StageServices;
+  /** The busiest open Polymarket markets right now; the route answers 404 without it. */
+  liveMarkets?: () => Promise<LiveMarkets | null>;
   /** User ratings from paid work; the routes answer 404 without it. */
   ratings?: Ratings;
 }): Hono {
@@ -103,6 +106,14 @@ export function createAppRoutes(deps: {
     if (!deps.router) return c.json({ error: "web_off" }, 503);
     if (!categoriesCache || Date.now() - categoriesCache.at > 60_000) categoriesCache = { at: Date.now(), items: await deps.router.categories() };
     return c.json({ items: categoriesCache.items });
+  });
+
+  // Public: what is trading on Polymarket now, read by Agon, never cached by the browser.
+  app.get("/markets/live", async (c) => {
+    if (!deps.liveMarkets) return c.json({ error: "not_found" }, 404);
+    c.header("Cache-Control", "no-store");
+    const live = await deps.liveMarkets().catch(() => null);
+    return live ? c.json(live) : c.json({ error: "polymarket_unavailable" }, 503);
   });
 
   app.get("/config", async (c) => {
