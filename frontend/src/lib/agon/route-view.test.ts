@@ -148,3 +148,8 @@ test("a DefiLlama price answer reads as one price per coin, with when it was rea
 test("an empty price answer says no price came back", () => {
   assert.deepEqual(answerView({ coins: {} }), { kind: "text", text: "The service sent no price for those coins." });
 });
+
+// 2026-11-10 production (job ff086716): a queued image job read as rows of ticket fields.
+test("a queued job the service never finished says so, not its ticket fields", () => {
+  assert.deepEqual(answerView({ object: "image.generation.job", status: "queued", id: "1e45", poll_url: "/api/v1/images/generations/1e45", payment_status: "verified" }), { kind: "text", text: "The service queued this work and did not send the result." });
+});

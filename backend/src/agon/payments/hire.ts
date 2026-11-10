@@ -28,6 +28,8 @@ export type HireDeps = {
   feeMin?: bigint;
   /** Fees collect on the wallet's tab and go out in one transfer once they reach this; unset or 0 sends each fee at once. */
   feeTab?: bigint;
+  /** Waits between polls of a queued job; tests pass one that returns at once. */
+  sleep?: (ms: number) => Promise<void>;
 };
 
 const ON_TAB = "Agon routing fee, on tab";
@@ -37,6 +39,29 @@ const FEE_GIVE_UP_MS = 24 * 60 * 60_000;
 /// A hire of the lead agent covers its own data purchases, a negotiation and
 /// a paid forecast, so the paid request gets well over a minute.
 export const HIRE_PAID_TIMEOUT_MS = 180_000;
+
+/// A slow service may answer a paid call with a queued job and an address to poll
+/// (BlockRun's image models, 2026-11-10). Each poll asks for payment again, signed by
+/// the same wallet; the seller says it settles once, on the poll that returns the work.
+/// Polls are few and spaced, each signature is capped at the job's price, and a poll
+/// address on another site is never called.
+export const QUEUED_MAX_POLLS = 8;
+const QUEUED_WAIT_MS = 10_000;
+const QUEUED_STATES = new Set(["queued", "in_progress", "pending", "processing", "running"]);
+
+/// The poll address of a queued job on the same site as the service, or null when the answer is not one.
+export function queuedPollUrl(data: unknown, serviceUrl: string): string | null {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+  const d = data as { status?: unknown; poll_url?: unknown };
+  if (typeof d.poll_url !== "string" || typeof d.status !== "string" || !QUEUED_STATES.has(d.status.toLowerCase())) return null;
+  try {
+    const service = new URL(serviceUrl);
+    const poll = new URL(d.poll_url, service);
+    return poll.origin === service.origin ? poll.toString() : "";
+  } catch {
+    return "";
+  }
+}
 
 export type HireRequest = {
   ownerRef: string; providerUrl: string; providerRef: string; providerLabel: string; body: Record<string, unknown>;
@@ -187,8 +212,21 @@ async function payJob(deps: HireDeps, wallet: BudgetWallet, job: Job, perPayment
   };
   await deps.store.upsertJobPayment(payment);
 
-  const signed: { nonce: Hex | null } = { nonce: null };
+  const signed: { nonce: Hex | null; all: Hex[] } = { nonce: null, all: [] };
   const call = providerCall(String(job.request.url), job.request.method === "GET" ? "GET" : "POST", (job.request.body ?? {}) as Record<string, unknown>, job.jobId);
+  const signerFor = () =>
+    createGuardedSigner({
+      address: wallet.address,
+      walletId: wallet.walletId,
+      signJson: deps.signJson,
+      context: () => ({ network: deps.network, from: wallet.address, payTo, maxValue: job.priceAtomic, now: deps.now() }),
+      // Recorded before the paid request is sent, so an interrupted payment can be reconciled on chain.
+      onSigned: (message) => {
+        signed.nonce = message.nonce as Hex;
+        signed.all.push(message.nonce as Hex);
+        return deps.store.upsertJobPayment({ ...payment, authNonce: message.nonce as Hex, authValidBefore: new Date(Number(message.validBefore) * 1000), updatedAt: deps.now() });
+      },
+    });
   const purchase = await buyExact({
     url: call.url,
     init: call.init,
@@ -197,18 +235,7 @@ async function payJob(deps: HireDeps, wallet: BudgetWallet, job: Job, perPayment
     expectedPayTo: payTo,
     fetchImpl: deps.fetchImpl,
     paidTimeoutMs: deps.paidTimeoutMs ?? HIRE_PAID_TIMEOUT_MS,
-    signerFor: () =>
-      createGuardedSigner({
-        address: wallet.address,
-        walletId: wallet.walletId,
-        signJson: deps.signJson,
-        context: () => ({ network: deps.network, from: wallet.address, payTo, maxValue: job.priceAtomic, now: deps.now() }),
-        // Recorded before the paid request is sent, so an interrupted payment can be reconciled on chain.
-        onSigned: (message) => {
-          signed.nonce = message.nonce as Hex;
-          return deps.store.upsertJobPayment({ ...payment, authNonce: message.nonce as Hex, authValidBefore: new Date(Number(message.validBefore) * 1000), updatedAt: deps.now() });
-        },
-      }),
+    signerFor,
   });
 
   if (purchase.ok && purchase.amount === 0n) {
@@ -224,6 +251,38 @@ async function payJob(deps: HireDeps, wallet: BudgetWallet, job: Job, perPayment
     await deps.store.upsertJobPayment({ ...payment, status: "settled", txHash: purchase.txHash, detail: "settled; the provider sent an empty answer", updatedAt: deps.now() });
     await deps.store.updateJob(job.jobId, { state: "failed", result: { error: "delivery_failed", detail: "empty answer" } });
     return { ok: false, code: "delivery_failed", jobId: job.jobId, txHash: purchase.txHash };
+  }
+  const pollUrl = purchase.ok ? queuedPollUrl(purchase.data, call.url) : null;
+  if (purchase.ok && pollUrl !== null) {
+    // The service queued the work. Poll its own address until the work comes back, a few times at most.
+    let txHash = purchase.txHash;
+    let next = pollUrl;
+    const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+    for (let i = 0; next && i < QUEUED_MAX_POLLS; i += 1) {
+      await sleep(QUEUED_WAIT_MS);
+      const poll = await buyExact({
+        url: next, init: { method: "GET", headers: { "x-agon-job": job.jobId } }, network: deps.network, maxAmount: job.priceAtomic, expectedPayTo: payTo,
+        fetchImpl: deps.fetchImpl, paidTimeoutMs: 60_000, signerFor,
+      });
+      if (!poll.ok) break;
+      if (poll.txHash) txHash = poll.txHash;
+      const again = queuedPollUrl(poll.data, next);
+      if (again !== null) { next = again; continue; }
+      if (poll.data === null || poll.data === undefined) break;
+      await deps.store.finishSpend(walletRef, key, { state: "settled", txHash });
+      await deps.store.upsertJobPayment({ ...payment, authNonce: signed.nonce, status: "settled", txHash, updatedAt: deps.now() });
+      await deps.store.updateJob(job.jobId, { state: "delivered", result: poll.data });
+      if (fee > 0n && feeAddress) await payFee(deps, wallet, job, fee, feeAddress);
+      return { ok: true, jobId: job.jobId, amount: job.priceAtomic, txHash, result: poll.data };
+    }
+    // Not finished. Money moved only if one of the signed authorizations was used on chain;
+    // when that cannot be read, the payment is kept as made, never written off.
+    const used = deps.authorizationUsed ? await Promise.all(signed.all.map((n) => deps.authorizationUsed!(wallet.address, n).catch(() => null))) : [null];
+    const charged = used.some((u) => u !== false);
+    await deps.store.finishSpend(walletRef, key, charged ? { state: "settled", txHash } : { state: "failed" });
+    await deps.store.upsertJobPayment({ ...payment, authNonce: signed.nonce, status: charged ? "settled" : "failed", txHash: charged ? txHash : null, detail: charged ? "settled; the service did not finish the work" : "no charge: the service did not finish the work", updatedAt: deps.now() });
+    await deps.store.updateJob(job.jobId, { state: "failed", result: { error: "not_finished", detail: "The service queued the work and did not finish it in time." } });
+    return { ok: false, code: "delivery_failed", jobId: job.jobId, txHash };
   }
   if (purchase.ok) {
     // A provider that could not deliver and refunded the buyer (the lead agent does this) answers 200 with refunded: true.

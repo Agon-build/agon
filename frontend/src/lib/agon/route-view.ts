@@ -163,6 +163,9 @@ export function answerView(result: unknown): AnswerView | null {
   if (typeof r.contentType === "string" && typeof r.text === "string") return { kind: "text", text: r.text };
   if (typeof r.contentType === "string" && typeof r.bytes === "number") return { kind: "text", text: `The service sent a file: ${r.contentType}, ${r.bytes} bytes.` };
   if (Array.isArray(result)) return { kind: "text", text: JSON.stringify(result, null, 1) };
+  // A queued job's ticket is not the work (BlockRun's images, 2026-11-10).
+  const ticket = result as { status?: unknown; poll_url?: unknown };
+  if (typeof ticket.poll_url === "string" && typeof ticket.status === "string" && /^(queued|in_progress|pending|processing|running)$/i.test(ticket.status)) return { kind: "text", text: "The service queued this work and did not send the result." };
   const rules = rulesView(result as Record<string, unknown>);
   if (rules) return rules;
   const watch = watchView(result as Record<string, unknown>);

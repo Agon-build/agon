@@ -4,7 +4,7 @@ import { Hono } from "hono";
 import { privateKeyToAccount } from "viem/accounts";
 import type { Address, Hex } from "viem";
 
-import { HIRE_PAID_TIMEOUT_MS, completeApprovedHire, confirmHire, quoteHire, reconcileStuckHires, settleFeeTab, type HireDeps } from "../../src/agon/payments/hire.ts";
+import { HIRE_PAID_TIMEOUT_MS, QUEUED_MAX_POLLS, completeApprovedHire, confirmHire, quoteHire, reconcileStuckHires, settleFeeTab, type HireDeps } from "../../src/agon/payments/hire.ts";
 import { budgetWalletRef, completeWithdraw, requestWithdraw } from "../../src/agon/payments/budget-wallets.ts";
 import { exactPayment, type X402Paid } from "../../src/agon/payments/exact-seller.ts";
 import { agonNetwork } from "../../src/agon/network.ts";
@@ -43,8 +43,20 @@ function world(opts: { price?: bigint } = {}) {
         ? c.json({ ok: false, code: "no_market", refunded: true, refundTx: `0x${"fe".repeat(32)}`, progress: [] })
         : c.json({ ok: true, probabilityBps: 3400, job: c.req.header("x-agon-job") })),
   );
+  // A slow image service, shaped like BlockRun's (2026-11-10): the paid call answers with a queued
+  // job and a poll address; each poll is paid again and answers the image once it is done.
+  const images = { polls: 0, finishAfter: 2, pollUrl: "/images/jobs/j1", polled: [] as string[] };
+  const imagePay = () => exactPayment({ network, payTo: LEAD, price: async () => 22_000n, settle: settler.settle, claimNonce: (n, p, nonce) => store.claimSellerNonce(n, p, nonce), description: "Images" });
+  app.post("/images", imagePay(), async (c) => c.json({ object: "image.generation.job", status: "queued", id: "j1", poll_url: images.pollUrl, payment_status: "verified" }));
+  app.get("/images/jobs/j1", imagePay(), async (c) => {
+    images.polls += 1;
+    images.polled.push(c.req.url);
+    return images.polls >= images.finishAfter
+      ? c.json({ created: 1794329597, data: [{ url: "https://img.example/coffee-logo.png" }] })
+      : c.json({ object: "image.generation.job", status: "in_progress", id: "j1", poll_url: images.pollUrl });
+  });
   const deps: HireDeps = {
-    store, network, now: () => new Date(), off: { all: false, budget: false },
+    store, network, now: () => new Date(), off: { all: false, budget: false }, sleep: async () => {},
     fetchImpl: ((url: string, init?: RequestInit) => app.request(url, init)) as typeof fetch,
     signJson: circleSignJson(buyer),
     ops: {
@@ -59,7 +71,7 @@ function world(opts: { price?: bigint } = {}) {
     },
   };
   const req = { ownerRef: "wa:abc", providerUrl: "http://api.test/agon/agents/lead/forecast", providerRef: "agent:lead", providerLabel: "Agon Lead Agent", body: { question: "BTC above 82k on Friday?" } };
-  return { store, settler, state, deps, req, transfers, seen };
+  return { store, settler, state, deps, req, transfers, seen, images };
 }
 
 test("quote under the limit returns a code; confirming pays once and delivers", async () => {
@@ -527,4 +539,46 @@ test("two hires that fill the tab at the same moment send it once", async () => 
   const wallet = (await store.getBudgetWallet("wa:abc", "arc-testnet"))!;
   await Promise.all([settleFeeTab(tabbed, wallet), settleFeeTab(tabbed, wallet)]);
   assert.deepEqual(transfers.map((t) => t.amountBaseUnits), [20_000n], "one transfer for both fees");
+});
+
+// 2026-11-10 production (job ff086716): BlockRun's image service answered a paid call with a queued job
+// and a poll address. Agon stored the ticket as the answer and called it delivered; no image came back.
+const imageReq = { ownerRef: "wa:abc", providerUrl: "http://api.test/images", providerRef: "circle:images", providerLabel: "Generate images", body: { prompt: "A logo for my coffee shop" } };
+
+test("a service that answers with a queued job is polled at its own address until the image comes back", async () => {
+  const { deps, store, images } = world();
+  const q = await quoteHire(deps, imageReq);
+  assert.ok(q.ok && q.quote.step === "confirm_code", show(q));
+  const out = await confirmHire(deps, { ownerRef: "wa:abc", code: q.quote.code });
+  assert.ok(out.ok, show(out));
+  assert.deepEqual(out.result, { created: 1794329597, data: [{ url: "https://img.example/coffee-logo.png" }] });
+  assert.equal(images.polls, 2);
+  assert.ok(images.polled.every((u) => u === "http://api.test/images/jobs/j1"), "the poll goes to the address the service gave");
+  assert.equal((await store.getJob(q.quote.jobId))!.state, "delivered");
+});
+
+test("a queued job that never finishes is not delivered, charges no routing fee and stops polling", async () => {
+  const { deps, store, images, transfers } = world();
+  images.finishAfter = 99;
+  const q = await quoteHire(deps, imageReq);
+  assert.ok(q.ok && q.quote.step === "confirm_code");
+  const out = await confirmHire(deps, { ownerRef: "wa:abc", code: q.quote.code });
+  assert.equal(out.ok, false);
+  assert.equal(!out.ok && out.code, "delivery_failed");
+  assert.equal(images.polls, QUEUED_MAX_POLLS, "polling is bounded");
+  const job = await store.getJob(q.quote.jobId);
+  assert.equal(job!.state, "failed");
+  assert.equal((job!.result as { error?: string }).error, "not_finished");
+  assert.equal(transfers.length, 0, "no routing fee for work that did not arrive");
+});
+
+test("a poll address on another site is never called", async () => {
+  const { deps, store, images } = world();
+  images.pollUrl = "https://elsewhere.example/images/jobs/j1";
+  const q = await quoteHire(deps, imageReq);
+  assert.ok(q.ok && q.quote.step === "confirm_code");
+  const out = await confirmHire(deps, { ownerRef: "wa:abc", code: q.quote.code });
+  assert.equal(out.ok, false);
+  assert.equal(images.polls, 0);
+  assert.equal((await store.getJob(q.quote.jobId))!.state, "failed");
 });
