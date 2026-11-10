@@ -4,7 +4,7 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 
 import { copyProblems } from "./docs-content.ts";
-import { introDestination, landingFacts, landingMotion, logoDestination, WELCOME_NEXT } from "./landing.ts";
+import { introDestination, landingFacts, landingMotion, logoDestination, PINNED_CARD, PINNED_CARD_WRAP, WELCOME_NEXT } from "./landing.ts";
 import type { Board } from "./scores-api.ts";
 import type { HireCategory, SeasonInfo } from "./stage-types.ts";
 import type { AgonListing } from "./types.ts";
@@ -82,4 +82,31 @@ test("the welcome story shows expert agents and escrow as Next, never as working
   assert.match(text, /expert/i);
   assert.doesNotMatch(text, /(live|available now)/i, "roadmap copy never claims it works today");
   assert.deepEqual(copyProblems(text), []);
+});
+
+// 2026-11-10: on a wide screen Start hiring and See how it works could not be pressed. The layer
+// that holds the card which slides over the hero covered them from the first frame.
+test("the layer that carries the sliding card lets presses through to the hero", () => {
+  assert.equal(PINNED_CARD_WRAP.pointerEvents, "none");
+  assert.equal(PINNED_CARD.pointerEvents, "auto", "the card itself can still be pressed");
+  const story = readFileSync(new URL("../../components/landing/WelcomeStory.tsx", import.meta.url), "utf8");
+  assert.match(story, /gsap.set("[data-card-wrap]", PINNED_CARD_WRAP)/);
+  assert.match(story, /gsap.set("[data-card]", PINNED_CARD)/);
+});
+
+// 2026-11-10: the welcome story had the mark and nothing else in its header, so the only way
+// into the app was to scroll to a button.
+test("the welcome story's header always offers the way into Hire", () => {
+  const nav = readFileSync(new URL("../../components/redesign/TopNav.tsx", import.meta.url), "utf8");
+  const bare = nav.slice(nav.indexOf("if (bare) return ("), nav.indexOf("return (
+    <>"));
+  assert.match(bare, /href="/"/);
+  assert.match(bare, /Start hiring/);
+});
+
+// 2026-11-10: the phone menu listed Sign out twice and the profile under it.
+test("the Agon phone menu lists Sign out once", () => {
+  const nav = readFileSync(new URL("../../components/redesign/TopNav.tsx", import.meta.url), "utf8");
+  const menu = nav.slice(nav.indexOf('id="agon-mobile-menu"'));
+  assert.equal(menu.split("isSignedIn && !isAgon ? (").length - 1, 2, "the legacy profile and sign out rows are not shown on Agon");
 });

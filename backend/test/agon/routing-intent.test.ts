@@ -66,3 +66,22 @@ test("code names the capability a request needs in the words listings use", asyn
   const forecast = await readIntent("Will this logo win the design award?", model, "m");
   assert.equal(forecast.kind, "forecast", "a chance question stays a forecast");
 });
+
+// 2026-11-10 rehearsal: "Look up the company Stripe" was read as office work and found nothing.
+// Looking something up is a web search, whatever the thing is.
+test("looking something up is a web search", () => {
+  assert.deepEqual(capabilityOf("Look up the company Stripe"), { kind: "research", words: "web search" });
+  assert.deepEqual(capabilityOf("Who founded Anthropic?"), { kind: "research", words: "web search" });
+  assert.deepEqual(capabilityOf("Tell me about solid-state batteries"), { kind: "research", words: "web search" });
+  assert.equal(capabilityOf("Send an SMS to my team"), null);
+  assert.deepEqual(capabilityOf("Look up a logo for my shop"), { kind: "content", words: "image generate" }, "something to make wins over looking up");
+});
+
+test("a lookup the model placed in a data category stays there; office work or unsure becomes a web search", async () => {
+  const says = (kind: string) => async () => ({ text: `{"kind":"${kind}","query":"lookup","values":{}}` });
+  assert.equal((await readIntent("Look up the price of ETH", says("market_data"), "m")).kind, "market_data");
+  const company = await readIntent("Look up the company Stripe", says("business"), "m");
+  assert.equal(company.kind, "research");
+  assert.match(company.query, /web search/);
+  assert.equal((await readIntent("Who founded Anthropic?", says("other"), "m")).kind, "research");
+});

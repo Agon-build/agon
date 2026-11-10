@@ -7,8 +7,8 @@ import { Footer } from "@/components/redesign/Footer";
 import { TagButton } from "@/components/redesign/TagButton";
 import { presentListing } from "@/lib/agon/catalog";
 import { inspectManifest, listListings } from "@/lib/agon/client";
-import { markWelcomeSeen } from "@/lib/agon/intro-cards";
-import { landingFacts, landingMotion, topRow, WELCOME_NEXT, type LandingFacts } from "@/lib/agon/landing";
+import { markEntered } from "@/lib/agon/intro-cards";
+import { landingFacts, landingMotion, PINNED_CARD, PINNED_CARD_WRAP, topRow, WELCOME_NEXT, type LandingFacts } from "@/lib/agon/landing";
 import { getBoard, type Board } from "@/lib/agon/scores-api";
 import { getCategories, getSeason } from "@/lib/agon/stage";
 import type { HireCategory, SeasonInfo } from "@/lib/agon/stage-types";
@@ -81,7 +81,8 @@ function useStoryMotion(root: React.RefObject<HTMLDivElement | null>) {
       const ctx = gsap.context(() => {
         const wide = window.matchMedia("(min-width: 1024px)").matches;
         if (wide) {
-          gsap.set("[data-card-wrap]", { position: "absolute", left: 0, right: 0, top: 0, height: "100vh", display: "flex", alignItems: "center", paddingBottom: 0 });
+          gsap.set("[data-card-wrap]", PINNED_CARD_WRAP);
+          gsap.set("[data-card]", PINNED_CARD);
           const tl = gsap.timeline({ scrollTrigger: { trigger: "[data-pin]", start: "top top", end: "+=140%", scrub: true, pin: true } });
           tl.to("[data-hero]", { opacity: 0.15, filter: "blur(6px)", scale: 0.96, ease: "none" }, 0)
             .fromTo("[data-card]", { y: () => window.innerHeight, scale: 0.86 }, { y: 0, scale: 1, ease: "none" }, 0);
@@ -113,7 +114,7 @@ export function WelcomeStory() {
   const root = useRef<HTMLDivElement>(null);
   const facts = useLandingFacts();
   // Start hiring opens Hire, not the intro whose Enter brought the person here.
-  useEffect(() => markWelcomeSeen(), []);
+  useEffect(() => markEntered(), []);
   useStoryMotion(root);
   useReveal(root);
   const top = facts?.topAgent ?? null;

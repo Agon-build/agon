@@ -1,7 +1,8 @@
+import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { INTRO_CARDS, INTRO_CARD_MS, introKeyAction, introStartPhase, introStep, type IntroState } from "./intro-cards.ts";
+import { INTRO_CARDS, INTRO_CARD_MS, introKeyAction, introStartPhase, introStep, type IntroState, markEntered, readEntered } from "./intro-cards.ts";
 import { copyProblems } from "./docs-content.ts";
 
 test("seven cards, each labelled by what is true today (capabilities.md)", () => {
@@ -53,15 +54,29 @@ test("Enter leaves the intro unless focus is on one of its controls; arrows alwa
   assert.equal(introKeyAction("a", false), null);
 });
 
-test("the intro plays on every visit to agon.surf, once per page load, never over a resumed job", () => {
-  assert.equal(introStartPhase({ shownThisLoad: false, forced: false, resumingJob: false }), "show", "every visit opens with the intro");
-  assert.equal(introStartPhase({ shownThisLoad: true, forced: false, resumingJob: false }), "skip", "moving back to Hire inside the app does not replay it");
-  assert.equal(introStartPhase({ shownThisLoad: false, forced: false, resumingJob: true }), "skip", "a paid job reopens straight to its progress");
-  assert.equal(introStartPhase({ shownThisLoad: true, forced: true, resumingJob: true }), "show", "?intro=1 always shows it");
+// 2026-11-10: the intro played again whenever Hire was opened after a reload or a sign-in,
+// and its Enter led away from Hire. It now plays once in a browser session, on a first visit to Hire.
+test("the intro plays once in a browser session, never over a resumed job", () => {
+  assert.equal(introStartPhase({ entered: false, forced: false, resumingJob: false }), "show", "a first visit opens with the intro");
+  assert.equal(introStartPhase({ entered: true, forced: false, resumingJob: false }), "skip", "after that, Hire opens as Hire");
+  assert.equal(introStartPhase({ entered: false, forced: false, resumingJob: true }), "skip", "a paid job reopens straight to its progress");
+  assert.equal(introStartPhase({ entered: true, forced: true, resumingJob: true }), "show", "?intro=1 always shows it");
 });
 
-// 2026-11-09: Start hiring on /welcome opened Hire, the intro played again, and its Enter went back to /welcome.
-test("arriving from the welcome story opens Hire, not the intro again", () => {
-  assert.equal(introStartPhase({ shownThisLoad: false, seenWelcome: true, forced: false, resumingJob: false }), "skip");
-  assert.equal(introStartPhase({ shownThisLoad: false, seenWelcome: true, forced: true, resumingJob: false }), "show", "?intro=1 still shows it");
+test("having entered Agon is remembered for the browser session, through a reload", () => {
+  const kept = new Map<string, string>();
+  const store = { getItem: (k: string) => kept.get(k) ?? null, setItem: (k: string, v: string) => { kept.set(k, v); } };
+  assert.equal(readEntered(store), false);
+  markEntered(store);
+  assert.equal(readEntered(store), true, "a reload reads it back from the session");
+  const blocked = { getItem: () => { throw new Error("blocked"); }, setItem: () => { throw new Error("blocked"); } };
+  assert.doesNotThrow(() => markEntered(blocked));
+  assert.equal(readEntered(blocked), false, "storage that cannot be read means not entered");
+});
+
+test("any Agon page, the welcome story and the intro itself all count as having entered", () => {
+  const read = (p: string) => readFileSync(new URL(p, import.meta.url), "utf8");
+  assert.match(read("../../components/redesign/TopNav.tsx"), /markEntered()/);
+  assert.match(read("../../components/landing/WelcomeStory.tsx"), /markEntered()/);
+  assert.match(read("../../components/agon/IntroGate.tsx"), /markEntered()/);
 });

@@ -49,21 +49,32 @@ export function introKeyAction(key: string, onInteractiveControl: boolean): "nex
   return null;
 }
 
-/// Every visit to agon.surf opens with the intro, once per page load: moving
-/// back to Hire inside the app does not replay it, and a paid job reopens
-/// straight to its progress. Coming from the welcome story, which the intro's
-/// Enter opens, goes straight to Hire. ?intro=1 always shows it.
-export function introStartPhase(input: { shownThisLoad: boolean; seenWelcome?: boolean; forced: boolean; resumingJob: boolean }): "show" | "skip" {
+/// The intro plays once in a browser session, on a first visit to Hire. A reload, a
+/// sign-in round trip or moving back to Hire inside the app opens Hire itself, and a
+/// paid job reopens straight to its progress. ?intro=1 always shows it.
+export function introStartPhase(input: { entered: boolean; forced: boolean; resumingJob: boolean }): "show" | "skip" {
   if (input.forced) return "show";
-  if (input.resumingJob || input.shownThisLoad || input.seenWelcome) return "skip";
-  return "show";
+  return input.resumingJob || input.entered ? "skip" : "show";
 }
 
-/// Set when the welcome story opens; lives for one page load, like the intro.
-let welcomeSeen = false;
-export function markWelcomeSeen(): void {
-  welcomeSeen = true;
+type SessionStore = Pick<Storage, "getItem" | "setItem">;
+const ENTERED_KEY = "agon.entered";
+let entered = false;
+
+function session(): SessionStore | null {
+  try { return typeof window === "undefined" ? null : window.sessionStorage; } catch { return null; }
 }
-export function welcomeSeenThisLoad(): boolean {
-  return welcomeSeen;
+
+/// Called by the intro, the welcome story and every Agon page: the person is in.
+export function markEntered(store: SessionStore | null = session()): void {
+  entered = true;
+  try { store?.setItem(ENTERED_KEY, "1"); } catch { /* storage is blocked: this page load still remembers */ }
+}
+
+export function readEntered(store: SessionStore | null = session()): boolean {
+  try { return store?.getItem(ENTERED_KEY) === "1"; } catch { return false; }
+}
+
+export function enteredThisSession(): boolean {
+  return entered || readEntered();
 }

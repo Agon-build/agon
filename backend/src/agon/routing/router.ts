@@ -46,6 +46,8 @@ const ROUTE_TTL_MS = 15 * 60_000;
 /// Room kept in the wallet for the gas that sends Agon's fee (a token transfer on Arc costs about 0.0013 USDC at the 20 Gwei floor).
 export const FEE_GAS_RESERVE = 5_000n;
 const DOWNRANK_MS = 24 * 60 * 60_000;
+/// How long a service that did not answer stays off the choices before it is checked again.
+const SILENT_MS = 5 * 60_000;
 const ROUTES_PER_OWNER = 20;
 const MAX_ROUTES = 5_000;
 /// A category this small goes to the fit check whole; a larger one is narrowed by shared words first.
@@ -80,6 +82,8 @@ export function createRouter(deps: {
   directEntry?: (reference: string) => Promise<CatalogEntry | null>;
   /** The open Polymarket market a request is about, found on Polymarket itself; null when none matches. */
   findMarket?: (text: string) => Promise<{ ref: string; question: string } | null>;
+  /** Whether a service answers an unpaid call now. Unset means no check is made. */
+  alive?: (entry: CatalogEntry) => Promise<boolean>;
   /** The Lead as a choice in Prediction markets; choosing it runs leadAsk. */
   leadEntry?: () => Promise<CatalogEntry | null>;
   now?: () => Date;
@@ -103,6 +107,21 @@ export function createRouter(deps: {
     return unpayable.size === 0 ? list : list.filter((e) => !unpayable.has(e.reference));
   };
 
+  // Services that did not answer: Agon's unpaid check before offering them, or a quote.
+  // They leave the choices for a few minutes, then are checked again.
+  const silent = new Map<string, number>();
+  const answering = async (list: CatalogEntry[]): Promise<CatalogEntry[]> => {
+    const t = now().getTime();
+    for (const [ref, until] of silent) if (until <= t) silent.delete(ref);
+    const known = list.filter((e) => !silent.has(e.reference));
+    if (!deps.alive || known.length === 0) return known;
+    const ups = await Promise.all(known.map((e) => deps.alive!(e).catch(() => true)));
+    // Nothing answered at all: the fault is more likely Agon's own connection than every service at once.
+    if (known.length > 1 && ups.every((up) => !up)) return known;
+    known.forEach((e, i) => { if (!ups[i]) silent.set(e.reference, t + SILENT_MS); });
+    return known.filter((_, i) => ups[i]);
+  };
+
   // Each owner keeps their newest routes; expired ones go first, and a full map
   // drops its oldest entries rather than everyone's.
   const keepRoom = (ownerRef: string) => {
@@ -121,11 +140,26 @@ export function createRouter(deps: {
     async route(ownerRef: string, text: string, opts: { quoteLead?: boolean; choices?: boolean; category?: HireCategoryId } = {}): Promise<RouteResult> {
       const intent = await deps.readIntent(text);
       if (opts.choices) {
-        const category = opts.category ?? categoryForKind(intent.kind);
+        const first = opts.category ?? categoryForKind(intent.kind);
+        let category = first;
+        let found = await choicesIn(category);
+        // The request's own category holds nothing that does it: research (a web search can look
+        // most things up) is tried once before Agon says nothing fits. A category the person chose stays.
+        const empty = (g: Groups) => g.ranked.length + g.fresh.length + g.outside.length === 0;
+        if (empty(found.groups) && !opts.category && first !== "research") {
+          const wider = await choicesIn("research");
+          if (!empty(wider.groups)) { category = "research"; found = wider; }
+        }
+        const { groups, lead } = found;
+        const routeId = (deps.newId ?? randomUUID)();
+        keepRoom(ownerRef);
+        routes.set(routeId, { ownerRef, text, intent, entries: [...groups.ranked, ...groups.fresh, ...groups.outside], expiresAt: now().getTime() + ROUTE_TTL_MS, ...(lead ? { lead: lead.reference } : {}) });
+        return { kind: "choices", routeId, category, groups, sources: deps.sources.map((s) => ({ id: s.id, status: s.status() })) };
+      }
+      async function choicesIn(category: HireCategoryId): Promise<{ groups: Groups; lead: CatalogEntry | null }> {
         const cat = hireCategory(category);
         const query = { words: wordsOf(`${intent.query} ${text}`), agonCategories: [...cat.agonCategories], circleCategories: [...cat.circleCategories] };
         const found = await Promise.all(deps.sources.map((s) => s.search(query).catch(() => [] as CatalogEntry[])));
-        const sources = deps.sources.map((s) => ({ id: s.id, status: s.status() }));
         const lead = category === "prediction" && deps.leadEntry ? await deps.leadEntry().catch(() => null) : null;
         // Every service held in a small category reaches the fit check, shared words or not:
         // a listing rarely uses the person's words (an image service never says "logo").
@@ -134,26 +168,24 @@ export function createRouter(deps: {
         const pool = whole.length <= CATEGORY_POOL_MAX ? whole : whole.filter((e) => e.source === "agon");
         const seen = new Set<string>();
         const candidates = [...found.flat(), ...pool].filter((e) => (seen.has(e.reference) ? false : (seen.add(e.reference), true)));
-        const list = shortlist(payable(candidates), intent, text, new Set(pool.map((e) => e.reference)));
-        const fitted = deps.judge ? await deps.judge(text, list).catch(() => null) : null;
+        const listed = shortlist(payable(candidates), intent, text, new Set(pool.map((e) => e.reference)));
+        // The fit check and the unpaid calls run side by side, so checking costs no extra wait.
+        const [fitted, list] = await Promise.all([deps.judge ? deps.judge(text, listed).catch(() => null) : null, answering(listed)]);
         const groups = groupCandidates(lead ? [lead, ...list] : list, intent, {
           feeBps: deps.feeBps, feeMin: deps.feeMin, downranked: downranked(), feeBpsFor: (e) => (deps.feeAddress[e.network] ? deps.feeBps : 0), fitted, category,
           // A forecast always offers the Lead; a market check always offers Agon's own market agents,
           // because the fit model can drop them for a market it was not shown.
           always: intent.kind === "forecast" ? (lead ? [lead.reference] : []) : intent.kind === "analysis" && category === "prediction" ? list.filter((e) => e.source === "agon").map((e) => e.reference) : [],
         });
-        const routeId = (deps.newId ?? randomUUID)();
-        keepRoom(ownerRef);
-        routes.set(routeId, { ownerRef, text, intent, entries: [...groups.ranked, ...groups.fresh, ...groups.outside], expiresAt: now().getTime() + ROUTE_TTL_MS, ...(lead ? { lead: lead.reference } : {}) });
-        return { kind: "choices", routeId, category, groups, sources };
+        return { groups, lead };
       }
       if (intent.kind === "forecast") return opts.quoteLead === false ? { kind: "lead" } : { kind: "lead", ask: await deps.leadAsk(ownerRef, text) };
       // Every category is searched: a request read as research may be served by a finance service.
       const query = { words: wordsOf(`${intent.query} ${text}`), agonCategories: ALL_AGON, circleCategories: ALL_CIRCLE };
       const found = await Promise.all(deps.sources.map((s) => s.search(query).catch(() => [] as CatalogEntry[])));
       const sources = deps.sources.map((s) => ({ id: s.id, status: s.status() }));
-      const list = shortlist(payable(found.flat()), intent, text);
-      const fitted = deps.judge ? await deps.judge(text, list).catch(() => null) : null;
+      const listed = shortlist(payable(found.flat()), intent, text);
+      const [fitted, list] = await Promise.all([deps.judge ? deps.judge(text, listed).catch(() => null) : null, answering(listed)]);
       const ranked = rankCandidates(list, intent, { feeBps: deps.feeBps, feeMin: deps.feeMin, downranked: downranked(), feeBpsFor: (e) => (deps.feeAddress[e.network] ? deps.feeBps : 0), fitted });
       if (!ranked.pick) return { kind: "none", sources };
       const routeId = (deps.newId ?? randomUUID)();
@@ -276,6 +308,7 @@ export function createRouter(deps: {
         }
         if (quoted.code === "provider_unreachable") {
           const refused = /^status 4\d\d$/.test(quoted.detail ?? "");
+          if (!refused) silent.set(entry.reference, now().getTime() + SILENT_MS);
           return { ok: false, code: refused ? "service_refused" : "service_unreachable", ...(quoted.detail ? { detail: quoted.detail } : {}) };
         }
         return { ok: false, code: quoted.code, ...(quoted.detail ? { detail: quoted.detail } : {}) };

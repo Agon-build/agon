@@ -31,7 +31,11 @@ const MARKET_CHECK = /\b(worth (trading|it|betting|a bet)|trad(e|ing) it|tradeab
 const CAPABILITIES: { pattern: RegExp; words: string; kind: IntentKind }[] = [
   { pattern: /\b(video|clip|animation|reel|trailer)s?\b/i, words: "video generate", kind: "content" },
   { pattern: /\b(logo|poster|banner|flyer|illustration|icon|artwork|drawing|thumbnail|wallpaper|avatar|mascot|sticker|picture|image|photo)s?\b/i, words: "image generate", kind: "content" },
+  // Looking something up is a web search, whatever the thing is. No company data service is payable on Arc (2026-11-10).
+  { pattern: /\b(look(ing)? up|who (is|are|was|owns|founded|runs)|tell me about|find (out|information|info) (about|on)|background on)\b/i, words: "web search", kind: "research" },
 ];
+/// A lookup yields to the model when it placed the request with a kind of data (a price, a market, a post).
+const YIELDS: ReadonlySet<IntentKind> = new Set(["business", "other", "research"]);
 
 export function capabilityOf(text: string): { kind: IntentKind; words: string } | null {
   const hit = CAPABILITIES.find((c) => c.pattern.test(text));
@@ -55,7 +59,8 @@ export async function readIntent(text: string, callModel: ModelCaller, model: st
   if (kind) return { ...read, kind };
   // The capability joins the search words, so the service is found whatever words the model chose.
   const made = capabilityOf(text);
-  return made ? { ...read, kind: made.kind, query: `${read.query} ${made.words}` } : read;
+  if (!made || (made.kind === "research" && !YIELDS.has(read.kind))) return read;
+  return { ...read, kind: made.kind, query: `${read.query} ${made.words}` };
 }
 
 async function readWithModel(text: string, callModel: ModelCaller, model: string): Promise<Intent> {

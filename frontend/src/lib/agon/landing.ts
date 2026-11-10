@@ -64,6 +64,11 @@ export function landingMotion(motionAllowed: boolean): "scroll" | "static" {
 }
 
 /// Where Enter Agon on the intro goes.
+/// On a wide screen the card slides up over the hero inside a layer that covers it. The layer
+/// lets presses through, so the hero's buttons work; the card itself still takes them.
+export const PINNED_CARD_WRAP = { position: "absolute", left: 0, right: 0, top: 0, height: "100vh", display: "flex", alignItems: "center", paddingBottom: 0, pointerEvents: "none" } as const;
+export const PINNED_CARD = { pointerEvents: "auto" } as const;
+
 export function introDestination(): "/welcome" {
   return "/welcome";
 }

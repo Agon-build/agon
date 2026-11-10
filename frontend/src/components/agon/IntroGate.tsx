@@ -4,16 +4,12 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { AgonIntro } from "@/components/agon/AgonIntro";
-import { introStartPhase, welcomeSeenThisLoad } from "@/lib/agon/intro-cards";
+import { enteredThisSession, introStartPhase, markEntered } from "@/lib/agon/intro-cards";
 import { introDestination } from "@/lib/agon/landing";
 
 const STARTUP_HOLD_MS = 3000;
 
-/// Lives for one page load: a new visit to agon.surf starts it at false again,
-/// while moving back to Hire inside the app keeps it.
-let shownThisLoad = false;
-
-/// The intro opens every visit to agon.surf over Hire. Enter leaves it at any time.
+/// The intro opens a first visit to Hire, once in a browser session. Enter leaves it at any time.
 export function IntroGate({ children }: { children: ReactNode }) {
   const params = useSearchParams();
   const router = useRouter();
@@ -28,8 +24,8 @@ export function IntroGate({ children }: { children: ReactNode }) {
   useLayoutEffect(() => {
     if (decided.current) return;
     decided.current = true;
-    if (introStartPhase({ shownThisLoad, seenWelcome: welcomeSeenThisLoad(), forced, resumingJob }) === "skip") { setPhase("hidden"); return; }
-    shownThisLoad = true;
+    if (introStartPhase({ entered: enteredThisSession(), forced, resumingJob }) === "skip") { setPhase("hidden"); return; }
+    markEntered();
     setPhase("visible");
   }, [forced, resumingJob]);
 

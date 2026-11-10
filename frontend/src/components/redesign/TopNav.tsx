@@ -12,6 +12,7 @@ import { WalletBalanceChip } from "@/components/redesign/WalletBalanceChip";
 import { ArcRunMark } from "@/components/redesign/ArcRunMark";
 import { AgonMark } from "@/components/redesign/AgonMark";
 import { logoDestination } from "@/lib/agon/landing";
+import { markEntered } from "@/lib/agon/intro-cards";
 import { NotificationBell } from "@/components/redesign/NotificationBell";
 import { LiveMissionBanner } from "@/components/redesign/LiveMissionBanner";
 import { ThemeToggle } from "@/components/redesign/ThemeToggle";
@@ -73,12 +74,18 @@ export function TopNav({ hideSignOut = false, bare = false }: { hideSignOut?: bo
     setOpen(false);
   }, [pathname]);
 
+  // Any Agon page counts as having entered, so Hire opens as Hire from here on.
+  useEffect(() => {
+    if (!bare && isAgon) markEntered();
+  }, [bare, isAgon]);
+
   if (bare) return (
     <header className="sticky top-0 z-20 border-b border-[color:var(--hairline)] bg-canvas">
-      <div className="mx-auto flex h-16 max-w-[1600px] items-center px-3 sm:px-6">
+      <div className="mx-auto flex h-16 max-w-[1600px] items-center justify-between gap-3 px-3 sm:px-6">
         <Link href={logoDestination(isAgon)} className="inline-flex min-w-0 shrink-0 items-center text-ink" aria-label="Agon home">
           {isAgon ? <AgonMark /> : <ArcRunMark />}
         </Link>
+        <Link href="/" className="inline-flex min-h-11 items-center bg-accent px-4 font-mono text-[11px] uppercase tracking-[0.12em] text-accent-ink transition-colors duration-120 hover:bg-accent-press">Start hiring</Link>
       </div>
     </header>
   );
@@ -172,12 +179,12 @@ export function TopNav({ hideSignOut = false, bare = false }: { hideSignOut?: bo
             })}
             {isAgon && isSignedIn ? <button type="button" onClick={async () => { await signOut(); disconnect(); }} className="inline-flex min-h-11 items-center py-3 text-left font-mono text-[12px] uppercase tracking-[0.16em] text-ink-3">Sign out</button> : null}
             {isAgon ? <Link className="inline-flex min-h-11 items-center py-3 font-mono text-[12px] uppercase tracking-[0.16em] text-ink-3" href="/support">Help</Link> : null}
-            {isSignedIn ? (
+            {isSignedIn && !isAgon ? (
               <div className="border-b border-[color:var(--hairline)] py-3 last:border-0">
                 <ProfileLink />
               </div>
             ) : null}
-            {isSignedIn ? (
+            {isSignedIn && !isAgon ? (
               <button
                 type="button"
                 onClick={async () => {

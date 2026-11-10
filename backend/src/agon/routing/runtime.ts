@@ -8,6 +8,7 @@ import type { ModelCaller } from "../playground/seasons/house-agents.ts";
 import { parseUsdc } from "../stage/money.ts";
 import type { AskResult } from "../stage/services.ts";
 import { createAgonSource, type AgonListingLite } from "./agon-source.ts";
+import { createLiveness } from "./alive.ts";
 import type { Proof } from "./catalog.ts";
 import { createCircleSource } from "./circle-source.ts";
 import { fillInput } from "./fill-input.ts";
@@ -83,6 +84,7 @@ export function startRouting(deps: {
   });
   const circle = createCircleSource();
   const findLiveMarket = createMarketFinder();
+  const safeDestination = (url: string) => assertPublicHttpsDestination(url).then(() => true, () => false);
   if (deps.startLoops !== false) {
     void circle.refresh();
     setInterval(() => { void circle.refresh(); }, 60 * 60_000).unref();
@@ -104,7 +106,8 @@ export function startRouting(deps: {
     newWalletAllowed: deps.newWalletAllowed,
     directEntry: (reference) => agon.entryFor(reference),
     leadEntry: () => agon.leadEntry(),
-    safeDestination: (url) => assertPublicHttpsDestination(url).then(() => true, () => false),
+    safeDestination,
+    alive: createLiveness({ safe: safeDestination }),
   });
 }
 

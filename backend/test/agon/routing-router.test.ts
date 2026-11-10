@@ -33,7 +33,7 @@ function fakeRuntime(network: "arc-testnet" | "arc", calls: string[], opts: { am
   };
 }
 
-function setup(opts: { fill?: Parameters<typeof createRouter>[0]["fill"]; findMarket?: (text: string) => Promise<{ ref: string; question: string } | null>; judge?: (text: string, list: CatalogEntry[]) => Promise<string[] | null>; kind?: Intent["kind"]; outside?: boolean; entries?: CatalogEntry[]; circleStatus?: "ok" | "unavailable"; quoteAmount?: bigint; quoteFail?: string; quoteCode?: string } = {}) {
+function setup(opts: { fill?: Parameters<typeof createRouter>[0]["fill"]; findMarket?: (text: string) => Promise<{ ref: string; question: string } | null>; judge?: (text: string, list: CatalogEntry[]) => Promise<string[] | null>; kind?: Intent["kind"]; outside?: boolean; entries?: CatalogEntry[]; circleStatus?: "ok" | "unavailable"; quoteAmount?: bigint; quoteFail?: string; quoteCode?: string; alive?: (e: CatalogEntry) => Promise<boolean> } = {}) {
   const calls: string[] = [];
   const store = new MemoryPaymentsStore();
   const src = (id: "agon" | "circle", rows: CatalogEntry[], status: "ok" | "unavailable" = "ok"): RouteSource => ({ id, status: () => status, search: async () => rows.filter((r) => r.source === id), all: async () => rows.filter((r) => r.source === id) });
@@ -45,6 +45,7 @@ function setup(opts: { fill?: Parameters<typeof createRouter>[0]["fill"]; findMa
     ...(opts.judge ? { judge: opts.judge } : {}),
     fill: opts.fill ?? (async (e) => (e.source === "circle" ? { ok: true as const, input: { symbol: "AAPL" } } : { ok: true as const, input: { market: "arsenal" } })),
     ...(opts.findMarket ? { findMarket: opts.findMarket } : {}),
+    ...(opts.alive ? { alive: opts.alive } : {}),
     feeBps: 150,
     feeAddress: { "arc-testnet": `0x${"fe".repeat(20)}` as Address, arc: `0x${"ef".repeat(20)}` as Address },
     leadAsk: async () => { calls.push("lead"); return { ok: false, code: "invalid_question" }; },
@@ -426,4 +427,51 @@ test("a market link the person typed or answered with is used as it is; no live 
   const q3 = await missing.router.quote("op:x", r2.routeId, "agon:scout", { market: "will-bitcoin-reach-150k" });
   assert.ok(q3.ok && "input" in q3);
   assert.deepEqual(q3.input, { market: "will-bitcoin-reach-150k" });
+});
+
+// 2026-11-10: Agon offered services without knowing whether they were up. It now calls each
+// one unpaid before listing it, and offers only those that answered.
+test("a service that does not answer Agon's check is left out of the choices", async () => {
+  const { router } = setup({ kind: "content", entries: [IMAGES, CHAT], judge: async () => ["circle:images", "circle:chat"], alive: async (e) => e.reference !== "circle:images" });
+  const out = await router.route("op:x", "generate images and chat", { choices: true, category: "developer" });
+  assert.ok(out.kind === "choices");
+  assert.deepEqual(out.groups.outside.map((c) => c.reference), ["circle:chat"]);
+});
+
+test("when nothing answers the check, the fault is taken to be Agon's own and every service stays", async () => {
+  const { router } = setup({ kind: "content", entries: [IMAGES, CHAT], judge: async () => ["circle:images", "circle:chat"], alive: async () => false });
+  const out = await router.route("op:x", "generate images and chat", { choices: true, category: "developer" });
+  assert.ok(out.kind === "choices");
+  assert.deepEqual(out.groups.outside.map((c) => c.reference).sort(), ["circle:chat", "circle:images"]);
+});
+
+test("a service that could not be reached for a quote is left out of the next choices", async () => {
+  const { router } = setup({ kind: "content", entries: [IMAGES, CHAT], judge: async () => ["circle:images", "circle:chat"], quoteFail: "fetch failed" });
+  const first = await router.route("op:x", "generate images and chat", { choices: true, category: "developer" });
+  assert.ok(first.kind === "choices");
+  assert.equal((await router.quote("op:x", first.routeId, "circle:images") as { code?: string }).code, "service_unreachable");
+  const next = await router.route("op:x", "generate images and chat", { choices: true, category: "developer" });
+  assert.ok(next.kind === "choices");
+  assert.deepEqual(next.groups.outside.map((c) => c.reference), ["circle:chat"]);
+});
+
+// 2026-11-10 rehearsal: "Look up the company Stripe" found nothing. No company data service is
+// payable on Arc, but a web search is, and it sat in another category.
+const SEARCH = entry({ source: "circle", reference: "circle:search", name: "Search the web with Exa", provider: "Exa", category: "WEB_SEARCH_RESEARCH", description: "Search the web with Exa and return ranked results.", url: "https://search.example/search", price: 7_000n, payTo: CIRCLE_PAY, network: "arc", rating: { tier: "unrated", score: null } });
+const PHONE = entry({ source: "circle", reference: "circle:phone", name: "Phone carrier lookup", provider: "BlockRun", category: "COMMUNICATION", description: "Carrier and line type for a phone number.", url: "https://phone.example/lookup", price: 11_000n, payTo: CIRCLE_PAY, network: "arc", rating: { tier: "unrated", score: null } });
+
+test("a request its own category cannot serve is tried in research before Agon says nothing fits", async () => {
+  const { router } = setup({ kind: "business", entries: [SEARCH, PHONE], judge: async (_t, list) => list.filter((e) => e.reference === "circle:search").map((e) => e.reference) });
+  const out = await router.route("op:x", "Tell me about Stripe, the payments firm", { choices: true });
+  assert.ok(out.kind === "choices");
+  assert.equal(out.category, "research");
+  assert.deepEqual(out.groups.outside.map((c) => c.reference), ["circle:search"]);
+});
+
+test("a category the person chose themselves is not swapped for another", async () => {
+  const { router } = setup({ kind: "business", entries: [SEARCH, PHONE], judge: async (_t, list) => list.filter((e) => e.reference === "circle:search").map((e) => e.reference) });
+  const out = await router.route("op:x", "Tell me about Stripe, the payments firm", { choices: true, category: "business" });
+  assert.ok(out.kind === "choices");
+  assert.equal(out.category, "business");
+  assert.deepEqual(out.groups.outside, []);
 });
