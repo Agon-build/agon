@@ -34,6 +34,7 @@ import { PostgresRatingsStore } from "../agon/ratings/store.ts";
 import { approvalsByNetwork, startRouting, type ListingView } from "../agon/routing/runtime.ts";
 import type { Proof, ProofPart } from "../agon/routing/catalog.ts";
 import type { Router } from "../agon/routing/router.ts";
+import { createEventReader } from "../agon/routing/live-market.ts";
 import { PostgresChannelStore } from "../agon/channels/store.ts";
 import { createApprovalRoutes } from "../agon/stage/approval-routes.ts";
 import { createAppRoutes } from "../agon/stage/app-routes.ts";
@@ -898,6 +899,7 @@ if (agonPayments) {
     leadPrice: async () => agonPayments.settings.leadPrice,
     fee: { bps: agonPayments.settings.routingFeeBps, address: agonPayments.settings.feeAddress },
     newWalletAllowed,
+    readEvent: createEventReader(),
     now: () => new Date(),
   });
   const outsideServices = outsideRuntime

@@ -6,13 +6,13 @@ import { keywordIntent, parseCodeIntent } from "../../src/agon/channels/chat/int
 import type { ChatReply } from "../../src/agon/channels/chat/types.ts";
 import { hashChatUser, telegramOwnerRef } from "../../src/agon/stage/settings.ts";
 import { MemoryChannelStore } from "./channel-memory-store.ts";
-import { QUESTION, stageWorld } from "./stage-test-world.ts";
+import { QUESTION, TRUMP_EVENT, TRUMP_GROUP, TRUMP_WHICH, stageWorld } from "./stage-test-world.ts";
 
 const PEPPER = "p".repeat(40);
 const USER = "4242";
 
-function setup(opts: { off?: boolean; acceptTerms?: boolean; limit?: (key: string) => boolean; router?: ConversationDeps["router"]; outside?: ConversationDeps["outside"] } = {}) {
-  const world = stageWorld();
+function setup(opts: { off?: boolean; acceptTerms?: boolean; limit?: (key: string) => boolean; router?: ConversationDeps["router"]; outside?: ConversationDeps["outside"]; readEvent?: NonNullable<Parameters<typeof stageWorld>[0]>["readEvent"] } = {}) {
+  const world = stageWorld(opts.readEvent ? { readEvent: opts.readEvent } : {});
   const channels = new MemoryChannelStore();
   const sent: { id: number; reply: ChatReply }[] = [];
   const edits: { id: number; reply: ChatReply }[] = [];
@@ -270,4 +270,12 @@ test("a refunded forecast reads as plain words, never as the raw result", async 
   const text = s.last().text;
   assert.match(text, /^No forecast this time: Polymarket has no open market that matches this question\. Your payment was refunded\./);
   assert.doesNotMatch(text, /"ok"|Done\. The answer/);
+});
+
+// 2026-11-10: a whole Polymarket event link in chat now asks which market instead of quoting a guess.
+test("a forecast with an event link of several markets asks which market and quotes nothing", async () => {
+  const s = await accepted({ readEvent: async () => TRUMP_GROUP });
+  await s.say(`Will someone leave? ${TRUMP_EVENT}`);
+  assert.equal(s.last().text, `${TRUMP_WHICH} Send your question again with that included.`);
+  assert.equal(s.store.jobs.size, 0);
 });

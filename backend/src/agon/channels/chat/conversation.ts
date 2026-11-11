@@ -380,6 +380,10 @@ async function sendLeadQuote(deps: ConversationDeps, s: StageServices, ownerRef:
     });
     return;
   }
+  if (quote.code === "which_market" && quote.detail) {
+    await deps.reply.send({ text: `${quote.detail} Send your question again with that included.` });
+    return;
+  }
   const reasons: Record<string, string> = {
     over_your_max: `This costs ${formatUsdc(quote.amount ?? 0n)} USDC in total, more than the maximum you gave.`,
     invalid_question: "Ask a full question, between 8 and 300 characters.",

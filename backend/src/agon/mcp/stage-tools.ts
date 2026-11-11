@@ -142,6 +142,7 @@ export function registerStageTools(server: McpServer, authInfo: () => AuthInfo |
       return failure("terms_required", `The account owner must accept Agon's agent wallet terms once in the browser at ${deps.services.siteUrl} (Hire page) before an agent can hire.`);
     }
     const asked = askJson(await deps.services.ask(operatorOwnerRef(who), { question: input.data.question, ...(maxPrice !== undefined ? { maxPrice } : {}) }));
+    if (!asked.ok && asked.code === "which_market") return result({ ...asked, nextStep: "Ask the user which market they mean, then call hire_service again with that market named in the question." });
     if (!asked.ok) return result(asked);
     const nextStep = asked.step === "confirm_code"
       ? "Show the user the price. When they agree, call confirm_hire with jobId and code (needs the wallet:execute capability)."

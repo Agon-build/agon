@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Address } from "viem";
 
-import { QUESTION, SITE, stageWorld } from "./stage-test-world.ts";
+import { QUESTION, SITE, TRUMP_EVENT, TRUMP_GROUP, TRUMP_WHICH, stageWorld } from "./stage-test-world.ts";
 import { show } from "./x402-test-helpers.ts";
 
 const OWNER = `op:0x${"1".repeat(40)}`;
@@ -187,4 +187,22 @@ test("minor: the person's maximum is checked against the total with Agon's fee",
   const { services } = stageWorld({ fee: { bps: 150, address: `0x${"fe".repeat(20)}` as Address } });
   const out = await services.ask(OWNER, { question: QUESTION, maxPrice: 302_000n });
   assert.deepEqual(out, { ok: false, code: "over_your_max", amount: 304_500n });
+});
+
+// 2026-11-10 production: MCP and Telegram Lead hires passed a whole Polymarket event link to the Lead,
+// which then could not tell which of its markets to forecast.
+test("a Lead question with an event link of several markets asks which one before any quote", async () => {
+  const { services, store } = stageWorld({ readEvent: async () => TRUMP_GROUP });
+  assert.deepEqual(await services.ask(OWNER, { question: TRUMP_EVENT }), { ok: false, code: "which_market", detail: TRUMP_WHICH });
+  assert.equal(store.jobs.size, 0);
+});
+
+test("a Lead question that names the market, or an event of one market, is quoted on that market", async () => {
+  const { services, store } = stageWorld({ readEvent: async (slug) => (slug === "fed" ? { title: "Fed", markets: [TRUMP_GROUP.markets[1]!] } : TRUMP_GROUP) });
+  const named = await services.ask(OWNER, { question: `Will Hegseth leave? ${TRUMP_EVENT}` });
+  assert.ok(named.ok, show(named));
+  assert.equal((store.jobs.get(named.jobId)!.request as { body: { question: string } }).body.question, `Will Hegseth leave? ${TRUMP_EVENT}/will-pete-hegseth-leave`);
+  const single = await services.ask(OWNER, { question: "https://polymarket.com/event/fed" });
+  assert.ok(single.ok, show(single));
+  assert.equal((store.jobs.get(single.jobId)!.request as { body: { question: string } }).body.question, `${TRUMP_EVENT}/will-kash-patel-leave`);
 });

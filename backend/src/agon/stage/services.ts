@@ -7,6 +7,7 @@ import { budgetWalletRef } from "../payments/budget-wallets.ts";
 import { MAX_CODE_ATTEMPTS } from "../payments/limits.ts";
 import type { HireOutcome, ProviderRefusal } from "../payments/hire.ts";
 import { receiptTree, type ReceiptNode } from "../payments/jobs.ts";
+import { eventLinkIn, outcomeIn, outcomeQuestion, type EventMarkets } from "../routing/live-market.ts";
 import type { HireService } from "../payments/runtime.ts";
 import type { BudgetWallet, Job, JobState, PaymentsStore } from "../payments/types.ts";
 import type { LeaderboardRow } from "../playground/seasons/scoring.ts";
@@ -15,7 +16,7 @@ export type WalletView = {
   networkId: AgonNetworkId; network: string; testnet: boolean; explorer: string; address: Address; balance: bigint | null;
   perHireCap: bigint; dailyCap: bigint; spentToday: bigint; leftToday: bigint; frozen: boolean;
 };
-export type AskRefusal = "invalid_question" | "payments_off" | "frozen" | "over_your_max" | "insufficient_balance" | "provider_unreachable" | "no_matching_option" | "provider_free" | "busy" | "terms_changed" | ProviderRefusal;
+export type AskRefusal = "invalid_question" | "which_market" | "payments_off" | "frozen" | "over_your_max" | "insufficient_balance" | "provider_unreachable" | "no_matching_option" | "provider_free" | "busy" | "terms_changed" | ProviderRefusal;
 export type AskResult =
   | { ok: true; step: "confirm_code"; jobId: string; amount: bigint; fee: bigint; total: bigint; providerLabel: string; network: string; testnet: boolean; expiresAt: Date; code: string }
   | { ok: true; step: "approval_link"; jobId: string; amount: bigint; fee: bigint; total: bigint; providerLabel: string; network: string; testnet: boolean; expiresAt: Date; approvalUrl: string }
@@ -70,6 +71,8 @@ export type StageServiceDeps = {
   newWalletAllowed?: () => boolean;
   /** Agon routing fee on Lead hires: rate and where it goes. */
   fee?: { bps: number; address: Address | null };
+  /** A Polymarket event by its slug, with its open markets; null when it cannot be read. Unset means event links pass as typed. */
+  readEvent?: (slug: string) => Promise<EventMarkets | null>;
 };
 
 export const LEAD_LABEL = "Agon Lead Agent";
@@ -165,9 +168,22 @@ export function createStageServices(deps: StageServiceDeps): StageServices {
     async ask(ownerRef, input) {
       const question = input.question.trim();
       if (question.length < 8 || question.length > 300) return { ok: false, code: "invalid_question" };
+      // A whole Polymarket event is a group of markets: the Lead gets its one market or the one
+      // named, and with several and none named the person is asked which, before any quote.
+      let asked = question;
+      const found = deps.readEvent ? eventLinkIn(question) : null;
+      if (found) {
+        const event = await deps.readEvent!(found.slug).catch(() => null);
+        if (event && event.markets.length > 0) {
+          const one = event.markets.length === 1 ? event.markets[0]! : outcomeIn(event, question.replace(found.link, " "));
+          if (!one) return { ok: false, code: "which_market", detail: outcomeQuestion(event) };
+          asked = question.replace(found.link, one.ref);
+          if (asked.length > 300) asked = one.ref;
+        }
+      }
       // Each new owner costs a Circle wallet, so new wallets pass a global gate.
       if (deps.newWalletAllowed && !(await deps.store.getBudgetWallet(ownerRef, deps.network.id)) && !deps.newWalletAllowed()) return { ok: false, code: "busy" };
-      const quoted = await deps.hire.quoteHire({ ownerRef, providerUrl: deps.hire.leadProviderUrl, providerRef: LEAD_PROVIDER_REF, providerLabel: LEAD_LABEL, body: { question }, feeBps: deps.fee?.bps ?? 0, feeAddress: deps.fee?.address ?? null });
+      const quoted = await deps.hire.quoteHire({ ownerRef, providerUrl: deps.hire.leadProviderUrl, providerRef: LEAD_PROVIDER_REF, providerLabel: LEAD_LABEL, body: { question: asked }, feeBps: deps.fee?.bps ?? 0, feeAddress: deps.fee?.address ?? null });
       if (!quoted.ok) {
         if (quoted.code === "insufficient_balance") return { ok: false, code: quoted.code, amount: quoted.amount, depositAddress: quoted.depositAddress };
         return { ok: false, code: quoted.code, ...(quoted.detail ? { detail: quoted.detail } : {}) };

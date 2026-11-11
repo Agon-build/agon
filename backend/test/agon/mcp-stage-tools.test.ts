@@ -5,7 +5,7 @@ import { Hono } from "hono";
 import { createMcpAccessAdapter } from "../../src/agon/mcp/adapter.ts";
 import { createAgonNativeMcpHandler } from "../../src/agon/mcp/native-server.ts";
 import type { StageMcpDeps } from "../../src/agon/mcp/stage-tools.ts";
-import { QUESTION, stageWorld } from "./stage-test-world.ts";
+import { QUESTION, TRUMP_EVENT, TRUMP_GROUP, TRUMP_WHICH, stageWorld } from "./stage-test-world.ts";
 
 const ALICE = `0x${"1".repeat(40)}`;
 const access = createMcpAccessAdapter({
@@ -30,8 +30,7 @@ async function payload(res: Response): Promise<{ isError?: boolean; value: Recor
   return { isError: body.result.isError, value: JSON.parse(body.result.content[0]!.text) };
 }
 
-function setup(off = false, limit?: (key: string) => boolean, termsAccepted = true, router?: StageMcpDeps["router"]) {
-  const world = stageWorld();
+function setup(off = false, limit?: (key: string) => boolean, termsAccepted = true, router?: StageMcpDeps["router"], world = stageWorld()) {
   const seasonCalls: { path: string; body: unknown }[] = [];
   const season = new Hono();
   season.post("/1/entries", async (c) => {
@@ -220,4 +219,13 @@ test("the Lead agent is not described as hiring a best-rated forecaster while no
   const { handler } = setup();
   const { value } = await payload(await handler.fetch(rpc(1, "find_service", {})));
   assert.doesNotMatch(JSON.stringify(value), /best-rated/i);
+});
+
+// 2026-11-10 production: hire_service with ref agent:lead quoted a whole event link without asking which market.
+test("hire_service with an event link of several markets asks which market before quoting", async () => {
+  const { handler, store } = setup(false, undefined, true, undefined, stageWorld({ readEvent: async () => TRUMP_GROUP }));
+  const out = await payload(await handler.fetch(rpc(1, "hire_service", { ref: "agent:lead", question: TRUMP_EVENT }), auth(["agon:read"])));
+  assert.deepEqual([out.value.ok, out.value.code, out.value.detail], [false, "which_market", TRUMP_WHICH]);
+  assert.match(String(out.value.nextStep), /which market/i);
+  assert.equal(store.jobs.size, 0);
 });

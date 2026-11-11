@@ -8,6 +8,7 @@ import { exactPayment, type X402Paid } from "../../src/agon/payments/exact-selle
 import type { HireService } from "../../src/agon/payments/runtime.ts";
 import type { LeaderboardRow } from "../../src/agon/playground/seasons/scoring.ts";
 import { agonNetwork } from "../../src/agon/network.ts";
+import type { EventMarkets } from "../../src/agon/routing/live-market.ts";
 import { createStageServices } from "../../src/agon/stage/services.ts";
 import { MemoryPaymentsStore } from "./payments-memory-store.ts";
 import { BUYER_KEY, circleSignJson, fakeSettler } from "./x402-test-helpers.ts";
@@ -23,7 +24,7 @@ export const ATLAS_ROW: LeaderboardRow = {
 
 /// A stage stack over the in-memory store: real hire engine, real budget
 /// wallets and a lead agent endpoint that writes live events like the real one.
-export function stageWorld(opts: { price?: bigint; newWalletAllowed?: () => boolean; fee?: { bps: number; address: Address } } = {}) {
+export function stageWorld(opts: { price?: bigint; newWalletAllowed?: () => boolean; fee?: { bps: number; address: Address }; readEvent?: (slug: string) => Promise<EventMarkets | null> } = {}) {
   const store = new MemoryPaymentsStore();
   const settler = fakeSettler();
   const buyer = privateKeyToAccount(BUYER_KEY);
@@ -95,6 +96,15 @@ export function stageWorld(opts: { price?: bigint; newWalletAllowed?: () => bool
     leadPrice: async () => state.price,
     ...(opts.newWalletAllowed ? { newWalletAllowed: opts.newWalletAllowed } : {}),
     ...(opts.fee ? { fee: opts.fee } : {}),
+    ...(opts.readEvent ? { readEvent: opts.readEvent } : {}),
   });
   return { store, settler, state, network, hire, services, buyer };
 }
+
+/// A Polymarket event link with two open markets, for the event-link tests (2026-11-10).
+export const TRUMP_EVENT = "https://polymarket.com/event/who-will-leave-trump-administration-before-2027";
+export const TRUMP_GROUP: EventMarkets = { title: "Who will leave Trump Administration before 2027?", markets: [
+  { label: "Pete Hegseth", question: "Will Pete Hegseth leave?", ref: `${TRUMP_EVENT}/will-pete-hegseth-leave`, yesBps: 2750, volume24h: 43620 },
+  { label: "Kash Patel", question: "Will Kash Patel leave?", ref: `${TRUMP_EVENT}/will-kash-patel-leave`, yesBps: 2000, volume24h: 1478 },
+] };
+export const TRUMP_WHICH = "That link is a group of 2 markets. Which one? Pete Hegseth 28%, Kash Patel 20%. Name one, or paste its own link.";
