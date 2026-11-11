@@ -38,11 +38,16 @@ export function evaluateAgonLifecycle(input: {
     throw new Error("lifecycle failure threshold must be between 1 and 10");
   }
   if (input.passed) {
-    const recovering = input.previousStatus === "warning" || input.previousStatus === "suspended";
+    // A suspended listing comes back after two passes in a row (owner decision 2026-11-11): the
+    // first pass moves it to warning and writes nothing; the second recovers it. One more
+    // failure in between suspends it again, because the failure count is kept.
+    if (input.previousStatus === "suspended") {
+      return { status: "warning", consecutiveFailures: input.previousConsecutiveFailures, actions: [] };
+    }
     return {
       status: "healthy",
       consecutiveFailures: 0,
-      actions: [recovering ? "recover" : "approve"],
+      actions: [input.previousStatus === "warning" ? "recover" : "approve"],
     };
   }
   const consecutiveFailures = input.previousConsecutiveFailures + 1;
@@ -57,9 +62,12 @@ export function nextAgonLifecycleCheck(input: {
   passed: boolean;
   checkIntervalMs: number;
   warningRetryMs: number;
+  /** A number from 0 to 1. With it, the next check after a pass comes between half and one and a half intervals away, so a listing cannot tell when it is being checked. */
+  random?: () => number;
 }): Date {
   if (!Number.isFinite(input.now.getTime())) throw new Error("lifecycle time is invalid");
-  const delay = input.passed ? input.checkIntervalMs : input.warningRetryMs;
+  const spread = input.random ? 0.5 + Math.min(1, Math.max(0, input.random())) : 1;
+  const delay = input.passed ? Math.max(60_000, Math.round(input.checkIntervalMs * spread)) : input.warningRetryMs;
   if (!Number.isSafeInteger(delay) || delay < 60_000) throw new Error("lifecycle interval must be at least one minute");
   return new Date(input.now.getTime() + delay);
 }

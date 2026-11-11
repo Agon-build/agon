@@ -557,8 +557,20 @@ const agonCertificationProviderRunner = createManifestDerivedPlaygroundProviderR
   overrides: config.agon.playground.providerEndpoints,
   fetch: agonCheckerFetch,
 });
+// Safety checks on listings (changed payment terms, an answer that is not clean) only report
+// what they find until AGON_SAFETY_CHECKS=enforce; then a finding pauses the listing at once.
+const agonSafetyEnforced = process.env.AGON_SAFETY_CHECKS?.trim() === "enforce";
+const agonListingNetwork = agonNetwork(config.chainId === 5042002 ? "arc-testnet" : "arc");
 const agonCertificationEndpointQaRunner = createManifestDerivedAgonEndpointQaRunner({
   overrides: config.agon.playground.endpointQaEndpoints,
+  terms: {
+    caip2: agonListingNetwork.caip2, usdc: agonListingNetwork.usdc, enforce: agonSafetyEnforced,
+    // The payee first seen for this listing version; the listing reference ends in its listing id.
+    payeeOf: async (provider) => {
+      const listingId = /:(\d+)$/.exec(provider.listingReference)?.[1];
+      return listingId ? agonRepository.firstAgonEndpointPayee(BigInt(listingId), provider.listingVersion) : null;
+    },
+  },
 });
 const configuredJobEscrowV2 = config.agon.deployment?.contracts.AgonJobEscrowV2;
 const configuredJobEscrow = configuredJobEscrowV2 ?? config.agon.deployment?.contracts.AgonJobEscrow;
@@ -1204,6 +1216,8 @@ if (config.agon.certification.workerEnabled) {
     playgroundStore: agonPlaygroundStore,
     providerRunner: agonCertificationProviderRunner,
     endpointQaRunner: agonCertificationEndpointQaRunner,
+    safetyMode: agonSafetyEnforced ? "enforce" : "observe",
+    onSafetyFinding: (f) => console.warn(`[certification] safety finding on ${f.listingReference}@${f.listingVersion}: ${f.reasons.join(", ")} (${f.enforced ? "enforced" : "observed only"})`),
     listingVerifier: listingVerifierAdapter,
     alert: config.agon.operationsAlerts.enabled
       ? (input) => alertAgonCertificationOperator(input, agonOperationsAlerts)

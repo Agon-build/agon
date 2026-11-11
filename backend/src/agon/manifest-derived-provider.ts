@@ -30,7 +30,16 @@ export type ManifestDerivedProviderOptions = {
   timeoutMs?: number;
   /** Clock for choosing the hourly test variant; tests pin it. */
   now?: () => Date;
+  /** The network listings are paid on, and the payee first seen for a listing version. With it the endpoint check holds each 402 to the listing's own terms. */
+  terms?: { caip2: string; usdc: string; payeeOf?: (provider: ListedPlaygroundProvider) => Promise<string | null>; /** True fails the endpoint check on changed terms; otherwise they are only recorded. */ enforce?: boolean };
 };
+
+/// The price a service file publishes, in USDC base units; null when it names none Agon can read.
+export function publishedPriceAtomic(body: unknown): bigint | null {
+  const amount = (body as { pricing?: { amountUSDC?: unknown } } | null)?.pricing?.amountUSDC;
+  const m = typeof amount === "string" ? /^(\d{1,9})(?:\.(\d{1,6}))?$/.exec(amount.trim()) : null;
+  return m ? BigInt(m[1]!) * 1_000_000n + BigInt((m[2] ?? "").padEnd(6, "0") || "0") : null;
+}
 
 function record(value: unknown): ManifestRecord | null {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -197,7 +206,15 @@ export function createManifestDerivedAgonEndpointQaRunner(
         try {
           const inspection = await loadManifest(input.provider, options);
           const target = await safeEndpoint(declaredEndpoint(inspection.body, "payment"), options);
-          return createHttpAgonEndpointQaRunner({ [scope(input.provider)]: target }, options).run(input);
+          const terms = options.terms;
+          return createHttpAgonEndpointQaRunner({ [scope(input.provider)]: target }, {
+            ...options,
+            ...(terms ? { enforceTerms: terms.enforce === true, expected: async (provider: ListedPlaygroundProvider) => ({
+              priceAtomic: publishedPriceAtomic(inspection.body), caip2: terms.caip2, usdc: terms.usdc,
+              // A payee that cannot be read is not compared: the check never fails on Agon's own fault.
+              payTo: terms.payeeOf ? await terms.payeeOf(provider).catch(() => null) : null,
+            }) } : {}),
+          }).run(input);
         } catch (error) {
           if (error instanceof PlaygroundProviderError) {
             throw new AgonEndpointQaError(error.code, error.message);

@@ -9,15 +9,50 @@ export type AgonEndpointQaEvidence = {
   endpointUrl: string;
   endpointStatus: number | null;
   checkedAt: string;
+  /** The listing version the check was made for; the payee is compared within one version. */
+  listingVersion?: string;
   checks: {
     x402_payment: {
       passed: boolean;
       detail: string;
       header: "PAYMENT-REQUIRED" | null;
     };
+    /** Present when the listing's own terms are known: the 402 must ask the published price, to the payee seen before. */
+    steady_terms?: { passed: boolean; detail: string; amount: string | null; payTo: string | null };
   };
   error?: string;
 };
+
+/// What a listing's 402 is held to: its published price (USDC base units), on its network, and the
+/// payee Agon first saw for this listing version (null on the first check, when it is recorded).
+export type ExpectedTerms = { priceAtomic: bigint | null; caip2: string; usdc: string; payTo: string | null };
+
+function challengeAccepts(value: string | null): Record<string, unknown>[] | null {
+  if (!value || value.length > 16 * 1024) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as { accepts?: unknown };
+    return Array.isArray(parsed.accepts) ? parsed.accepts.filter((a): a is Record<string, unknown> => Boolean(a) && typeof a === "object") : null;
+  } catch {
+    return null;
+  }
+}
+
+/// Fixed rules: the same 402 and the same expected terms always give the same verdict.
+export function steadyTerms(accepts: Record<string, unknown>[], expected: ExpectedTerms): NonNullable<AgonEndpointQaEvidence["checks"]["steady_terms"]> {
+  const offers = accepts.filter((a) => a.scheme === "exact" && a.network === expected.caip2 && typeof a.asset === "string" && a.asset.toLowerCase() === expected.usdc.toLowerCase()
+    && typeof a.amount === "string" && /^\d+$/.test(a.amount) && typeof a.payTo === "string" && /^0x[0-9a-fA-F]{40}$/.test(a.payTo));
+  if (offers.length === 0) return { passed: false, detail: "The payment challenge offers no USDC payment on the listing's network.", amount: null, payTo: null };
+  const priced = expected.priceAtomic === null ? offers : offers.filter((a) => BigInt(a.amount as string) <= expected.priceAtomic!);
+  const first = offers[0]!;
+  if (priced.length === 0) {
+    return { passed: false, detail: `The payment challenge asks ${first.amount} USDC base units, more than the ${expected.priceAtomic} the listing publishes.`, amount: first.amount as string, payTo: (first.payTo as string).toLowerCase() };
+  }
+  const paid = expected.payTo === null ? priced : priced.filter((a) => (a.payTo as string).toLowerCase() === expected.payTo!.toLowerCase());
+  if (paid.length === 0) {
+    return { passed: false, detail: "The payment challenge names a different payee than the one this listing version was first checked with.", amount: priced[0]!.amount as string, payTo: (priced[0]!.payTo as string).toLowerCase() };
+  }
+  return { passed: true, detail: "The payment challenge asks no more than the published price, to the same payee as before.", amount: paid[0]!.amount as string, payTo: (paid[0]!.payTo as string).toLowerCase() };
+}
 
 export type AgonEndpointQaResult = {
   passed: boolean;
@@ -118,7 +153,7 @@ async function readBoundedBody(response: Response): Promise<void> {
 
 export function createHttpAgonEndpointQaRunner(
   configuredEndpoints: Readonly<Record<string, string>>,
-  options: { fetch?: typeof fetch; timeoutMs?: number } = {},
+  options: { fetch?: typeof fetch; timeoutMs?: number; expected?: (provider: ListedPlaygroundProvider) => Promise<ExpectedTerms | null> | ExpectedTerms | null; /** When false or unset the terms check is recorded but never fails the endpoint check. */ enforceTerms?: boolean } = {},
 ): AgonEndpointQaRunner {
   const targets = new Map<string, URL>();
   for (const [key, value] of Object.entries(configuredEndpoints)) {
@@ -179,12 +214,18 @@ export function createHttpAgonEndpointQaRunner(
       const header = rawPaymentHeader !== null
         ? "PAYMENT-REQUIRED" as const
         : null;
-      const passed = response.status === 402 && header !== null && validPaymentChallenge(rawPaymentHeader);
+      const challenged = response.status === 402 && header !== null && validPaymentChallenge(rawPaymentHeader);
+      // With a valid challenge and the listing's own terms known, the challenge is held to them.
+      const expected = challenged && options.expected ? await Promise.resolve(options.expected(provider)).catch(() => null) : null;
+      const steady = expected ? steadyTerms(challengeAccepts(rawPaymentHeader) ?? [], expected) : null;
+      const passed = challenged;
       const evidence: AgonEndpointQaEvidence = {
         endpointUrl: target.toString(),
         endpointStatus: response.status,
         checkedAt,
+        listingVersion: provider.listingVersion,
         checks: {
+          ...(steady ? { steady_terms: steady } : {}),
           x402_payment: {
             passed,
             detail: passed
@@ -198,7 +239,7 @@ export function createHttpAgonEndpointQaRunner(
           },
         },
       };
-      return { passed, evidenceHash: evidenceHash(evidence), evidence };
+      return { passed: passed && (!options.enforceTerms || steady === null || steady.passed), evidenceHash: evidenceHash(evidence), evidence };
     },
   };
 }

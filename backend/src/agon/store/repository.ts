@@ -1417,6 +1417,20 @@ export class PostgresAgonRepository {
     );
   }
 
+  /// The payee Agon first saw in a passing endpoint check of this listing version; null before any.
+  async firstAgonEndpointPayee(listingId: bigint, listingVersion: string): Promise<string | null> {
+    const { rows } = await this.pool.query<{ pay_to: string | null }>(
+      `select evidence->'checks'->'steady_terms'->>'payTo' as pay_to
+         from agon_verification_evidence
+        where listing_id = $1 and passed and evidence->>'source' = 'agon-endpoint-qa' and evidence->>'listingVersion' = $2
+          and evidence->'checks'->'steady_terms'->>'payTo' is not null
+        order by id asc limit 1`,
+      [listingId.toString(), listingVersion],
+    );
+    const payTo = rows[0]?.pay_to ?? null;
+    return payTo && /^0x[0-9a-fA-F]{40}$/.test(payTo) ? payTo.toLowerCase() : null;
+  }
+
   async failAgonCertification(jobId: string, errorCode: string, nextAttemptAt: Date | null): Promise<void> {
     const updated = await this.pool.query(
       `update agon_certification_jobs

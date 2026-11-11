@@ -18,6 +18,7 @@ import {
 } from "./endpoint-qa.ts";
 import { certificationBackoffMs, type AgonCertificationJob } from "./certification.ts";
 import { nextAgonLifecycleCheck, type AgonLifecycleCheckResult, type AgonLifecycleTransition } from "./certification-lifecycle.ts";
+import { scanAnswer } from "./safety/answer-scan.ts";
 import { AgonListingVerificationError, type AgonListingVerifierAdapter } from "./execution/listing-verifier.ts";
 
 export type CertificationWorkerRepository = {
@@ -56,6 +57,16 @@ export type CertificationWorkerOptions = {
   checkIntervalMs?: number;
   warningRetryMs?: number;
   failureThreshold?: number;
+  /** A number from 0 to 1 for spreading the next check; Math.random when unset. */
+  random?: () => number;
+  /**
+   * What the safety checks (changed payment terms, an answer that is not clean) do. "enforce"
+   * fails the check and pauses the listing at once. "observe", the default, only reports what
+   * was found, so the checks can be watched on real listings before they can pause one.
+   */
+  safetyMode?: "enforce" | "observe";
+  /** Told each safety finding, enforced or not. */
+  onSafetyFinding?: (input: { listingReference: string; listingVersion: string; reasons: readonly string[]; enforced: boolean }) => void;
   requireEndpointQa?: boolean;
   alertOperator?: string;
   listingVerifier?: AgonListingVerifierAdapter;
@@ -200,6 +211,18 @@ export async function runAgonCertificationOnce(options: CertificationWorkerOptio
       endpointQa = qa;
     }
     const reasons: string[] = [];
+    // Safety checks come first, so the reason a listing is paused for names them.
+    const found: string[] = [];
+    const steady = (endpointQa?.evidence as { checks?: { steady_terms?: { passed?: unknown } } } | null | undefined)?.checks?.steady_terms;
+    if (steady && steady.passed === false) found.push("terms_changed");
+    // The answer is read as data. Text it quotes word for word from the task it was sent is left out.
+    if (scanAnswer(result.output, { quoted: result.input }).flagged) found.push("answer_not_clean");
+    const enforced = options.safetyMode === "enforce";
+    if (found.length > 0) {
+      try { options.onSafetyFinding?.({ listingReference: job.listingReference, listingVersion: job.listingVersion, reasons: found, enforced }); } catch { /* a reporting fault never stops a check */ }
+    }
+    if (enforced) reasons.push(...found);
+    const safetyFailure = enforced && found.length > 0;
     if (!result.passed) reasons.push("playground_task_failed");
     if (endpointQa && !endpointQa.passed) reasons.push("endpoint_qa_failed");
     if (options.requireEndpointQa && !endpointQa) reasons.push("endpoint_qa_unavailable");
@@ -209,6 +232,7 @@ export async function runAgonCertificationOnce(options: CertificationWorkerOptio
       passed,
       checkIntervalMs: options.checkIntervalMs ?? 6 * 60 * 60_000,
       warningRetryMs: options.warningRetryMs ?? 15 * 60_000,
+      random: options.random ?? Math.random,
     });
     const transition = await options.repository.finalizeAgonCertificationLifecycle(job.jobId, {
       checkId: randomUUID(),
@@ -225,7 +249,9 @@ export async function runAgonCertificationOnce(options: CertificationWorkerOptio
       endpointQaEvidenceHash: endpointQa?.evidenceHash ?? null,
       checkedAt: now,
       nextCheckAt,
-      failureThreshold: options.failureThreshold ?? 3,
+      // Changed payment terms or an answer that is not clean pauses the listing at once; a
+      // service that is only failing or unreachable keeps its usual number of chances.
+      failureThreshold: safetyFailure ? 1 : options.failureThreshold ?? 3,
     });
     lifecycleFinalized = true;
     const persisted = await options.repository.getAgonCertification(job.jobId);

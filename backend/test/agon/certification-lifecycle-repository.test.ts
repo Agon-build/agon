@@ -18,7 +18,7 @@ before(async () => {
 
 after(async () => database.close());
 
-test("persists every lifecycle check and recovers a suspended version only after a pass", async () => {
+test("persists every lifecycle check and recovers a suspended version only after two passes in a row", async () => {
   const start = new Date("2026-09-21T12:00:00.000Z");
   const scheduled = await repository.withTransaction((transaction) => transaction.scheduleAgonCertification({
     chainId: 5042002n,
@@ -68,8 +68,8 @@ test("persists every lifecycle check and recovers a suspended version only after
     [RUN_ID, PROVIDER, "00000000-0000-4000-8000-000000000305", "certification-lifecycle-recovery", HASH, JSON.stringify({ listingReference: `5042002:${REGISTRY}:7`, listingVersion: "3" }), at],
   );
   await repository.claimAgonCertification(at);
-  const recovered = await repository.finalizeAgonCertificationLifecycle(scheduled.jobId, {
-    checkId: "00000000-0000-4000-8000-000000000306",
+  const pass = (checkId: string, checkedAt: Date) => repository.finalizeAgonCertificationLifecycle(scheduled.jobId, {
+    checkId,
     passed: true,
     reasons: [],
     playgroundRunId: RUN_ID,
@@ -81,21 +81,29 @@ test("persists every lifecycle check and recovers a suspended version only after
     evaluatorVersionHash: HASH,
     providerHost: "provider.example",
     endpointQaEvidenceHash: HASH,
-    checkedAt: at,
-    nextCheckAt: new Date(at.getTime() + 21_600_000),
+    checkedAt,
+    nextCheckAt: new Date(checkedAt.getTime() + 21_600_000),
     failureThreshold: 3,
   });
+  // Owner decision 2026-11-11: the first pass after a suspension writes nothing; the second recovers.
+  const first = await pass("00000000-0000-4000-8000-000000000306", at);
+  assert.deepEqual(first, { status: "warning", consecutiveFailures: 3, actions: [] });
+  const between = await repository.getAgonCertification(scheduled.jobId);
+  assert.deepEqual([between?.lifecycleStatus, between?.verificationAction], ["warning", "suspend"], "still suspended on Arc after one pass");
+  at = new Date(at.getTime() + 21_600_000);
+  await repository.claimAgonCertification(at);
+  const recovered = await pass("00000000-0000-4000-8000-000000000307", at);
   assert.deepEqual(recovered, { status: "healthy", consecutiveFailures: 0, actions: ["recover"] });
   const job = await repository.getAgonCertification(scheduled.jobId);
   assert.equal(job?.state, "scheduled");
   assert.equal(job?.lifecycleStatus, "healthy");
-  assert.equal(job?.checkSequence, 4);
+  assert.equal(job?.checkSequence, 5);
   assert.equal(job?.playgroundRunId, RUN_ID);
   const history = await database.pool.query<{ outcome: string }>(
     "select outcome from agon_certification_checks where job_id = $1 order by sequence",
     [scheduled.jobId],
   );
-  assert.deepEqual(history.rows.map((row) => row.outcome), ["failed", "failed", "failed", "passed"]);
+  assert.deepEqual(history.rows.map((row) => row.outcome), ["failed", "failed", "failed", "passed", "passed"]);
 
   await repository.recordAgonCertificationVerificationAction({
     jobId: scheduled.jobId,
