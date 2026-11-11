@@ -21,7 +21,7 @@ test("every refusal a person can hit has a plain sentence", () => {
 });
 
 test("a market agent's refusal reads as its reason, at quote time and on the job page", () => {
-  for (const code of ["market_not_found", "market_closed", "not_yes_no", "not_a_football_market", "market_unavailable", "which_market", "invalid_size", "unknown_side"]) {
+  for (const code of ["market_not_found", "market_closed", "not_yes_no", "not_a_football_market", "market_unavailable", "which_market", "invalid_size", "unknown_side", "unsupported_question"]) {
     assert.notEqual(askRefusalText(code), askRefusalText("something_unknown"), code);
     assert.notEqual(failureText(code), failureText("something_unknown"), code);
   }

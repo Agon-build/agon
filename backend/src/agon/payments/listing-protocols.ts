@@ -40,6 +40,17 @@ const settlementBody = z.object({
   input: z.object({ question: z.string().min(1).max(500), readings: z.array(z.record(z.unknown())).min(1).max(12) }),
   scope: z.object({ listingReference: z.string().max(200), listingVersion: z.string().max(20) }),
 });
+/// The Playground's Research test (tests/tasks.ts): Arc's chain id and a fresh block, with the source read.
+export const LIVE_FACT_TASK_ID = "arc-live-fact";
+const liveFactBody = z.object({
+  protocol: z.literal(CERTIFICATION_PROTOCOL),
+  category: z.string().max(40),
+  task: z.object({ id: z.literal(LIVE_FACT_TASK_ID), title: z.string().max(200), adversarialPrompt: z.string().max(1000), capability: z.string().max(200) }),
+  input: z.object({ question: z.string().min(1).max(500) }).passthrough(),
+  scope: z.object({ listingReference: z.string().max(200), listingVersion: z.string().max(20) }),
+});
+/// How a research agent answers it: from its own reading of the chain, or null when it could not read it.
+export type LiveFactAnswerer = () => Promise<{ chainId: number; blockNumber: number; source: string } | null>;
 /// The Playground's true-numbers test (tests/tasks.ts): an order book as Polymarket sends it, a side and a size.
 export const TRUE_NUMBERS_TASK_ID = "true-numbers";
 const bookLevels = z.array(z.object({ price: z.string().max(20), size: z.string().max(30) })).max(200);
@@ -119,7 +130,14 @@ function firstJsonObject(text: string): unknown {
 /// agents with their model, deterministic agents with their rules. The only
 /// fixed fields are the ones that are true by construction: these endpoints
 /// never write anywhere.
-export async function certificationReply(input: { agent: { name: string; capabilities: string[] }; body: unknown; marketRules?: MarketRulesAnswerer; settlementAlerts?: SettlementAlertsAnswerer; trueNumbers?: TrueNumbersAnswerer } & CertificationAnswerer): Promise<{ status: 200; json: CertificationReply } | { status: 400 | 502; json: { error: string } }> {
+export async function certificationReply(input: { agent: { name: string; capabilities: string[] }; body: unknown; marketRules?: MarketRulesAnswerer; settlementAlerts?: SettlementAlertsAnswerer; trueNumbers?: TrueNumbersAnswerer; liveFact?: LiveFactAnswerer } & CertificationAnswerer): Promise<{ status: 200; json: CertificationReply } | { status: 400 | 502; json: { error: string } }> {
+  const factTask = liveFactBody.safeParse(input.body);
+  // Only an agent that reads the chain itself answers this from a reading; for any other agent the request is refused below, as before.
+  if (factTask.success && input.liveFact) {
+    const fact = await input.liveFact().catch(() => null);
+    if (!fact) return { status: 502, json: { error: "chain_unavailable" } };
+    return { status: 200, json: { protocol: CERTIFICATION_PROTOCOL, agent: { name: input.agent.name, version: "1", capabilities: input.agent.capabilities }, output: { ...fact, writesPerformed: false }, externalWrites: false } };
+  }
   const numbersTask = trueNumbersBody.safeParse(input.body);
   if (numbersTask.success) {
     if (!input.trueNumbers) return { status: 400, json: { error: "invalid_certification_request" } };
@@ -189,7 +207,7 @@ const carriesPayment = (c: Context) => Boolean(c.req.header("PAYMENT-SIGNATURE")
 export async function answerListingCheck(
   c: Context,
   raw: unknown,
-  certify: ({ agent: { name: string; capabilities: string[] }; gate?: (c: Context) => boolean; marketRules?: MarketRulesAnswerer; settlementAlerts?: SettlementAlertsAnswerer; trueNumbers?: TrueNumbersAnswerer } & CertificationAnswerer) | null,
+  certify: ({ agent: { name: string; capabilities: string[] }; gate?: (c: Context) => boolean; marketRules?: MarketRulesAnswerer; settlementAlerts?: SettlementAlertsAnswerer; trueNumbers?: TrueNumbersAnswerer; liveFact?: LiveFactAnswerer } & CertificationAnswerer) | null,
 ): Promise<Response | "preflight" | null> {
   const kind = listingProtocolKind(raw);
   if (kind === "service") return null;

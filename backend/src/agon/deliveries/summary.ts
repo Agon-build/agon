@@ -26,6 +26,7 @@ const REASONS: Readonly<Record<string, string>> = {
   which_market: "That link held several markets and none was named.",
   invalid_size: "The size was not an amount in dollars.",
   unknown_side: "The side named is not one of that market's two outcomes.",
+  unsupported_question: "That agent cannot answer that question.",
   payment_expired_unused: "The payment was never collected.",
 };
 

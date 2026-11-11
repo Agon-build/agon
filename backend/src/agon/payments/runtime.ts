@@ -11,6 +11,8 @@ import { createHouseSellerRoutes } from "../playground/seasons/house-seller.ts";
 import { createMarketLookup } from "../agents/market-lookup.ts";
 import { createPolymarket } from "../polymarket/index.ts";
 import { createSpecialistRoutes } from "../agents/routes.ts";
+import { createReadQuestion } from "../agents/research/lookup.ts";
+import { RESEARCH_MODEL, createResearchRoutes, researchWalletsFrom } from "../agents/research/routes.ts";
 import { createEvidenceSearch } from "../playground/seasons/evidence.ts";
 import { PostgresWatchStore } from "../agents/watch-store.ts";
 import { createGammaWatchReader, startWatchWorker } from "../agents/watch-worker.ts";
@@ -83,7 +85,7 @@ export type PaymentsRuntime = {
   settings: PaymentSettings;
   store: PostgresPaymentsStore;
   hire: HireService;
-  routes: { payments: Hono; house: Hono; specialists: Hono; standin: Hono | null };
+  routes: { payments: Hono; house: Hono; specialists: Hono; research: Hono; standin: Hono | null };
   balanceOf(address: Address): Promise<bigint | null>;
 };
 
@@ -177,6 +179,10 @@ export function startPaymentsRuntime(input: {
       const owner = rows[0] ? parseOwnerRef(rows[0].owner_ref) : null;
       return owner?.kind === "operator" ? owner.address.toLowerCase() : null;
     };
+    // The house research agents sell one fact per call. With no wallets set they sell nothing.
+    const research = researchWalletsFrom(input.env ?? process.env);
+    if (research.problem) log(`research agents off: ${research.problem}`);
+    const researchPolymarket = createPolymarket();
     const routes = {
       payments: createPaymentRoutes({
         store, network, log, off: () => s.off.all || s.off.lead,
@@ -201,6 +207,27 @@ export function startPaymentsRuntime(input: {
         // Pitch reads recent news with the same search the Arena's evidence forecaster uses.
         ...((input.env ?? process.env).EXA_API_KEY?.trim() ? { evidence: createEvidenceSearch({ apiKey: (input.env ?? process.env).EXA_API_KEY!.trim(), log: (m) => console.warn(`[agon-pitch] ${m}`) }) } : {}),
         watch: { store: watchStore, ownerOf: ownerOfWallet, statusBase: input.siteUrl ? `${input.siteUrl}/watch` : `${s.publicApiUrl}/agon/agents/specialists/watch` },
+      }) as unknown as Hono,
+      research: createResearchRoutes({
+        network, store,
+        sellers: Object.fromEntries(Object.entries(research.wallets).map(([key, w]) => [key, { payTo: w.address, settle: settler(w) }])),
+        readQuestion: createReadQuestion(async (p) => ({ text: (await callModel(p)).text }), RESEARCH_MODEL),
+        chain: {
+          latest: () => client.getBlockNumber(),
+          block: async (n) => {
+            const block = await client.getBlock({ blockNumber: n }).catch((error: unknown) => { if (error instanceof Error && error.name === "BlockNotFoundError") return null; throw error; });
+            return block ? { gasUsed: block.gasUsed, txCount: block.transactions.length, timestamp: new Date(Number(block.timestamp) * 1000) } : null;
+          },
+        },
+        markets: {
+          candidates: async () => [],
+          record: async (ref) => {
+            const found = await researchPolymarket.resolve(ref);
+            if (!found.ok) { if (found.code === "market_unavailable") throw new Error(found.code); return null; }
+            return { slug: found.market.slug, question: found.market.question, endDate: found.market.endAt, outcomes: found.market.outcomes.map((o) => o.label), yesNo: found.market.yesNo };
+          },
+        },
+        callModel: async (p) => ({ text: (await callModel({ model: p.model, systemPrompt: p.system, userPrompt: p.prompt, maxTokens: p.maxTokens, temperature: 0.2 })).text }),
       }) as unknown as Hono,
       standin: s.standin ? (createStandinRoutes({ network, payTo: s.standin.address, settle: settler(s.standin), claimNonce }) as unknown as Hono) : null,
     };

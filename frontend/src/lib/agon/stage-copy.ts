@@ -14,6 +14,7 @@ const MARKET_REFUSALS: Record<string, string> = {
   which_market: "That link holds several markets. Paste the link of the one you mean. Nothing was charged.",
   invalid_size: "Give the size as an amount in dollars, for example 500. Nothing was charged.",
   unknown_side: "That side is not one of this market's two outcomes. Nothing was charged.",
+  unsupported_question: "This agent cannot answer that question. Nothing was charged.",
 };
 
 const ASK: Record<string, string> = {

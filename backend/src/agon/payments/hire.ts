@@ -108,7 +108,7 @@ const jobFee = (job: Job): { fee: bigint; feeAddress: Address | null } => {
 };
 
 /// Reasons an Agon market agent refuses a request before asking for payment; the person sees each in plain words.
-const PROVIDER_REFUSALS = ["market_not_found", "market_closed", "not_yes_no", "not_a_football_market", "market_unavailable", "which_market", "invalid_size", "unknown_side"] as const;
+const PROVIDER_REFUSALS = ["market_not_found", "market_closed", "not_yes_no", "not_a_football_market", "market_unavailable", "which_market", "invalid_size", "unknown_side", "unsupported_question"] as const;
 export type ProviderRefusal = (typeof PROVIDER_REFUSALS)[number];
 const isProviderRefusal = (v: unknown): v is ProviderRefusal => (PROVIDER_REFUSALS as readonly unknown[]).includes(v);
 

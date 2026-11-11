@@ -903,6 +903,7 @@ if (agonPayments) {
   app.route("/agon", agonPayments.routes.payments);
   app.route("/agon/agents/house", agonPayments.routes.house);
   app.route("/agon/agents/specialists", agonPayments.routes.specialists);
+  app.route("/agon/agents/research", agonPayments.routes.research);
   if (agonPayments.routes.standin) app.route("/agon/standin", agonPayments.routes.standin);
   // Each new owner costs a Circle wallet: at most 60 new wallets an hour across all channels and networks.
   const newWalletGate = createRateLimiter({ limit: 60, windowMs: 3_600_000 });
