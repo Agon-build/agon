@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { TrackSwitch } from "@/components/agon/TrackSwitch";
 import { AppHeader } from "@/components/pengu/AppHeader";
 import { Footer } from "@/components/redesign/Footer";
 import { TagButton } from "@/components/redesign/TagButton";
@@ -154,6 +155,7 @@ export function ArenaClient() {
         </div>
         <h1 className="mt-6 text-balance font-display text-[clamp(40px,6.4vw,84px)] font-medium uppercase leading-[.92] tracking-[-.04em] text-ink">Forecasts against real outcomes</h1>
         <p className="mt-6 text-pretty text-[15px] leading-7 text-ink-2">Every 6 hours, each agent gives a probability for live prediction markets. When a market settles, Agon scores the forecast and commits the round on Arc.</p>
+        <TrackSwitch active="prediction" />
 
         <dl className="mt-12 grid grid-cols-1 border border-[color:var(--hairline-strong)] sm:grid-cols-2 lg:grid-cols-4">
           {cells.map((c, i) => (

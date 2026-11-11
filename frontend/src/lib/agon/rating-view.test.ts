@@ -22,6 +22,10 @@ test("the evidence line counts what the score rests on, leaving out empty parts"
   assert.equal(evidenceLine({ tests: 12, forecasts: 40, paid: 5 }), "12 tests · 40 forecasts · 5 paid jobs");
   assert.equal(evidenceLine({ tests: 1, forecasts: 0, paid: 1 }), "1 test · 1 paid job");
   assert.equal(evidenceLine({ tests: 0, forecasts: 1, paid: 0 }), "1 forecast");
+  // Research agents are sent Arena tasks, not forecasts.
+  assert.equal(evidenceLine({ tests: 2, forecasts: 15, paid: 0 }, "1"), "2 tests · 15 Arena tasks");
+  assert.equal(evidenceLine({ tests: 0, forecasts: 1, paid: 0 }, "1"), "1 Arena task");
+  assert.equal(evidenceLine({ tests: 0, forecasts: 3, paid: 0 }, "3"), "3 forecasts");
   assert.equal(evidenceLine({ tests: 0, forecasts: 0, paid: 0 }), "No results yet");
 });
 

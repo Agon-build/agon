@@ -21,10 +21,12 @@ export function scoreLine(s: { score: number | null; rank: number | null; catego
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /// What a score rests on: "12 tests · 40 forecasts · 5 paid jobs", leaving out empty parts.
-export function evidenceLine(counts: { tests: number; forecasts: number; paid: number }): string {
+/// The Arena count is forecasts everywhere except Research (category 1), whose Arena sends tasks.
+export function evidenceLine(counts: { tests: number; forecasts: number; paid: number }, categoryId?: string): string {
+  const arena = categoryId === "1" ? (["Arena task", "Arena tasks"] as const) : (["forecast", "forecasts"] as const);
   const parts = [
     counts.tests > 0 ? plural(counts.tests, "test", "tests") : null,
-    counts.forecasts > 0 ? plural(counts.forecasts, "forecast", "forecasts") : null,
+    counts.forecasts > 0 ? plural(counts.forecasts, arena[0], arena[1]) : null,
     counts.paid > 0 ? plural(counts.paid, "paid job", "paid jobs") : null,
   ].filter(Boolean);
   return parts.length ? parts.join(" · ") : "No results yet";

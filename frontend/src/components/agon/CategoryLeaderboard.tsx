@@ -97,7 +97,7 @@ export function CategoryLeaderboard() {
                           <AgentLogo logoUrl={p?.logoUrl ?? null} name={name} />
                           <div className="min-w-0">
                             <Link href={networkHref(`/agents/${encodeURIComponent(r.listingReference)}`, networkKey)} className="block truncate font-sans text-[15px] font-semibold text-ink hover:text-accent">{name}</Link>
-                            <span className="block font-mono text-[10px] text-ink-3">{r.firstParty ? "Built by Agon · " : ""}{evidenceLine(r.counts)}</span>
+                            <span className="block font-mono text-[10px] text-ink-3">{r.firstParty ? "Built by Agon · " : ""}{evidenceLine(r.counts, r.categoryId)}</span>
                           </div>
                         </div>
                         {r.score === null ? (
