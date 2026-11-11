@@ -3,7 +3,7 @@ import test from "node:test";
 import { privateKeyToAccount } from "viem/accounts";
 import type { Address } from "viem";
 
-import { createMarketLookup, marketRefFrom, type MarketSnapshot } from "../../src/agon/agents/market-lookup.ts";
+import { createMarketLookup, marketRefFrom, marketRefParts, type MarketSnapshot } from "../../src/agon/agents/market-lookup.ts";
 import { isFootballMarket } from "../../src/agon/agents/pitch.ts";
 import { scoutReport } from "../../src/agon/agents/scout.ts";
 import { SPECIALISTS, createSpecialistRoutes } from "../../src/agon/agents/routes.ts";
@@ -35,10 +35,61 @@ function gammaFetch(markets: Record<string, unknown>[], tags: string[] = ["EPL",
       const closed = url.searchParams.get("closed") === "true";
       return Response.json(markets.filter((m) => Boolean(m.closed) === closed && (slug ? m.slug === slug : cid ? m.conditionId === cid : false)));
     }
-    if (url.pathname === "/events") return Response.json([{ slug: url.searchParams.get("slug"), tags: tags.map((slug) => ({ slug })), markets }]);
+    if (url.pathname === "/events") {
+      // Like Gamma: an event holds the markets that name it, and an unknown name gives nothing.
+      const slug = url.searchParams.get("slug");
+      const held = markets.filter((m) => (m.events as { slug: string }[] | undefined)?.[0]?.slug === slug);
+      return Response.json(held.length > 0 ? [{ slug, title: "EPL 2027 champion", tags: tags.map((t) => ({ slug: t })), markets: held }] : []);
+    }
     return new Response("not found", { status: 404 });
   }) as typeof fetch;
 }
+
+// 2026-11-11 production: 6 of 10 real links pasted to Scout were refused. A link without https, a link
+// inside a sentence and an event link all read as "not found".
+test("a pasted link is read without https, inside a sentence and with tracking after it", () => {
+  assert.deepEqual(marketRefParts(`polymarket.com/event/epl-2027-champion/${EPL_SLUG}`), { kind: "market", value: EPL_SLUG });
+  assert.deepEqual(marketRefParts(`Is this worth trading? https://polymarket.com/event/epl-2027-champion/${EPL_SLUG}?tid=1762822000000.`), { kind: "market", value: EPL_SLUG });
+  assert.deepEqual(marketRefParts(`http://www.polymarket.com/market/${EPL_SLUG}`), { kind: "market", value: EPL_SLUG });
+  assert.deepEqual(marketRefParts("https://polymarket.com/event/epl-2027-champion"), { kind: "event", value: "epl-2027-champion" });
+  assert.deepEqual(marketRefParts("https://polymarket.com/es/event/epl-2027-champion/"), { kind: "event", value: "epl-2027-champion" });
+  assert.deepEqual(marketRefParts("https://polymarket.com/sports/nba/nba-mia-uta-2026-11-10"), { kind: "event", value: "nba-mia-uta-2026-11-10" });
+  assert.equal(marketRefParts("https://notpolymarket.com/event/epl-2027-champion"), null);
+  assert.equal(marketRefParts("https://evil.example/polymarket.com/event/epl-2027-champion"), null);
+  assert.equal(marketRefFrom(`polymarket.com/event/epl-2027-champion/${EPL_SLUG}`), EPL_SLUG);
+});
+
+test("an event link with one open market finds it; one with several asks which, busiest first", async () => {
+  const one = await createMarketLookup({ fetchImpl: gammaFetch([gammaMarket(), gammaMarket({ slug: "closed-one", conditionId: `0x${"e0".repeat(32)}`, closed: true })]) })("https://polymarket.com/event/epl-2027-champion");
+  assert.ok(one.ok, JSON.stringify(one));
+  assert.equal(one.market.slug, EPL_SLUG);
+
+  const several = createMarketLookup({ fetchImpl: gammaFetch([
+    gammaMarket({ groupItemTitle: "Arsenal", outcomePrices: '["0.6", "0.4"]', volume24hr: 100 }),
+    gammaMarket({ slug: "will-man-city-win-the-epl", conditionId: `0x${"a1".repeat(32)}`, groupItemTitle: "Man City", outcomePrices: '["0.2", "0.8"]', volume24hr: 900 }),
+    gammaMarket({ slug: "closed-one", conditionId: `0x${"e0".repeat(32)}`, groupItemTitle: "Spurs", closed: true }),
+  ]) });
+  assert.deepEqual(await several("polymarket.com/event/epl-2027-champion"), {
+    ok: false, code: "which_market", title: "EPL 2027 champion",
+    choices: [
+      { label: "Man City", url: "https://polymarket.com/event/epl-2027-champion/will-man-city-win-the-epl", yesPct: 20 },
+      { label: "Arsenal", url: `https://polymarket.com/event/epl-2027-champion/${EPL_SLUG}`, yesPct: 60 },
+    ],
+  });
+  // The market's own link still finds it.
+  const named = await several("https://polymarket.com/event/epl-2027-champion/will-man-city-win-the-epl");
+  assert.ok(named.ok && named.market.yesBps === 2000, JSON.stringify(named));
+});
+
+test("a game link means the game's own market, and one that is not Yes or No is still refused", async () => {
+  const GAME = "nba-mia-uta-2026-11-10";
+  const lookup = createMarketLookup({ fetchImpl: gammaFetch([
+    gammaMarket({ slug: GAME, conditionId: `0x${"b1".repeat(32)}`, question: "Heat vs. Jazz", outcomes: '["Heat", "Jazz"]', events: [{ slug: GAME }] }),
+    gammaMarket({ slug: `${GAME}-total-228pt5`, conditionId: `0x${"b2".repeat(32)}`, question: "Heat vs. Jazz: O/U 228.5", outcomes: '["Over", "Under"]', events: [{ slug: GAME }] }),
+  ]) });
+  assert.deepEqual(await lookup(`https://polymarket.com/event/${GAME}`), { ok: false, code: "not_yes_no" });
+  assert.deepEqual(await lookup("https://polymarket.com/event/no-such-event"), { ok: false, code: "market_not_found" });
+});
 
 test("a market is found from a polymarket link, a slug or a condition id", async () => {
   assert.equal(marketRefFrom(`https://polymarket.com/event/epl-2027-champion/${EPL_SLUG}`), EPL_SLUG);
@@ -377,4 +428,17 @@ test("a scout check says when Polymarket was read", async () => {
   const out = await buyExact({ url: "http://api.test/scout", init: json({ market: EPL_SLUG }), network, maxAmount: SPECIALISTS.scout.price, signerFor: () => localSigner(buyer), fetchImpl });
   assert.ok(out.ok, show(out));
   assert.ok(Math.abs(new Date((out.data as { readAt: string }).readAt).getTime() - Date.now()) < 60_000, "read at the time of the request");
+});
+
+test("an event link with several markets is answered with the choices before any payment", async () => {
+  const { app, settler } = setup();
+  const res = await app.request("http://api.test/scout", json({ market: "Worth trading? polymarket.com/event/epl-2027-champion" }));
+  assert.equal(res.status, 422);
+  const body = (await res.json()) as { error: string; message: string; choices: { url: string }[] };
+  assert.equal(body.error, "which_market");
+  assert.deepEqual(body.choices.map((c) => c.url), [`https://polymarket.com/event/epl-2027-champion/${EPL_SLUG}`, "https://polymarket.com/event/epl-2027-champion/rules-one"]);
+  assert.match(body.message, /^That link holds several markets\. Which one\? /);
+  const priced = await app.request("http://api.test/scout", json({ market: `Worth trading? polymarket.com/event/epl-2027-champion/${EPL_SLUG}` }));
+  assert.equal(priced.status, 402, "a market link without https, inside a sentence, reaches the price");
+  assert.equal(settler.calls.length, 0, "nothing settles");
 });

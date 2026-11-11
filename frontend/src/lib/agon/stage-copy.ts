@@ -11,6 +11,7 @@ const MARKET_REFUSALS: Record<string, string> = {
   not_yes_no: "Only Yes or No markets are supported. Nothing was charged.",
   not_a_football_market: "This agent only works on football markets. Nothing was charged.",
   market_unavailable: "Polymarket did not answer. Try again in a minute. Nothing was charged.",
+  which_market: "That link holds several markets. Paste the link of the one you mean. Nothing was charged.",
 };
 
 const ASK: Record<string, string> = {

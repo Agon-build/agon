@@ -8,7 +8,7 @@ import { exactPayment, type ExactSettler, type X402Paid } from "../payments/exac
 import { LISTING_BODY_LIMIT_BYTES, answerListingCheck, createCertificationGate } from "../payments/listing-protocols.ts";
 import type { PaymentsStore } from "../payments/types.ts";
 import { FORECAST_MAX_TOKENS, parseProbability, type ModelCaller } from "../playground/seasons/house-agents.ts";
-import type { MarketLookup, MarketSnapshot } from "./market-lookup.ts";
+import type { MarketChoice, MarketLookup, MarketSnapshot } from "./market-lookup.ts";
 import { isFootballMarket, pitchPrompt } from "./pitch.ts";
 import type { EvidenceSearch } from "../playground/seasons/evidence.ts";
 import { randomBytes } from "node:crypto";
@@ -43,6 +43,10 @@ const REFUSALS: Readonly<Record<string, string>> = {
   not_a_football_market: "Pitch only forecasts football markets.",
   market_unavailable: "Polymarket did not answer. Try again in a minute.",
 };
+/// An event link with several markets: the busiest, with their links, so the caller can send one.
+const whichMarket = (choices: MarketChoice[]): string =>
+  `That link holds several markets. Which one? ${choices.map((c) => (c.yesPct === null ? c.label : `${c.label} ${c.yesPct}%`)).join(", ")}. Send that market's own link.`;
+type Refused = { ok: false; code: string; choices?: MarketChoice[] };
 
 const marketView = (m: MarketSnapshot) => ({ question: m.question, url: m.url, slug: m.slug, closesAt: m.endAt.toISOString(), crowdBps: m.yesBps });
 
@@ -96,14 +100,14 @@ export function createSpecialistRoutes(deps: {
   const gates = new Map<string, ReturnType<typeof createCertificationGate>>();
   const gateFor = (key: string) => gates.get(key) ?? gates.set(key, createCertificationGate()).get(key)!;
   /// The markets a request names, each found, still open and fit for this agent, or the reason it is refused.
-  const marketsFor = async (key: SpecialistKey, raw: unknown): Promise<{ ok: true; list: MarketSnapshot[] } | { ok: false; code: string }> => {
+  const marketsFor = async (key: SpecialistKey, raw: unknown): Promise<{ ok: true; list: MarketSnapshot[] } | Refused> => {
     const one = body.safeParse(raw);
     const refs = key === "watch" ? watchRefs(raw) : one.success ? [one.data.market] : null;
     if (!refs) return { ok: false, code: "invalid_request" };
     const list: MarketSnapshot[] = [];
     for (const ref of refs) {
       const r = await deps.lookup(ref);
-      if (!r.ok) return { ok: false, code: r.code };
+      if (!r.ok) return r.code === "which_market" ? { ok: false, code: r.code, choices: r.choices } : { ok: false, code: r.code };
       if (r.market.closed) return { ok: false, code: "market_closed" };
       if (key === "pitch" && !isFootballMarket(r.market)) return { ok: false, code: "not_a_football_market" };
       list.push(r.market);
@@ -155,6 +159,7 @@ export function createSpecialistRoutes(deps: {
     // A paid request is checked again just before it settles.
     if (!c.req.header("payment-signature") && !c.req.header("x-payment")) {
       const checked = await marketsFor(found.key, raw);
+      if (!checked.ok && checked.choices) return c.json({ error: checked.code, message: whichMarket(checked.choices), choices: checked.choices }, 422);
       if (!checked.ok) return c.json({ error: checked.code, message: REFUSALS[checked.code] ?? "This market cannot be used." }, checked.code === "market_unavailable" ? 503 : 422);
     }
     return next();

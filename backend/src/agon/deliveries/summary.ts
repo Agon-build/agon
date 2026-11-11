@@ -22,6 +22,7 @@ const REASONS: Readonly<Record<string, string>> = {
   not_yes_no: "Only Yes or No markets are supported.",
   not_a_football_market: "This agent only works on football markets.",
   market_unavailable: "Polymarket did not answer at the time.",
+  which_market: "That link held several markets and none was named.",
   payment_expired_unused: "The payment was never collected.",
 };
 

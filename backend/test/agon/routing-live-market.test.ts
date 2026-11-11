@@ -89,3 +89,10 @@ test("the outcome a person names picks its market; none named picks nothing", ()
 test("an event with several markets asks which one, naming the busiest with their prices", () => {
   assert.equal(outcomeQuestion(EVENT), "That link is a group of 3 markets. Which one? Pete Hegseth 28%, Kash Patel 20%, Robert F. Kennedy Jr. 11%. Name one, or paste its own link.");
 });
+
+// 2026-11-11 production: a link pasted without https was refused as not found.
+test("a link typed without https is still read, and a market link comes back with https", () => {
+  assert.equal(marketInText("worth it? polymarket.com/event/fed-decision/will-the-fed-cut-rates."), "https://polymarket.com/event/fed-decision/will-the-fed-cut-rates");
+  assert.equal(marketInText("see notpolymarket.com/event/fed-decision/will-the-fed-cut-rates"), null);
+  assert.deepEqual(eventLinkIn("polymarket.com/event/fed-decision?tid=1"), { link: "polymarket.com/event/fed-decision", slug: "fed-decision" });
+});

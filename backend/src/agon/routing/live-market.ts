@@ -7,12 +7,15 @@ import { fallbackQueryFor, matchMarket, searchQueryFor, type MarketCandidate } f
 export type FoundMarket = { ref: string; question: string; yesBps: number | null };
 export type MarketFinder = (text: string, now: Date) => Promise<FoundMarket | null>;
 
-const LINK = /https:\/\/(?:www\.)?polymarket\.com\/[^\s"'<>)]+/i;
+// As people paste it: with or without https. Never part of another site's address.
+const LINK = /(?<![\w.\-/])(?:https?:\/\/)?(?:www\.)?polymarket\.com\/[^\s"'<>)]+/i;
 const CONDITION = /\b0x[0-9a-fA-F]{64}\b/;
 
 /// A Polymarket link or condition id the person typed, or null. Nothing else is taken as a market.
+/// A link typed without https comes back with it.
 export function marketInText(text: string): string | null {
-  const link = text.match(LINK)?.[0]?.replace(/[.,;!?]+$/, "");
+  const typed = text.match(LINK)?.[0]?.replace(/[.,;!?]+$/, "");
+  const link = typed ? `https://${typed.replace(/^https?:\/\//i, "")}` : null;
   if (link && marketRefFrom(link)) return link;
   const id = text.match(CONDITION)?.[0];
   return id ? id.toLowerCase() : null;
@@ -97,7 +100,7 @@ export function createMarketFinder(options: { fetchImpl?: typeof fetch; baseUrl?
 export type EventMarket = { label: string; question: string; ref: string; yesBps: number; volume24h: number };
 export type EventMarkets = { title: string; markets: EventMarket[] };
 
-const EVENT_LINK = /https:\/\/(?:www\.)?polymarket\.com\/event\/([a-z0-9-]+)\/?(?=[\s"'<>)?.,;!]|$)/i;
+const EVENT_LINK = /(?<![\w.\-/])(?:https?:\/\/)?(?:www\.)?polymarket\.com\/(?:[a-z]{2}\/)?event\/([a-z0-9-]+)\/?(?=[\s"'<>)?#.,;!]|$)/i;
 
 /// A link to a whole event (polymarket.com/event/<event>, with no market after it), or null.
 export function eventLinkIn(text: string): { link: string; slug: string } | null {
