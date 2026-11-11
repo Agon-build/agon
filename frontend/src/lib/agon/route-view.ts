@@ -93,11 +93,18 @@ const VERDICT_TEXT = { tradeable: "Tradeable", watch: "Trade with care", avoid: 
 
 function scoutView(r: Record<string, unknown>): ScoutAnswerView | null {
   if ((r.verdict !== "tradeable" && r.verdict !== "watch" && r.verdict !== "avoid") || !Array.isArray(r.flags) || !r.metrics || typeof r.metrics !== "object") return null;
-  const market = (r.market ?? {}) as { question?: unknown; url?: unknown };
+  const market = (r.market ?? {}) as { question?: unknown; url?: unknown; outcomes?: unknown };
   const m = r.metrics as Record<string, unknown>;
   const metrics: { label: string; value: string }[] = [];
   const add = (label: string, v: unknown, text: (n: number) => string) => { const n = num(v); if (n !== null) metrics.push({ label, value: text(n) }); };
-  add("Yes price", m.yesPct, (n) => `${n}%`);
+  // A market between two named sides (teams, Over and Under) shows both prices by name.
+  const sides = (Array.isArray(market.outcomes) ? market.outcomes : []).flatMap((o) => {
+    const side = (o ?? {}) as { label?: unknown; pct?: unknown };
+    const pct = num(side.pct);
+    return typeof side.label === "string" && side.label.trim() && pct !== null ? [{ label: side.label.trim().slice(0, 40), pct }] : [];
+  });
+  if (sides.length === 2 && !(sides[0]!.label === "Yes" && sides[1]!.label === "No")) for (const s of sides) metrics.push({ label: `${s.label} price`, value: `${s.pct}%` });
+  else add("Yes price", m.yesPct, (n) => `${n}%`);
   add("Spread", m.spreadCents, (n) => (n === 1 ? "1 cent" : `${n} cents`));
   add("Liquidity", m.liquidityUsd, usd);
   add("Traded in 24 hours", m.volume24hUsd, usd);

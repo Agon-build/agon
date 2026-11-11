@@ -30,3 +30,10 @@ test("alert times are relative, newest first, and the summary counts settled mar
   assert.match(view.summary, /22 December/);
   for (const s of [view.summary, ...view.markets.map((m) => m.detail)]) assert.ok(!s.includes("—") && !/ \+ /.test(s), s);
 });
+
+test("a watched market between two named sides reads by name", () => {
+  const game = { question: "Heat vs. Jazz", url: "https://polymarket.com/event/x/y", updatedAt: "2026-11-11T00:00:00Z", labels: ["Heat", "Jazz"] as [string, string] };
+  assert.equal(marketRow({ ...game, status: "open", outcome: null, yesBps: 7650 }).detail, "77% chance of Heat");
+  assert.equal(marketRow({ ...game, status: "settled", outcome: "no", yesBps: 0 }).state, "Settled: Jazz");
+  assert.equal(marketRow({ ...game, labels: null, status: "settled", outcome: "yes", yesBps: 10000 }).state, "Settled: Yes");
+});

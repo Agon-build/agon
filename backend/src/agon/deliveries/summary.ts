@@ -19,7 +19,7 @@ const REASONS: Readonly<Record<string, string>> = {
   lead_error: "Something went wrong while the agents worked.",
   market_closed: "That market has already closed, so there was nothing left to do on it.",
   market_not_found: "That market was not found on Polymarket.",
-  not_yes_no: "Only Yes or No markets are supported.",
+  not_yes_no: "That agent only takes Yes or No markets.",
   not_a_football_market: "This agent only works on football markets.",
   market_unavailable: "Polymarket did not answer at the time.",
   which_market: "That link held several markets and none was named.",

@@ -153,3 +153,14 @@ test("an empty price answer says no price came back", () => {
 test("a queued job the service never finished says so, not its ticket fields", () => {
   assert.deepEqual(answerView({ object: "image.generation.job", status: "queued", id: "1e45", poll_url: "/api/v1/images/generations/1e45", payment_status: "verified" }), { kind: "text", text: "The service queued this work and did not send the result." });
 });
+
+test("a Scout answer on a market between two named sides shows both prices by name", () => {
+  const view = answerView({
+    agent: "Scout", market: { question: "Heat vs. Jazz", url: "https://polymarket.com/event/nba-mia-uta-2026-11-10/nba-mia-uta-2026-11-10", crowdBps: 7650, outcomes: [{ label: "Heat", pct: 76.5 }, { label: "Jazz", pct: 23.5 }] },
+    verdict: "tradeable", flags: [], metrics: { yesPct: 76.5, spreadCents: 1, liquidityUsd: 50000, volume24hUsd: 900000, weekMovePts: 0, hoursLeft: 5 },
+    rulesNote: "The league's final score decides it.", readAt: "2026-11-11T09:41:07.000Z",
+  });
+  assert.ok(view && view.kind === "scout");
+  assert.deepEqual(view.metrics.slice(0, 2), [{ label: "Heat price", value: "76.5%" }, { label: "Jazz price", value: "23.5%" }]);
+  assert.ok(!view.metrics.some((m) => m.label === "Yes price"));
+});

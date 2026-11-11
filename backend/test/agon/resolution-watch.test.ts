@@ -53,3 +53,17 @@ test("the markets input takes up to 10 links, slugs or condition ids, one per li
   assert.equal(parseMarketRefs(""), null);
   assert.equal(parseMarketRefs(Array.from({ length: 11 }, (_, i) => `market-${i}-x`).join("\n")), null);
 });
+
+test("a market between two named sides is watched and settled by name", () => {
+  const game = (over: Record<string, unknown> = {}) => gamma({ question: "Heat vs. Jazz", outcomes: '["Heat", "Jazz"]', outcomePrices: '["0.7", "0.3"]', ...over });
+  const start = stateFromGamma(game());
+  assert.deepEqual(start.labels, ["Heat", "Jazz"]);
+  const proposed = stateFromGamma(game({ outcomePrices: '["0.99", "0.01"]', umaResolutionStatus: "proposed" }));
+  const started = alertsBetween("Heat vs. Jazz", start, proposed);
+  assert.equal(started.length, 1);
+  assert.ok(started[0]!.body.endsWith("Heat is trading at 99.0%."), started[0]!.body);
+  const settled = stateFromGamma(game({ outcomePrices: '["0", "1"]', closed: true, umaResolutionStatus: "resolved" }));
+  const done = alertsBetween("Heat vs. Jazz", proposed, settled);
+  assert.deepEqual([done[0]!.kind, done[0]!.title], ["settled", "Settled Jazz: Heat vs. Jazz"]);
+  assert.equal(open.labels, undefined, "a Yes or No market keeps its plain state");
+});

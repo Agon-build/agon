@@ -81,14 +81,29 @@ test("an event link with one open market finds it; one with several asks which, 
   assert.ok(named.ok && named.market.yesBps === 2000, JSON.stringify(named));
 });
 
-test("a game link means the game's own market, and one that is not Yes or No is still refused", async () => {
-  const GAME = "nba-mia-uta-2026-11-10";
+const GAME = "nba-mia-uta-2026-11-10";
+const gameMarket = (over: Record<string, unknown> = {}) => gammaMarket({
+  slug: GAME, conditionId: `0x${"b1".repeat(32)}`, question: "Heat vs. Jazz", outcomes: '["Heat", "Jazz"]', outcomePrices: '["0.765", "0.235"]',
+  clobTokenIds: '["111", "222"]', orderMinSize: 5, orderPriceMinTickSize: 0.01, events: [{ slug: GAME }], ...over,
+});
+
+test("a game link means the game's own market, read as two named sides with their tokens", async () => {
   const lookup = createMarketLookup({ fetchImpl: gammaFetch([
-    gammaMarket({ slug: GAME, conditionId: `0x${"b1".repeat(32)}`, question: "Heat vs. Jazz", outcomes: '["Heat", "Jazz"]', events: [{ slug: GAME }] }),
-    gammaMarket({ slug: `${GAME}-total-228pt5`, conditionId: `0x${"b2".repeat(32)}`, question: "Heat vs. Jazz: O/U 228.5", outcomes: '["Over", "Under"]', events: [{ slug: GAME }] }),
+    gameMarket(),
+    gameMarket({ slug: `${GAME}-total-228pt5`, conditionId: `0x${"b2".repeat(32)}`, question: "Heat vs. Jazz: O/U 228.5", outcomes: '["Over", "Under"]', outcomePrices: '["0.5", "0.5"]', clobTokenIds: undefined }),
   ]) });
-  assert.deepEqual(await lookup(`https://polymarket.com/event/${GAME}`), { ok: false, code: "not_yes_no" });
+  const found = await lookup(`https://polymarket.com/event/${GAME}`);
+  assert.ok(found.ok, JSON.stringify(found));
+  assert.deepEqual(found.market.outcomes, [{ label: "Heat", tokenId: "111", price: 0.765 }, { label: "Jazz", tokenId: "222", price: 0.235 }]);
+  assert.deepEqual([found.market.yesNo, found.market.yesBps, found.market.tickSize, found.market.minOrderSize], [false, 7650, 0.01, 5]);
+  const total = await lookup(`https://polymarket.com/event/${GAME}/${GAME}-total-228pt5`);
+  assert.ok(total.ok && total.market.outcomes[0].label === "Over" && total.market.outcomes[0].tokenId === "", JSON.stringify(total));
   assert.deepEqual(await lookup("https://polymarket.com/event/no-such-event"), { ok: false, code: "market_not_found" });
+  // Yes or No markets say so, and a record without exactly two outcomes is refused.
+  const yesNo = await createMarketLookup({ fetchImpl: gammaFetch([gammaMarket()]) })(EPL_SLUG);
+  assert.ok(yesNo.ok && yesNo.market.yesNo && yesNo.market.outcomes[1].label === "No");
+  const three = createMarketLookup({ fetchImpl: gammaFetch([gammaMarket({ outcomes: '["A", "B", "C"]', outcomePrices: '["0.2", "0.3", "0.5"]' })]) });
+  assert.deepEqual(await three(EPL_SLUG), { ok: false, code: "not_yes_no" });
 });
 
 test("a market is found from a polymarket link, a slug or a condition id", async () => {
@@ -116,7 +131,7 @@ test("football is recognised from event tags or the question, other sports are n
 });
 
 test("scout scores a market from its numbers and names every flag", () => {
-  const healthy = { yesBps: 6350, bestBid: 0.63, bestAsk: 0.64, spread: 0.01, liquidity: 123_709, volume24h: 3_784, weekChange: 0.02, endAt: new Date("2027-05-30T23:59:00Z"), description: "This market will resolve according to the team that wins the league.", closed: false } as MarketSnapshot;
+  const healthy = { outcomes: [{ label: "Yes", tokenId: "", price: 0.635 }, { label: "No", tokenId: "", price: 0.365 }], yesNo: true, yesBps: 6350, bestBid: 0.63, bestAsk: 0.64, spread: 0.01, liquidity: 123_709, volume24h: 3_784, weekChange: 0.02, endAt: new Date("2027-05-30T23:59:00Z"), description: "This market will resolve according to the team that wins the league.", closed: false } as MarketSnapshot;
   const ok = scoutReport(healthy, NOW);
   assert.equal(ok.verdict, "tradeable");
   assert.deepEqual(ok.flags, []);
@@ -136,14 +151,14 @@ test("scout scores a market from its numbers and names every flag", () => {
   assert.deepEqual(consensusOnly.flags.map((f) => f.code), ["vague_rules"]);
 });
 
-function setup(opts: { tags?: string[]; reply?: string; modelDown?: boolean; evidence?: (question: string, now: Date) => Promise<{ n: number; title: string; url: string; published: string | null; text: string }[]> } = {}) {
+function setup(opts: { tags?: string[]; reply?: string; modelDown?: boolean; extra?: Record<string, unknown>[]; evidence?: (question: string, now: Date) => Promise<{ n: number; title: string; url: string; published: string | null; text: string }[]> } = {}) {
   const store = new MemoryPaymentsStore();
   const settler = fakeSettler();
   const prompts: string[] = [];
   const app = createSpecialistRoutes({
     network, store,
     sellers: { pitch: { payTo: `0x${"c1".repeat(20)}` as Address, settle: settler.settle }, scout: { payTo: `0x${"c2".repeat(20)}` as Address, settle: settler.settle }, rules: { payTo: `0x${"c3".repeat(20)}` as Address, settle: settler.settle } },
-    lookup: createMarketLookup({ fetchImpl: gammaFetch([gammaMarket(), gammaMarket({ slug: "closed-one", conditionId: `0x${"e0".repeat(32)}`, closed: true }), gammaMarket({ slug: "rules-one", conditionId: `0x${"d0".repeat(32)}`, description: RULES, umaResolutionStatuses: `["proposed", "disputed"]` })], opts.tags) }),
+    lookup: createMarketLookup({ fetchImpl: gammaFetch([gammaMarket(), gammaMarket({ slug: "closed-one", conditionId: `0x${"e0".repeat(32)}`, closed: true }), gammaMarket({ slug: "rules-one", conditionId: `0x${"d0".repeat(32)}`, description: RULES, umaResolutionStatuses: `["proposed", "disputed"]` }), ...(opts.extra ?? [])], opts.tags) }),
     ...(opts.evidence ? { evidence: opts.evidence } : {}),
     callModel: async (p) => {
       prompts.push(`${p.systemPrompt} ${p.userPrompt}`);
@@ -441,4 +456,25 @@ test("an event link with several markets is answered with the choices before any
   const priced = await app.request("http://api.test/scout", json({ market: `Worth trading? polymarket.com/event/epl-2027-champion/${EPL_SLUG}` }));
   assert.equal(priced.status, 402, "a market link without https, inside a sentence, reaches the price");
   assert.equal(settler.calls.length, 0, "nothing settles");
+});
+
+// Owner decision 2026-11-11: Scout, Rules Check and Resolution Watch take any market with two
+// outcomes (teams, Over or Under). Pitch and the forecasters give the chance of Yes, so they still refuse.
+test("Scout answers a market between two named sides; Pitch still needs Yes or No", async () => {
+  const { app, fetchImpl, settler } = setup({ extra: [gameMarket()] });
+  const out = await buyExact({ url: "http://api.test/scout", init: json({ market: `https://polymarket.com/event/${GAME}` }), network, maxAmount: SPECIALISTS.scout.price, signerFor: () => localSigner(buyer), fetchImpl });
+  assert.ok(out.ok, show(out));
+  const data = out.data as { agent: string; market: { question: string; crowdBps: number; outcomes: { label: string; pct: number }[] }; metrics: { yesPct: number } };
+  assert.deepEqual([data.agent, data.market.question, data.market.crowdBps, data.metrics.yesPct], ["Scout", "Heat vs. Jazz", 7650, 76.5]);
+  assert.deepEqual(data.market.outcomes, [{ label: "Heat", pct: 76.5 }, { label: "Jazz", pct: 23.5 }]);
+  assert.equal(settler.calls.length, 1);
+
+  const pitch = await app.request("http://api.test/pitch", json({ market: GAME }));
+  assert.equal(pitch.status, 422);
+  assert.equal(((await pitch.json()) as { error: string }).error, "not_yes_no");
+  const rules = await app.request("http://api.test/rules", json({ market: GAME }));
+  assert.equal(rules.status, 402, "Rules Check reads any market's rules");
+
+  const extreme = scoutReport({ ...(await createMarketLookup({ fetchImpl: gammaFetch([gameMarket({ outcomePrices: '["0.985", "0.015"]' })]) })(GAME).then((r) => { assert.ok(r.ok); return r.market; })) }, NOW);
+  assert.ok(extreme.flags.some((f) => f.code === "extreme_price" && f.detail.startsWith("Heat is at 98.5%")), JSON.stringify(extreme.flags));
 });

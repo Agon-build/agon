@@ -4,7 +4,7 @@ import test from "node:test";
 
 import { parseBook, parseHistory } from "../../src/agon/polymarket/clob.ts";
 import { parseHolders, parseOpenInterest, parseTrades } from "../../src/agon/polymarket/data.ts";
-import { PolymarketUnavailable, costToTrade, createPolymarket, depthWithin, flowOf, type Book, type Trade } from "../../src/agon/polymarket/index.ts";
+import { PolymarketUnavailable, costToTrade, createPolymarket, depthWithin, flowOf, parseMarket, type Book, type Trade } from "../../src/agon/polymarket/index.ts";
 
 // Payloads recorded from Polymarket on 2026-11-11 and trimmed (see the phase 1 plan).
 const recorded = (name: string): unknown => JSON.parse(readFileSync(new URL(`./fixtures/polymarket/${name}.json`, import.meta.url), "utf8"));
@@ -133,6 +133,7 @@ function fakePolymarket(opts: { timeoutMs?: number } = {}) {
     if (url.pathname === "/v2/trades") return Response.json(recorded("trades"));
     if (url.pathname === "/v2/holders") return Response.json(recorded("holders"));
     if (url.pathname === "/v2/oi") return Response.json(recorded("oi"));
+    if (url.pathname === "/markets") return Response.json([{ unreadable: true }, ...(recorded("market-named") as unknown[]), ...(recorded("market-yes-no") as unknown[])]);
     return new Response("not found", { status: 404 });
   }) as typeof fetch;
   return { state, pm: createPolymarket({ fetchImpl, now: () => state.now, ...(opts.timeoutMs ? { timeoutMs: opts.timeoutMs } : {}) }) };
@@ -150,10 +151,10 @@ test("every read says when and where it was read, and asks Polymarket's own addr
   assert.equal((await pm.openInterest(CONDITION)).value, 55908.09897);
   assert.deepEqual(state.calls, [
     `https://clob.polymarket.com/book?token_id=${TOKEN}`,
-    `https://data-api.polymarket.com/v2/trades?condition_id=${CONDITION}&limit=200`,
+    `https://data-api.polymarket.com/v2/trades?condition=${CONDITION}&limit=200`,
     `https://clob.polymarket.com/prices-history?market=${TOKEN}&interval=1w&fidelity=60`,
-    `https://data-api.polymarket.com/v2/holders?condition_id=${CONDITION}&limit=3`,
-    `https://data-api.polymarket.com/v2/oi?condition_id=${CONDITION}`,
+    `https://data-api.polymarket.com/v2/holders?condition=${CONDITION}&limit=3`,
+    `https://data-api.polymarket.com/v2/oi?condition=${CONDITION}`,
   ]);
   await assert.rejects(pm.book("not-a-token"), TypeError);
   await assert.rejects(pm.trades("0x12"), TypeError);
@@ -193,4 +194,35 @@ test("a call that hangs fails inside the time limit", async () => {
   const started = Date.now();
   await assert.rejects(pm.book(TOKEN), (error: unknown) => error instanceof PolymarketUnavailable && /did not answer in 20 ms/.test(error.message));
   assert.ok(Date.now() - started < 1_000);
+});
+
+test("recorded markets are read as two named outcomes with their tokens", () => {
+  const yes = parseMarket((recorded("market-yes-no") as unknown[])[0]);
+  assert.ok(yes.ok, JSON.stringify(yes));
+  assert.deepEqual([yes.market.yesNo, yes.market.outcomes[0].label, yes.market.outcomes[1].label, yes.market.negRisk], [true, "Yes", "No", true]);
+  assert.match(yes.market.outcomes[0].tokenId, /^\d{20,}$/);
+  assert.notEqual(yes.market.outcomes[0].tokenId, yes.market.outcomes[1].tokenId);
+  assert.deepEqual([yes.market.tickSize, yes.market.minOrderSize], [0.001, 5]);
+  assert.equal(yes.market.yesBps, Math.round(yes.market.outcomes[0].price * 10_000));
+
+  const game = parseMarket((recorded("market-named") as unknown[])[0]);
+  assert.ok(game.ok, JSON.stringify(game));
+  assert.deepEqual([game.market.yesNo, game.market.outcomes.map((o) => o.label)], [false, ["Heat", "Jazz"]]);
+  assert.ok(game.market.url.startsWith("https://polymarket.com/event/nba-mia-uta-2026-11-10/"));
+  assert.match(game.market.outcomes[1].tokenId, /^\d{20,}$/);
+
+  assert.deepEqual(parseMarket({}), { ok: false, code: "market_not_found" });
+  assert.deepEqual(parseMarket({ ...((recorded("market-named") as Record<string, unknown>[])[0]), outcomes: '["Only one"]' }), { ok: false, code: "not_yes_no" });
+});
+
+test("the busiest open markets are listed by money traded, leaving out what cannot be read", async () => {
+  const { state, pm } = fakePolymarket();
+  const top = await pm.topMarkets();
+  assert.equal(top.value.length, 2);
+  assert.ok(top.value[0]!.volume24h >= top.value[1]!.volume24h, "busiest first");
+  assert.deepEqual(top.value.map((m) => m.outcomes[0].label).sort(), ["Heat", "Yes"]);
+  assert.equal(top.source, "https://gamma-api.polymarket.com/markets");
+  assert.equal(state.calls[0], "https://gamma-api.polymarket.com/markets?closed=false&active=true&order=volume24hr&ascending=false&limit=20");
+  await pm.topMarkets();
+  assert.equal(state.calls.length, 1, "kept for half a minute");
 });

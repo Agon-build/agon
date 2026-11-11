@@ -22,9 +22,12 @@ const forecastBody = { marketId: `0x${"ab".repeat(32)}`, question: "Will the pri
 const snapshot = (over: Partial<MarketSnapshot> = {}): MarketSnapshot => ({
   conditionId: `0x${"cd".repeat(32)}`, slug: "fed-cut-december", url: "https://polymarket.com/event/fed-cut-december", question: "Will the Fed cut rates in December?",
   endAt: new Date("2026-12-10T19:00:00Z"), yesBps: 6200, bestBid: 0.61, bestAsk: 0.63, spread: 0.02, liquidity: 90_000, volume24h: 12_000, weekChange: 0.03,
-  description: "Resolves Yes if the FOMC cuts.", tags: ["economy"], closed: false, umaStatuses: [], ...over,
+  description: "Resolves Yes if the FOMC cuts.", tags: ["economy"], closed: false, umaStatuses: [],
+  outcomes: [{ label: "Yes", tokenId: "", price: 0.62 }, { label: "No", tokenId: "", price: 0.38 }], yesNo: true,
+  tickSize: null, minOrderSize: null, acceptingOrders: true, negRisk: false, ...over,
 });
-const lookup: MarketLookup = async (ref) => (ref.includes("closed") ? { ok: true, market: snapshot({ closed: true }) } : ref.includes("fed") ? { ok: true, market: snapshot() } : { ok: false, code: "market_not_found" });
+const game = (): MarketSnapshot => snapshot({ question: "Heat vs. Jazz", yesNo: false, outcomes: [{ label: "Heat", tokenId: "", price: 0.62 }, { label: "Jazz", tokenId: "", price: 0.38 }] });
+const lookup: MarketLookup = async (ref) => (ref.includes("closed") ? { ok: true, market: snapshot({ closed: true }) } : ref.includes("heat") ? { ok: true, market: game() } : ref.includes("fed") ? { ok: true, market: snapshot() } : { ok: false, code: "market_not_found" });
 
 function setup(reply = '{"probability":0.34,"reasons":["a","b","c"]}') {
   const store = new MemoryPaymentsStore();
@@ -120,6 +123,9 @@ test("an unknown or closed market is refused with a reason before any payment", 
   assert.deepEqual(await unknown.json(), { error: "market_not_found" });
   const closed = await app.request("http://api.test/atlas/forecast", json({ market: "closed-market" }));
   assert.deepEqual([closed.status, await closed.json()], [400, { error: "market_closed" }]);
+  // A forecast is the chance of Yes; a market between two named sides has no Yes.
+  const named = await app.request("http://api.test/atlas/forecast", json({ market: "nba-heat-jazz" }));
+  assert.deepEqual([named.status, await named.json()], [400, { error: "not_yes_no" }]);
   assert.equal(settler.calls.length, 0);
 });
 

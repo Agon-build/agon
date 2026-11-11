@@ -8,7 +8,7 @@ export const KIND_LABEL: Record<StageEventKind, string> = {
 const MARKET_REFUSALS: Record<string, string> = {
   market_not_found: "That market was not found on Polymarket. Check the link, slug or condition id. Nothing was charged.",
   market_closed: "That market has already closed, so there is nothing left to do on it. Nothing was charged.",
-  not_yes_no: "Only Yes or No markets are supported. Nothing was charged.",
+  not_yes_no: "This agent only takes Yes or No markets. Nothing was charged.",
   not_a_football_market: "This agent only works on football markets. Nothing was charged.",
   market_unavailable: "Polymarket did not answer. Try again in a minute. Nothing was charged.",
   which_market: "That link holds several markets. Paste the link of the one you mean. Nothing was charged.",

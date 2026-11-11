@@ -60,3 +60,43 @@ export type Flow = {
   /** The three largest trades, largest first. */
   largest: Trade[];
 };
+
+/// One side of a market: its name ("Yes", "Heat", "Over"), the token traded for it and its price.
+/// `tokenId` is empty when Polymarket gave none.
+export type Outcome = { label: string; tokenId: string; price: number };
+
+/// One Polymarket market: a question with exactly two outcomes.
+export type Market = {
+  conditionId: string;
+  slug: string;
+  url: string;
+  question: string;
+  endAt: Date;
+  outcomes: [Outcome, Outcome];
+  /** True when the outcomes are named Yes and No, in that order. */
+  yesNo: boolean;
+  /** The first outcome's price in hundredths of a percent. For a Yes or No market this is the Yes price. */
+  yesBps: number;
+  bestBid: number | null;
+  bestAsk: number | null;
+  spread: number;
+  liquidity: number;
+  volume24h: number;
+  weekChange: number;
+  description: string;
+  tags: string[];
+  closed: boolean;
+  /** Polymarket's proposal and dispute rounds for this market, oldest first ("proposed", "disputed"). */
+  umaStatuses: string[];
+  tickSize: number | null;
+  minOrderSize: number | null;
+  acceptingOrders: boolean;
+  negRisk: boolean;
+};
+
+/// One market of an event that holds several, offered when a link names only the event.
+export type MarketChoice = { label: string; url: string; yesPct: number | null };
+export type ResolveResult =
+  | { ok: true; market: Market }
+  | { ok: false; code: "market_not_found" | "market_unavailable" | "not_yes_no" }
+  | { ok: false; code: "which_market"; title: string; choices: MarketChoice[] };

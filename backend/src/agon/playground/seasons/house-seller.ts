@@ -100,6 +100,8 @@ export function createHouseSellerRoutes(deps: {
     const found = await deps.lookupMarket(body.data.market);
     if (!found.ok) return c.json({ error: found.code }, found.code === "market_unavailable" ? 503 : 400);
     if (found.market.closed) return c.json({ error: "market_closed" }, 400);
+    // A forecast is the chance of Yes, so a market with other outcomes (teams, Over or Under) is refused.
+    if (!found.market.yesNo) return c.json({ error: "not_yes_no" }, 400);
     const m = found.market;
     c.set("forecast", { marketId: m.conditionId, question: m.question.slice(0, 300), endDate: m.endAt.toISOString(), crowdBps: m.yesBps, notes: body.data.notes });
     return next();

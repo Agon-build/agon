@@ -39,7 +39,7 @@ const watchRefs = (raw: unknown): string[] | null => { const b = watchBody.safeP
 const REFUSALS: Readonly<Record<string, string>> = {
   market_not_found: "That market was not found on Polymarket. Check the link, slug or condition id.",
   market_closed: "That market has already closed, so there is nothing left to do on it.",
-  not_yes_no: "Only Yes or No markets are supported.",
+  not_yes_no: "This agent only takes Yes or No markets.",
   not_a_football_market: "Pitch only forecasts football markets.",
   market_unavailable: "Polymarket did not answer. Try again in a minute.",
 };
@@ -48,7 +48,11 @@ const whichMarket = (choices: MarketChoice[]): string =>
   `That link holds several markets. Which one? ${choices.map((c) => (c.yesPct === null ? c.label : `${c.label} ${c.yesPct}%`)).join(", ")}. Send that market's own link.`;
 type Refused = { ok: false; code: string; choices?: MarketChoice[] };
 
-const marketView = (m: MarketSnapshot) => ({ question: m.question, url: m.url, slug: m.slug, closesAt: m.endAt.toISOString(), crowdBps: m.yesBps });
+/// The market as an answer shows it. `crowdBps` is the first outcome's price; `outcomes` names both.
+const marketView = (m: MarketSnapshot) => ({
+  question: m.question, url: m.url, slug: m.slug, closesAt: m.endAt.toISOString(), crowdBps: m.yesBps,
+  outcomes: m.outcomes.map((o) => ({ label: o.label, pct: Math.round(o.price * 1_000) / 10 })),
+});
 
 /// Specialist agents Agon runs and sells per call over x402: Pitch forecasts
 /// football markets, Scout checks whether a Polymarket market is worth trading,
@@ -93,7 +97,7 @@ export function createSpecialistRoutes(deps: {
     // The model reads the rules; code keeps only quotes found in them and decides the risk. No price is sent or returned.
     const reply = await deps.callModel({ model: spec.model, ...rulesCheckPrompt(m.question, m.description), maxTokens: RULES_MAX_TOKENS, temperature: 0 }).catch(() => null);
     if (!reply) return { ok: false, code: "model_unavailable" };
-    const { crowdBps: _price, ...market } = marketView(m);
+    const { crowdBps: _price, outcomes: _outcomes, ...market } = marketView(m);
     return { ok: true, body: { agent: spec.name, market, ...rulesCheck({ question: m.question, rules: m.description, umaStatuses: m.umaStatuses }, reply.text), model: spec.model } };
   };
   const sellerFor = (key: string) => (Object.hasOwn(SPECIALISTS, key) && deps.sellers[key as SpecialistKey] && (key !== "watch" || deps.watch) ? { key: key as SpecialistKey, seller: deps.sellers[key as SpecialistKey]! } : null);
@@ -109,6 +113,8 @@ export function createSpecialistRoutes(deps: {
       const r = await deps.lookup(ref);
       if (!r.ok) return r.code === "which_market" ? { ok: false, code: r.code, choices: r.choices } : { ok: false, code: r.code };
       if (r.market.closed) return { ok: false, code: "market_closed" };
+      // Pitch forecasts the chance of Yes, so it needs a Yes or No market. The other agents take any two outcomes.
+      if (key === "pitch" && !r.market.yesNo) return { ok: false, code: "not_yes_no" };
       if (key === "pitch" && !isFootballMarket(r.market)) return { ok: false, code: "not_a_football_market" };
       list.push(r.market);
     }
@@ -122,7 +128,7 @@ export function createSpecialistRoutes(deps: {
     const { watch, markets: ms, alerts } = found;
     return c.json({
       watchId: watch.watchId, status: watch.status, endsAt: watch.endsAt.toISOString(),
-      markets: ms.map((m) => ({ question: m.question, url: m.url, status: m.state.status, outcome: m.state.outcome, yesBps: m.state.yesBps, updatedAt: m.updatedAt.toISOString() })),
+      markets: ms.map((m) => ({ question: m.question, url: m.url, status: m.state.status, outcome: m.state.outcome, yesBps: m.state.yesBps, labels: m.state.labels ?? null, updatedAt: m.updatedAt.toISOString() })),
       alerts: alerts.map((a) => ({ kind: a.kind, title: a.title, body: a.body, at: a.createdAt.toISOString() })),
     });
   });
@@ -205,7 +211,10 @@ export function createSpecialistRoutes(deps: {
         const watchId = w.newId?.() ?? randomBytes(16).toString("hex");
         const endsAt = new Date(now().getTime() + WATCH_DAYS * 86_400_000);
         // The first reading is the baseline: an already proposed market raises "settlement started" on the next tick.
-        const baseline = (m: MarketSnapshot): WatchState => ({ status: "open", outcome: null, yesBps: m.yesBps, rules: m.description });
+        const baseline = (m: MarketSnapshot): WatchState => ({
+          status: "open", outcome: null, yesBps: m.yesBps, rules: m.description,
+          ...(m.yesNo ? {} : { labels: [m.outcomes[0].label, m.outcomes[1].label] as [string, string] }),
+        });
         await w.store.createWatch({ watchId, ownerAddress: await w.ownerOf(payer).catch(() => null), payer, network: deps.network.id, endsAt },
           list.map((m) => ({ conditionId: m.conditionId, question: m.question, url: m.url, state: baseline(m) })), now());
         return c.json({

@@ -39,7 +39,7 @@ export function scoutReport(m: MarketSnapshot, now: Date): ScoutReport {
   if (m.spread > 0.03) flags.push({ code: "wide_spread", detail: `The spread is ${metrics.spreadCents} cents, so entering and leaving costs that much.` });
   if (m.volume24h < 500) flags.push({ code: "low_activity", detail: `Only ${usd(m.volume24h)} traded in the last 24 hours.` });
   if (hoursLeft < 24) flags.push({ code: "closing_soon", detail: `Closes in ${Math.max(0, Math.round(hoursLeft))} hours.` });
-  if (m.yesBps < 300 || m.yesBps > 9_700) flags.push({ code: "extreme_price", detail: `Yes is at ${metrics.yesPct}%, close to settled either way; little upside left.` });
+  if (m.yesBps < 300 || m.yesBps > 9_700) flags.push({ code: "extreme_price", detail: `${m.outcomes[0].label} is at ${metrics.yesPct}%, close to settled either way; little upside left.` });
   if (vagueRules(m.description)) flags.push({ code: "vague_rules", detail: "The resolution rules leave room for judgment; read them before trading." });
   const thinAndWide = flags.some((f) => f.code === "thin_liquidity") && flags.some((f) => f.code === "wide_spread");
   const verdict = flags.length >= 3 || thinAndWide ? "avoid" : flags.length > 0 ? "watch" : "tradeable";
