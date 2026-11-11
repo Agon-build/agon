@@ -7,9 +7,10 @@ import { PlaygroundProviderError, type PlaygroundProviderRunner } from "../playg
 import { PlaygroundRunConflictError, type PlaygroundRateLimiter, type PlaygroundRunStore } from "../playground-store.ts";
 import { inspectManifest, ManifestInspectionError } from "../manifest-inspector.ts";
 import { clientAddress } from "../../http/client-address.ts";
+import { createRateLimiter } from "../stage/rate-limit.ts";
 import { createMcpAccessAdapter } from "../mcp/adapter.ts";
 import { authorizeMcpRequest } from "../mcp-oauth/edge.ts";
-import { createAgonNativeMcpHandler, type RatingsMcpDeps } from "../mcp/native-server.ts";
+import { createAgonNativeMcpHandler, createAgonPublicMcpHandler, type PublicMcpDeps, type RatingsMcpDeps } from "../mcp/native-server.ts";
 import type { StageMcpDeps } from "../mcp/stage-tools.ts";
 import type { ManagedPublisher } from "../mcp/managed-publisher.ts";
 import type { ProviderDraftStore } from "../mcp/provider-draft-store.ts";
@@ -382,6 +383,10 @@ export type CreateAgonRoutesOptions = {
   stageMcp?: StageMcpDeps;
   /** Public scores and Playground test tools (Plan 3f). */
   ratingsMcp?: RatingsMcpDeps;
+  /** What the public, read-only MCP endpoint serves beyond discovery and ratings. */
+  publicMcp?: Omit<PublicMcpDeps, "ratings">;
+  /** Per-caller limit of the public MCP endpoint; true while under it. */
+  publicMcpLimit?: (caller: string) => boolean;
   /** Optional external marketplace adapters. Arc remains the default source. */
   marketSources?: MarketSource[];
   requireAuth: MiddlewareHandler<{ Variables: AgonRouteVariables }>;
@@ -738,6 +743,11 @@ export function createAgonRoutes(options: CreateAgonRoutesOptions) {
   const app = new Hono<{ Variables: AgonRouteVariables }>();
   const mcp = createMcpAccessAdapter(options.service, { providerDraftStore: options.providerDraftStore, hostedManifestStore: options.hostedManifestStore, hireStore: options.hireStore, listingChecker: options.listingChecker });
   const nativeMcp = createAgonNativeMcpHandler(mcp, options.managedPublisher, options.stageMcp, options.ratingsMcp);
+  const publicMcp = createAgonPublicMcpHandler(mcp, {
+    ...(options.ratingsMcp ? { ratings: options.ratingsMcp } : {}),
+    ...(options.publicMcp ?? {}),
+  });
+  const publicMcpLimit = options.publicMcpLimit ?? createRateLimiter({ limit: 60, windowMs: 60_000 });
   const marketAggregator = createMarketAggregator(options.marketSources ?? [
     {
       id: "arc",
@@ -1144,6 +1154,16 @@ export function createAgonRoutes(options: CreateAgonRoutesOptions) {
   app.get("/listings/:reference", async (context) => {
     const result = await options.service.getListing(context.req.param("reference"));
     return result.ok ? context.json(result.value) : serviceErrorResponse(context, result.error);
+  });
+
+  // The public MCP endpoint: read-only discovery with no sign-in, limited per caller. It is a
+  // separate address so the signed-in endpoint keeps answering 401 to start a client's sign-in.
+  app.all("/mcp/public", async (context) => {
+    if (!publicMcpLimit(clientAddress((name) => context.req.header(name)))) {
+      return context.json({ error: { code: "rate_limited", message: "Too many requests. Try again in a minute." } }, 429);
+    }
+    if (Number(context.req.header("content-length") ?? 0) > 64 * 1024) return context.json({ error: { code: "invalid_request", message: "request body too large" } }, 413);
+    return publicMcp.fetch(context.req.raw);
   });
 
   // Standards-based MCP with sign-in: every request needs a connection. No

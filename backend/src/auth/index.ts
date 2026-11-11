@@ -31,7 +31,8 @@ import { firstPartyActivity, startOutsideRuntime, startPaymentsRuntime } from ".
 import { paidAverages, refsForListing } from "../agon/ratings/rules.ts";
 import { createRatings, type Ratings } from "../agon/ratings/service.ts";
 import { PostgresRatingsStore } from "../agon/ratings/store.ts";
-import { approvalsByNetwork, startRouting, type ListingView } from "../agon/routing/runtime.ts";
+import { approvalsByNetwork, listingLiteFrom, startRouting, type ListingView } from "../agon/routing/runtime.ts";
+import { agonPayee, createDirectory, createDirectoryRoutes, proofFromScores } from "../agon/directory.ts";
 import type { Proof, ProofPart } from "../agon/routing/catalog.ts";
 import type { Router } from "../agon/routing/router.ts";
 import { createEventReader } from "../agon/routing/live-market.ts";
@@ -1124,8 +1125,32 @@ app.route("/", createOAuthRoutes({
   terms: custodyTerms,
   resolveClient: (clientId) => resolveOAuthClient(clientId, { store: oauthStore, resolve: async (host) => (await dnsLookup(host, { all: true })).map((a) => a.address), get: pinnedHttpsGet, now: () => new Date() }),
 }));
+// The public directory: every listed Agon agent with its inputs, price, call address and proof.
+// No sign-in; an agent with its own wallet reads it and pays the agent's address over x402.
+const addressesOf = (wallets: Record<string, { address: `0x${string}` } | undefined>) =>
+  Object.fromEntries(Object.entries(wallets).flatMap(([key, w]) => (w ? [[key, w.address]] : []))) as Record<string, `0x${string}`>;
+const agonDirectory = createDirectory({
+  listListings: async () => {
+    const page = await agonService.listListings({ limit: 100, cursor: null, category: null, agentId: null, includeManifest: true });
+    if (!page.ok) throw new Error("listings unavailable");
+    return (page.value.items as unknown as ListingView[]).map(listingLiteFrom).filter((r): r is NonNullable<typeof r> => r !== null);
+  },
+  proofFor: async (agentId) => {
+    const res = await agonScoresRoutes.request(`/${encodeURIComponent(agentId)}`);
+    return res.ok ? proofFromScores(await res.json().catch(() => null)) : null;
+  },
+  payToFor: (endpoint) => (agonPayments
+    ? agonPayee(endpoint, { lead: agonPayments.settings.lead.address, house: addressesOf(agonPayments.settings.houseSellers), specialists: addressesOf(agonPayments.settings.specialistSellers) })
+    : null),
+  network: agonPayments ? agonPayments.settings.network : agonNetwork("arc-testnet"),
+  siteUrl: stage.settings.siteUrl,
+  apiUrl: AGON_API_ORIGIN,
+});
+app.route("/agon/directory", createDirectoryRoutes({ directory: agonDirectory }));
+
 app.route("/agon", createAgonRoutes({
   service: agonService,
+  publicMcp: { directory: agonDirectory, ...(stageServices ? { leaderboard: ((services) => (limit: number) => services.leaderboard(limit))(stageServices) } : {}) },
   verifyMcpToken: createMcpTokenVerifier(agonAccessTokens, verifyTokenClaims, undefined, async (token) => {
     const claims = await oauthStore.verifyAccess(token, AGON_MCP_RESOURCE, new Date());
     return claims ? { address: claims.address, client: "agon-mcp", scopes: claims.scopes } : null;
