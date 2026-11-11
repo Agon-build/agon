@@ -97,6 +97,7 @@ backend/scripts/*
 !backend/scripts/bedrock-forecast-sample.ts
 !backend/scripts/verify-season.ts
 !backend/scripts/payment-wallets.ts
+!backend/scripts/polymarket-contract-check.ts
 !backend/scripts/hire-smoke.ts
 !backend/scripts/mainnet-first-purchase.ts
 !backend/scripts/telegram-webhook.ts

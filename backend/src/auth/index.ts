@@ -54,6 +54,7 @@ import { PostgresTelegramLinks } from "../agon/deliveries/telegram-link.ts";
 import { callModel } from "../runners/llm/client.js";
 import { formatUsdc } from "../agon/payments/bargain.ts";
 import { checkStage, startStageMonitor } from "../agon/stage/monitor.ts";
+import { CONTRACT_ALERT_FINGERPRINT, CONTRACT_CHECK_INTERVAL_MS, contractAlerts, createPolymarket, runContractCheck } from "../agon/polymarket/index.ts";
 import { PostgresMonitorStore } from "../agon/stage/monitor-store.ts";
 import { createErc8004EntryVerifier, createSeasonRoutes } from "../agon/playground/seasons/routes.ts";
 import { createPublicClient as createSeasonClient, fallback as seasonFallback } from "viem";
@@ -1005,6 +1006,25 @@ if (agonPayments) {
       resolve: async (f) => { await agonOperationsAlerts.resolve(alertOperator, f); },
     });
     console.log(`[stage] monitor on; alerts to ${alertOperator}`);
+    // Polymarket can change or retire what Agon reads (its first Data API was retired in 2026).
+    // Four times a day Agon reads the busiest market through every call of the data module and
+    // tells the operator when one fails, before a buyer finds out.
+    const polymarketData = createPolymarket();
+    const polymarketCheck = startStageMonitor({
+      intervalMs: CONTRACT_CHECK_INTERVAL_MS,
+      log: (m) => console.warn(`[polymarket] ${m}`),
+      check: async () => {
+        const result = await runContractCheck({ polymarket: polymarketData });
+        // A pass also closes an alert left open by an earlier run of this service.
+        if (result.ok) await agonOperationsAlerts.resolve(alertOperator, CONTRACT_ALERT_FINGERPRINT).catch(() => false);
+        else console.warn(`[polymarket] data check failed: ${result.lines.filter((l) => !l.ok).map((l) => `${l.name}: ${l.detail}`).join("; ")}`);
+        return contractAlerts(result);
+      },
+      raise: async (a) => { await agonOperationsAlerts.raise({ operator: alertOperator, fingerprint: a.fingerprint, source: "stage", severity: a.severity, title: a.title, body: a.body }); },
+      resolve: async (f) => { await agonOperationsAlerts.resolve(alertOperator, f); },
+    });
+    setTimeout(() => void polymarketCheck.tick(), 60_000).unref();
+    console.log("[polymarket] data check on, every 6 hours");
   }
 }
 
