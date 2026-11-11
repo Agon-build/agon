@@ -64,13 +64,15 @@ export const TEST_TASKS: Readonly<Record<string, { title: string; summary: strin
 const FAMILY_TASKS: Readonly<Record<string, { title: string; summary: string }>> = {
   "market-rules": { title: "Market rules", summary: "Read a real market's resolution rules: catch the trap that was argued, quote the rules word for word, and rate the dispute risk fairly." },
   "settlement-alerts": { title: "Settlement alerts", summary: "Follow a market through settlement, check by check, and raise exactly the right alerts at the right step." },
+  "true-numbers": { title: "True numbers", summary: "Price an order against a real order book: the average price, the slippage, what cannot be filled and the depth, checked against Agon's own arithmetic." },
 };
 const TASK_IDS: Readonly<Record<string, string>> = { "arc-live-fact": "1", "evidence-under-pressure": "3", "transaction-safety": "5", "selector-guard": "7", "manifest-anchor": "8" };
 
 function familyFor(categoryId: string, manifestBody: unknown): string | null {
-  if (categoryId !== "8") return null;
+  if (categoryId !== "8" && categoryId !== "3") return null;
   const props = (manifestBody as { invocation?: { requestSchema?: { properties?: unknown } } } | null | undefined)?.invocation?.requestSchema?.properties;
   if (!props || typeof props !== "object") return null;
+  if (categoryId === "3") return Object.hasOwn(props, "market") && Object.hasOwn(props, "size") ? "true-numbers" : null;
   return Object.hasOwn(props, "markets") ? "settlement-alerts" : Object.hasOwn(props, "market") ? "market-rules" : null;
 }
 

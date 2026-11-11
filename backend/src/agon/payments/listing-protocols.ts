@@ -40,6 +40,20 @@ const settlementBody = z.object({
   input: z.object({ question: z.string().min(1).max(500), readings: z.array(z.record(z.unknown())).min(1).max(12) }),
   scope: z.object({ listingReference: z.string().max(200), listingVersion: z.string().max(20) }),
 });
+/// The Playground's true-numbers test (tests/tasks.ts): an order book as Polymarket sends it, a side and a size.
+export const TRUE_NUMBERS_TASK_ID = "true-numbers";
+const bookLevels = z.array(z.object({ price: z.string().max(20), size: z.string().max(30) })).max(200);
+const trueNumbersBody = z.object({
+  protocol: z.literal(CERTIFICATION_PROTOCOL),
+  category: z.string().max(40),
+  task: z.object({ id: z.literal(TRUE_NUMBERS_TASK_ID), title: z.string().max(200), adversarialPrompt: z.string().max(1000), capability: z.string().max(200) }),
+  input: z.object({ question: z.string().min(1).max(500), side: z.enum(["buy", "sell"]), sizeUsd: z.number().positive().max(1_000_000), book: z.object({ asset_id: z.string().min(1).max(100), bids: bookLevels, asks: bookLevels }) }),
+  scope: z.object({ listingReference: z.string().max(200), listingVersion: z.string().max(20) }),
+});
+export type TrueNumbersTask = z.infer<typeof trueNumbersBody>["input"];
+/// How a market-check agent answers the true-numbers test: what the order would really get, or null when it could not say.
+export type TrueNumbersAnswerer = (task: TrueNumbersTask) => Promise<Record<string, unknown> | null>;
+
 /// How a settlement watcher answers the settlement-alerts test: the alerts it would raise, step by step.
 export type SettlementAlertsAnswerer = (task: { question: string; readings: Record<string, unknown>[] }) => Promise<{ step: number; kind: string }[]>;
 
@@ -105,7 +119,14 @@ function firstJsonObject(text: string): unknown {
 /// agents with their model, deterministic agents with their rules. The only
 /// fixed fields are the ones that are true by construction: these endpoints
 /// never write anywhere.
-export async function certificationReply(input: { agent: { name: string; capabilities: string[] }; body: unknown; marketRules?: MarketRulesAnswerer; settlementAlerts?: SettlementAlertsAnswerer } & CertificationAnswerer): Promise<{ status: 200; json: CertificationReply } | { status: 400 | 502; json: { error: string } }> {
+export async function certificationReply(input: { agent: { name: string; capabilities: string[] }; body: unknown; marketRules?: MarketRulesAnswerer; settlementAlerts?: SettlementAlertsAnswerer; trueNumbers?: TrueNumbersAnswerer } & CertificationAnswerer): Promise<{ status: 200; json: CertificationReply } | { status: 400 | 502; json: { error: string } }> {
+  const numbersTask = trueNumbersBody.safeParse(input.body);
+  if (numbersTask.success) {
+    if (!input.trueNumbers) return { status: 400, json: { error: "invalid_certification_request" } };
+    const numbers = await input.trueNumbers(numbersTask.data.input).catch(() => null);
+    if (!numbers) return { status: 502, json: { error: "numbers_unavailable" } };
+    return { status: 200, json: { protocol: CERTIFICATION_PROTOCOL, agent: { name: input.agent.name, version: "1", capabilities: input.agent.capabilities }, output: { ...numbers, writesPerformed: false }, externalWrites: false } };
+  }
   const settlementTask = settlementBody.safeParse(input.body);
   if (settlementTask.success) {
     if (!input.settlementAlerts) return { status: 400, json: { error: "invalid_certification_request" } };
@@ -168,7 +189,7 @@ const carriesPayment = (c: Context) => Boolean(c.req.header("PAYMENT-SIGNATURE")
 export async function answerListingCheck(
   c: Context,
   raw: unknown,
-  certify: ({ agent: { name: string; capabilities: string[] }; gate?: (c: Context) => boolean; marketRules?: MarketRulesAnswerer; settlementAlerts?: SettlementAlertsAnswerer } & CertificationAnswerer) | null,
+  certify: ({ agent: { name: string; capabilities: string[] }; gate?: (c: Context) => boolean; marketRules?: MarketRulesAnswerer; settlementAlerts?: SettlementAlertsAnswerer; trueNumbers?: TrueNumbersAnswerer } & CertificationAnswerer) | null,
 ): Promise<Response | "preflight" | null> {
   const kind = listingProtocolKind(raw);
   if (kind === "service") return null;

@@ -71,6 +71,9 @@ test("a Verification agent's test is named from the input it declares, and a run
   assert.equal(testInfo("8", takes("market"))!.title, "Market rules");
   assert.equal(testInfo("8", null)!.title, "Service file check");
   assert.equal(testInfo("3", takes("market"))!.title, "Facts versus claims");
+  // An Analysis agent that takes a market and a size prices orders, so its test is the order book one.
+  assert.equal(testInfo("3", { invocation: { requestSchema: { properties: { market: {}, size: {}, side: {} } } } })!.title, "True numbers");
+  assert.equal(runTestTitle({ taskId: "true-numbers", categoryId: "3" }), "True numbers");
   assert.equal(runTestTitle({ taskId: "settlement-alerts", categoryId: "8" }), "Settlement alerts");
   assert.equal(runTestTitle({ taskId: "manifest-anchor", categoryId: "8" }), "Service file check");
   assert.equal(runTestTitle({ taskId: "unknown", categoryId: "6" }), null);

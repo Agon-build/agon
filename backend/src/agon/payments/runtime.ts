@@ -9,6 +9,7 @@ import { DEFAULT_HOUSE_AGENTS } from "../playground/seasons/house-agents.ts";
 import { parseFirstPartyAgents, providerRefFor } from "../first-party.ts";
 import { createHouseSellerRoutes } from "../playground/seasons/house-seller.ts";
 import { createMarketLookup } from "../agents/market-lookup.ts";
+import { createPolymarket } from "../polymarket/index.ts";
 import { createSpecialistRoutes } from "../agents/routes.ts";
 import { createEvidenceSearch } from "../playground/seasons/evidence.ts";
 import { PostgresWatchStore } from "../agents/watch-store.ts";
@@ -194,6 +195,8 @@ export function startPaymentsRuntime(input: {
         network, store,
         sellers: Object.fromEntries(Object.entries(s.specialistSellers).map(([key, w]) => [key, { payTo: w.address, settle: settler(w) }])),
         lookup: lookupMarket,
+        // Scout prices a size against the live order book and reads flow, holders and history.
+        polymarket: createPolymarket(),
         callModel: async (p) => ({ text: (await callModel(p)).text }),
         // Pitch reads recent news with the same search the Arena's evidence forecaster uses.
         ...((input.env ?? process.env).EXA_API_KEY?.trim() ? { evidence: createEvidenceSearch({ apiKey: (input.env ?? process.env).EXA_API_KEY!.trim(), log: (m) => console.warn(`[agon-pitch] ${m}`) }) } : {}),

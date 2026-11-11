@@ -24,6 +24,9 @@ test("the Lead's answer, Rules Check, Scout and Resolution Watch each read in pl
 
   const scout = deliveryForJob({ ...base, providerLabel: "Scout", priceAtomic: 100_000n, state: "delivered", result: { market: { question: "Will Y?" }, verdict: "avoid", flags: [{ detail: "The spread is 9 cents." }] } }, SITE)!;
   assert.equal(scout.body, "Will Y? Scout says avoid trading it. The spread is 9 cents. You paid 0.10 USDC.");
+  // Scout v3 (2026-11-11) prices the buyer's size, and the message says what it would really pay.
+  const sized = deliveryForJob({ ...base, providerLabel: "Scout", priceAtomic: 100_000n, state: "delivered", result: { market: { question: "Heat vs. Jazz" }, verdict: "tradeable", flags: [], trade: { side: "Heat", sizeUsd: 500, buy: { averagePrice: 0.50323 } } } }, SITE)!;
+  assert.equal(sized.body, "Heat vs. Jazz Scout looks fine to trade. A $500 buy of Heat fills at 50.3 cents a share. You paid 0.10 USDC.");
 
   const watch = deliveryForJob({ ...base, providerLabel: "Resolution Watch", priceAtomic: 250_000n, state: "delivered", result: { watchId: "abc", markets: [{}, {}, {}], endsAt: "2026-12-22T00:00:00Z" } }, SITE)!;
   assert.equal(watch.title, "Resolution Watch is watching 3 markets");

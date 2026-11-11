@@ -23,6 +23,8 @@ const REASONS: Readonly<Record<string, string>> = {
   not_a_football_market: "This agent only works on football markets.",
   market_unavailable: "Polymarket did not answer at the time.",
   which_market: "That link held several markets and none was named.",
+  invalid_size: "The size was not an amount in dollars.",
+  unknown_side: "The side named is not one of that market's two outcomes.",
   payment_expired_unused: "The payment was never collected.",
 };
 
@@ -52,7 +54,13 @@ function answerText(name: string, r: Record<string, unknown>): string | null {
   }
   if (typeof r.verdict === "string" && Array.isArray(r.flags)) {
     const verdict = { tradeable: "looks fine to trade", watch: "suggests watching it before trading", avoid: "says avoid trading it" }[r.verdict] ?? r.verdict;
-    return `${lead}${name} ${verdict}. ${sentence(str(rec(r.flags[0]).detail))}`.trim();
+    // Scout v3 prices the buyer's size: say what it would really pay.
+    const trade = rec(r.trade);
+    const buy = rec(trade.buy);
+    const priced = typeof trade.sizeUsd === "number" && str(trade.side) && typeof buy.averagePrice === "number"
+      ? `A $${Math.round(trade.sizeUsd).toLocaleString("en-US")} buy of ${str(trade.side)} fills at ${Math.round(buy.averagePrice * 1_000) / 10} cents a share.`
+      : "";
+    return [`${lead}${name} ${verdict}.`, priced, sentence(str(rec(r.flags[0]).detail))].filter(Boolean).join(" ");
   }
   return null;
 }

@@ -100,6 +100,20 @@ function ScoutAnswer({ view }: { view: ScoutAnswerView }) {
           </div>
         ))}
       </dl>
+      {view.sections.map((s) => (
+        <div key={s.title} className="mt-5">
+          <h3 className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-2">{s.title}</h3>
+          <dl className="mt-2 grid grid-cols-2 gap-px border border-[color:var(--hairline)] bg-[color:var(--hairline)] sm:grid-cols-3">
+            {s.rows.map((row) => (
+              <div key={row.label} className="bg-canvas-2 p-4">
+                <dt className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3">{row.label}</dt>
+                <dd className="mt-2 font-mono text-sm tabular-nums text-ink">{row.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      ))}
+      {view.missingLine ? <p className="mt-3 text-xs leading-5 text-ink-3">{view.missingLine}</p> : null}
       {view.flags.length > 0 ? (
         <ul className="mt-5 space-y-2">
           {view.flags.map((f) => (
@@ -107,7 +121,7 @@ function ScoutAnswer({ view }: { view: ScoutAnswerView }) {
           ))}
         </ul>
       ) : (
-        <p className="mt-5 text-sm leading-6 text-ink-2">No flags: the price, spread, liquidity and rules all pass Scout's checks.</p>
+        <p className="mt-5 text-sm leading-6 text-ink-2">No flags: the price, spread, liquidity, order book and rules all pass Scout's checks.</p>
       )}
       {view.rulesNote ? <p className="mt-5 border-l-2 border-accent pl-3 text-sm leading-6 text-ink-2">{view.rulesNote}</p> : null}
       <p className="mt-5 text-xs leading-5 text-ink-3">A market check, not financial advice.</p>

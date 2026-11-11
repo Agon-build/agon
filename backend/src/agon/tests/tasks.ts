@@ -4,22 +4,38 @@ import { quoteFound } from "../agents/rules-check.ts";
 import { canonicalHash } from "../playground.ts";
 import { MARKET_RULES_SET } from "./market-rules-set.ts";
 import { SETTLEMENT_SET } from "./settlement-alerts-set.ts";
+import { TRUE_NUMBERS_SET } from "./true-numbers-set.ts";
+import { parseBook } from "../polymarket/clob.ts";
+import { costToTrade, depthWithin } from "../polymarket/cost.ts";
 
 export const TESTABLE_CATEGORIES = ["1", "3", "5", "7", "8"] as const;
 export const VARIANT_COUNT = 4;
 export const PASS_SCORE = 80;
 
 /// A category's alternative test, chosen by what the agent declares it takes (see tests/service.ts).
-export type TestFamily = "market-rules" | "settlement-alerts";
+export type TestFamily = "market-rules" | "settlement-alerts" | "true-numbers";
+/// The reach of the depth figures in the true-numbers test, in cents from the best price.
+export const TRUE_NUMBERS_DEPTH_CENTS = 2;
+
+/// What an order of `sizeUsd` really gets against a book as Polymarket sends it. The true-numbers
+/// test is scored against this, and Scout answers the test with it.
+export function trueNumbers(input: { book: unknown; side: "buy" | "sell"; sizeUsd: number }): { averagePrice: number | null; slippageCents: number | null; filledUsd: number; unfilledUsd: number; depthBidUsd: number; depthAskUsd: number } {
+  const book = parseBook(input.book);
+  const cost = costToTrade(book, input.side, input.sizeUsd);
+  const depth = depthWithin(book, TRUE_NUMBERS_DEPTH_CENTS);
+  return { averagePrice: cost.averagePrice, slippageCents: cost.slippageCents, filledUsd: cost.filledUsd, unfilledUsd: cost.unfilledUsd, depthBidUsd: depth.bidUsd, depthAskUsd: depth.askUsd };
+}
 export type TestCase = { categoryId: string; taskId: string; title: string; prompt: string; capability: string; variant: number; input: unknown; expected: unknown };
 type Ctx = { arcChainId: number; arcBlock: bigint };
 
 /// A Verification agent whose service file takes a `market` reads market rules, and one that takes `markets`
 /// watches settlement; the test follows the declared input.
 export function testFamilyFor(listing: { categoryId: string; manifestBody: unknown }): TestFamily | undefined {
-  if (listing.categoryId !== "8") return undefined;
+  if (listing.categoryId !== "8" && listing.categoryId !== "3") return undefined;
   const props = (listing.manifestBody as { invocation?: { requestSchema?: { properties?: unknown } } } | null)?.invocation?.requestSchema?.properties;
   if (!props || typeof props !== "object") return undefined;
+  // An Analysis agent that takes a market and a size prices orders, so it is tested on true numbers.
+  if (listing.categoryId === "3") return Object.hasOwn(props, "market") && Object.hasOwn(props, "size") ? "true-numbers" : undefined;
   if (Object.hasOwn(props, "markets")) return "settlement-alerts";
   return Object.hasOwn(props, "market") ? "market-rules" : undefined;
 }
@@ -78,6 +94,11 @@ export function buildTestCase(categoryId: string, variant: number, ctx: { arcBlo
   if (categoryId === "8" && ctx.family === "settlement-alerts") {
     const s = SETTLEMENT_SET[v % SETTLEMENT_SET.length]!;
     return { categoryId, taskId: "settlement-alerts", title: "Settlement alerts", prompt: "Each reading is one check of a Polymarket market, in order. Report each alert a watcher should raise as {step, kind}, where step is the reading it appears at and kind is settlement_started, challenged, settled or rules_changed. The first reading is the baseline and raises nothing.", capability: "settlement watching", variant: v, input: { question: s.question, readings: s.readings }, expected: s.expected };
+  }
+  if (categoryId === "3" && ctx.family === "true-numbers") {
+    const t = TRUE_NUMBERS_SET[v % TRUE_NUMBERS_SET.length]!;
+    const input = { question: t.question, side: t.side, sizeUsd: t.sizeUsd, book: t.book };
+    return { categoryId, taskId: "true-numbers", title: "True numbers", prompt: `The book is one outcome's order book as Polymarket sends it. For a market ${t.side} of sizeUsd dollars that takes the best price first, return averagePrice (dollars a share), slippageCents (cents a share worse than the best price), filledUsd, unfilledUsd, and depthBidUsd and depthAskUsd: the dollars resting within ${TRUE_NUMBERS_DEPTH_CENTS} cents of the best bid and of the best ask.`, capability: "order book pricing", variant: v, input, expected: trueNumbers(input) };
   }
   switch (categoryId) {
     case "3": {
@@ -185,6 +206,18 @@ ${rules}`));
         { label: "Every trap quote is in the title or rules word for word", points: shaped ? Math.round(30 * (traps.length === 0 ? 1 : verified.length / traps.length)) : 0, max: 30 },
         check(ex.categories ? `An ambiguous trap of the kind that was argued (${ex.categories.join(", ")}), quoted from the rules` : "The tie rule is caught, quoted from the rules", caught, 35),
         check(ex.categories ? "Dispute risk is medium or high" : "Dispute risk is low or medium", ex.categories ? risk === "medium" || risk === "high" : risk === "low" || risk === "medium", 25),
+      ], extra);
+    }
+    case "true-numbers": {
+      const ex = test.expected as ReturnType<typeof trueNumbers>;
+      const { side, sizeUsd } = test.input as { side: string; sizeUsd: number };
+      const near = (got: unknown, want: number | null, by: number) => (want === null ? got === null : typeof got === "number" && Number.isFinite(got) && Math.abs(got - want) <= by);
+      return finish([
+        check(`Average price of a $${sizeUsd} ${side}, best price first (${ex.averagePrice})`, near(o.averagePrice, ex.averagePrice, 0.0005), 35),
+        check(`Cents a share worse than the best price (${ex.slippageCents})`, near(o.slippageCents, ex.slippageCents, 0.05), 15),
+        check(`Dollars filled and not filled (${ex.filledUsd} and ${ex.unfilledUsd})`, near(o.filledUsd, ex.filledUsd, 0.5) && near(o.unfilledUsd, ex.unfilledUsd, 0.5), 20),
+        check(`Dollars within ${TRUE_NUMBERS_DEPTH_CENTS} cents of the best bid (${ex.depthBidUsd})`, near(o.depthBidUsd, ex.depthBidUsd, 1), 15),
+        check(`Dollars within ${TRUE_NUMBERS_DEPTH_CENTS} cents of the best ask (${ex.depthAskUsd})`, near(o.depthAskUsd, ex.depthAskUsd, 1), 15),
       ], extra);
     }
     case "settlement-alerts": {

@@ -16,7 +16,9 @@ import { randomBytes } from "node:crypto";
 import { MAX_WATCH_MARKETS, alertsBetween, parseMarketRefs, stateFromGamma, type WatchState } from "./resolution-watch.ts";
 import { rulesCheck, rulesCheckPrompt } from "./rules-check.ts";
 import type { WatchStore } from "./watch-store.ts";
-import { scoutReport, scoutRulesPrompt } from "./scout.ts";
+import { SCOUT_DEFAULT_SIZE_USD, SCOUT_MAX_SIZE_USD, SCOUT_TOP_HOLDERS, SCOUT_TRADES, scoutAsk, scoutReport, scoutRulesPrompt, type ScoutAsk } from "./scout.ts";
+import type { Polymarket } from "../polymarket/index.ts";
+import { trueNumbers } from "../tests/tasks.ts";
 
 export type SpecialistKey = "pitch" | "scout" | "rules" | "watch";
 export const SPECIALISTS: Record<SpecialistKey, { name: string; price: bigint; model: string; description: string }> = {
@@ -31,7 +33,12 @@ const WATCH_DAYS = 60;
 const RULES_MAX_TOKENS = 1_500;
 export type SpecialistSeller = { payTo: Address; settle: ExactSettler };
 
-const body = z.object({ market: z.string().trim().min(3).max(400) });
+/// `size` and `side` are Scout's: the dollars to price and the outcome to price them on.
+const body = z.object({
+  market: z.string().trim().min(3).max(400),
+  size: z.union([z.number(), z.string().max(40)]).nullable().optional(),
+  side: z.string().max(80).nullable().optional(),
+});
 const watchBody = z.object({ markets: z.string().trim().min(3).max(4_000) });
 const watchRefs = (raw: unknown): string[] | null => { const b = watchBody.safeParse(raw); return b.success ? parseMarketRefs(b.data.markets) : null; };
 
@@ -42,11 +49,12 @@ const REFUSALS: Readonly<Record<string, string>> = {
   not_yes_no: "This agent only takes Yes or No markets.",
   not_a_football_market: "Pitch only forecasts football markets.",
   market_unavailable: "Polymarket did not answer. Try again in a minute.",
+  invalid_size: `Size is an amount in US dollars from 1 to ${SCOUT_MAX_SIZE_USD.toLocaleString("en-US")}, for example 500.`,
 };
 /// An event link with several markets: the busiest, with their links, so the caller can send one.
 const whichMarket = (choices: MarketChoice[]): string =>
   `That link holds several markets. Which one? ${choices.map((c) => (c.yesPct === null ? c.label : `${c.label} ${c.yesPct}%`)).join(", ")}. Send that market's own link.`;
-type Refused = { ok: false; code: string; choices?: MarketChoice[] };
+type Refused = { ok: false; code: string; choices?: MarketChoice[]; message?: string };
 
 /// The market as an answer shows it. `crowdBps` is the first outcome's price; `outcomes` names both.
 const marketView = (m: MarketSnapshot) => ({
@@ -66,6 +74,8 @@ export function createSpecialistRoutes(deps: {
   store: PaymentsStore;
   lookup: MarketLookup;
   callModel: ModelCaller;
+  /** Scout prices a size against the live order book and reads flow, holders and price history through this. */
+  polymarket?: Pick<Polymarket, "book" | "history" | "trades" | "holders" | "openInterest">;
   /** Recent dated news for a question; Pitch reads it so it never argues from the model's memory. */
   evidence?: EvidenceSearch;
   /** Resolution Watch: where watches are kept and how a payer maps to an Agon account. */
@@ -75,12 +85,36 @@ export function createSpecialistRoutes(deps: {
   const app = new Hono<{ Variables: { x402: X402Paid } }>();
   const now = deps.now ?? (() => new Date());
   const markets = new WeakMap<Request, MarketSnapshot>();
+  const asks = new WeakMap<Request, ScoutAsk>();
   const watched = new WeakMap<Request, MarketSnapshot[]>();
   const answers = new WeakMap<Request, Record<string, unknown>>();
-  /// Pitch and Rules Check answers, made before the payment settles: if the
-  /// model fails the buyer's payment is never submitted (audit H1, 2026-11-09).
-  const answerFor = async (key: SpecialistKey, m: MarketSnapshot): Promise<{ ok: true; body: Record<string, unknown> } | { ok: false; code: string }> => {
+  /// Scout's answer: the order book for the side asked about must be read, or nothing is sold.
+  /// Flow, holders and price history each fail alone and are named as unavailable.
+  const scoutAnswer = async (m: MarketSnapshot, ask: ScoutAsk): Promise<{ ok: true; body: Record<string, unknown> } | { ok: false; code: string }> => {
+    const spec = SPECIALISTS.scout;
+    // The model only summarises the rules; the verdict never depends on it.
+    const note = deps.callModel({ model: spec.model, ...scoutRulesPrompt(m), maxTokens: 200, temperature: 0 })
+      .then((r) => r.text.trim().split("\n")[0]!.slice(0, 240))
+      .catch(() => "");
+    const finish = async (report: ReturnType<typeof scoutReport>) =>
+      ({ ok: true as const, body: { agent: spec.name, market: marketView(m), ...report, rulesNote: (await note) || "Read the market's rules on Polymarket before trading.", readAt: now().toISOString() } });
+    const pm = deps.polymarket;
+    if (!pm) return finish(scoutReport(m, now()));
+    const token = m.outcomes[ask.sideIndex].tokenId;
+    if (!token) return { ok: false, code: "market_unavailable" };
+    const kept = <T,>(r: PromiseSettledResult<T>): T | null => (r.status === "fulfilled" ? r.value : null);
+    const [book, history, trades, holders, openInterest] = await Promise.allSettled([
+      pm.book(token), pm.history(token, "1w"), pm.trades(m.conditionId, SCOUT_TRADES), pm.holders(m.conditionId, SCOUT_TOP_HOLDERS), pm.openInterest(m.conditionId),
+    ] as const);
+    const read = kept(book);
+    if (!read) return { ok: false, code: "market_unavailable" };
+    return finish(scoutReport(m, now(), { ask, reads: { book: read, history: kept(history), trades: kept(trades), holders: kept(holders), openInterest: kept(openInterest) } }));
+  };
+  /// Answers are made before the payment settles: if the model or the order book fails,
+  /// the buyer's payment is never submitted (audit H1, 2026-11-09).
+  const answerFor = async (key: SpecialistKey, m: MarketSnapshot, ask?: ScoutAsk): Promise<{ ok: true; body: Record<string, unknown> } | { ok: false; code: string }> => {
     const spec = SPECIALISTS[key];
+    if (key === "scout") return scoutAnswer(m, ask ?? { sideIndex: 0, sizeUsd: SCOUT_DEFAULT_SIZE_USD, sizeGiven: false });
     if (key === "pitch") {
       // A failed or empty news search is no news, never a failed forecast.
       const news = deps.evidence ? (await deps.evidence(m.question, now()).catch(() => [])).slice(0, 5) : [];
@@ -104,7 +138,7 @@ export function createSpecialistRoutes(deps: {
   const gates = new Map<string, ReturnType<typeof createCertificationGate>>();
   const gateFor = (key: string) => gates.get(key) ?? gates.set(key, createCertificationGate()).get(key)!;
   /// The markets a request names, each found, still open and fit for this agent, or the reason it is refused.
-  const marketsFor = async (key: SpecialistKey, raw: unknown): Promise<{ ok: true; list: MarketSnapshot[] } | Refused> => {
+  const marketsFor = async (key: SpecialistKey, raw: unknown): Promise<{ ok: true; list: MarketSnapshot[]; ask?: ScoutAsk } | Refused> => {
     const one = body.safeParse(raw);
     const refs = key === "watch" ? watchRefs(raw) : one.success ? [one.data.market] : null;
     if (!refs) return { ok: false, code: "invalid_request" };
@@ -117,6 +151,12 @@ export function createSpecialistRoutes(deps: {
       if (key === "pitch" && !r.market.yesNo) return { ok: false, code: "not_yes_no" };
       if (key === "pitch" && !isFootballMarket(r.market)) return { ok: false, code: "not_a_football_market" };
       list.push(r.market);
+    }
+    if (key === "scout" && one.success) {
+      const asked = scoutAsk(list[0]!, one.data);
+      if (!asked.ok && asked.code === "unknown_side") return { ok: false, code: asked.code, message: `This market's sides are ${list[0]!.outcomes[0].label} and ${list[0]!.outcomes[1].label}. Send one of them as the side.` };
+      if (!asked.ok) return { ok: false, code: asked.code };
+      return { ok: true, list, ask: asked.ask };
     }
     return { ok: true, list };
   };
@@ -155,18 +195,20 @@ export function createSpecialistRoutes(deps: {
         const states = t.readings.map(stateFromGamma);
         return states.flatMap((s, i) => (i === 0 ? [] : alertsBetween(t.question, states[i - 1]!, s).map((a) => ({ step: i, kind: a.kind }))));
       } } : {}),
+      // Scout answers the true-numbers test with the arithmetic it sells.
+      ...(found.key === "scout" ? { trueNumbers: async (t: { book: unknown; side: "buy" | "sell"; sizeUsd: number }) => trueNumbers(t) } : {}),
     });
     if (check === "preflight") return next();
     if (check) return check;
     if (found.key === "watch") {
       if (!watchRefs(raw)) return c.json({ error: "invalid_request", message: `Send {"markets": "<up to ${MAX_WATCH_MARKETS} Polymarket links, slugs or condition ids, one per line>"}.` }, 400);
-    } else if (!body.safeParse(raw).success) return c.json({ error: "invalid_request", message: "Send {\"market\": \"<polymarket link, slug or condition id>\"}." }, 400);
+    } else if (!body.safeParse(raw).success) return c.json({ error: "invalid_request", message: found.key === "scout" ? "Send {\"market\": \"<polymarket link, slug or condition id>\"}, with \"size\" in dollars and \"side\" if you want them priced." : "Send {\"market\": \"<polymarket link, slug or condition id>\"}." }, 400);
     // Check the markets before asking for payment, so a buyer never signs for a market this agent would refuse.
     // A paid request is checked again just before it settles.
     if (!c.req.header("payment-signature") && !c.req.header("x-payment")) {
       const checked = await marketsFor(found.key, raw);
       if (!checked.ok && checked.choices) return c.json({ error: checked.code, message: whichMarket(checked.choices), choices: checked.choices }, 422);
-      if (!checked.ok) return c.json({ error: checked.code, message: REFUSALS[checked.code] ?? "This market cannot be used." }, checked.code === "market_unavailable" ? 503 : 422);
+      if (!checked.ok) return c.json({ error: checked.code, message: checked.message ?? REFUSALS[checked.code] ?? "This market cannot be used." }, checked.code === "market_unavailable" ? 503 : 422);
     }
     return next();
   });
@@ -188,11 +230,12 @@ export function createSpecialistRoutes(deps: {
           if (!checked.ok) return checked.code;
           if (key === "watch") watched.set(ctx.req.raw, checked.list);
           else markets.set(ctx.req.raw, checked.list[0]!);
+          if (checked.ask) asks.set(ctx.req.raw, checked.ask);
           return null;
         },
-        ...(key === "pitch" || key === "rules" ? {
+        ...(key !== "watch" ? {
           prepare: async (_payment: unknown, ctx: { req: { raw: Request } }) => {
-            const answer = await answerFor(key, markets.get(ctx.req.raw)!);
+            const answer = await answerFor(key, markets.get(ctx.req.raw)!, asks.get(ctx.req.raw));
             if (!answer.ok) return answer.code;
             answers.set(ctx.req.raw, answer.body);
             return null;
@@ -222,14 +265,7 @@ export function createSpecialistRoutes(deps: {
           markets: list.map((m) => ({ question: m.question, url: m.url, status: "open" })),
         });
       }
-      const m = markets.get(c.req.raw)!;
-      if (key === "pitch" || key === "rules") return c.json(answers.get(c.req.raw)!);
-      const report = scoutReport(m, now());
-      // The model only summarises the rules; the verdict never depends on it.
-      const note = await deps.callModel({ model: spec.model, ...scoutRulesPrompt(m), maxTokens: 200, temperature: 0 })
-        .then((r) => r.text.trim().split("\n")[0]!.slice(0, 240))
-        .catch(() => "");
-      return c.json({ agent: spec.name, market: marketView(m), ...report, rulesNote: note || "Read the market's rules on Polymarket before trading.", readAt: now().toISOString() });
+      return c.json(answers.get(c.req.raw)!);
     },
   );
   return app as unknown as Hono;

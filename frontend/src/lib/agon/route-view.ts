@@ -44,6 +44,10 @@ export type RulesAnswerView = {
 export type ScoutAnswerView = {
   kind: "scout"; verdict: "tradeable" | "watch" | "avoid"; verdictText: string; marketQuestion: string; marketUrl: string | null;
   metrics: { label: string; value: string }[]; flags: string[]; rulesNote: string | null; readLine: string | null;
+  /** The buyer's size against the order book, recent flow, largest holders and price swings, each when Scout read it. */
+  sections: { title: string; rows: { label: string; value: string }[] }[];
+  /** Names what Polymarket did not answer for, so a missing section is not read as "nothing there". */
+  missingLine: string | null;
 };
 /// A forecast from one of Agon's market agents, shown against the crowd price like a Lead forecast.
 export type ForecastAnswerView = { kind: "forecast"; answer: StageAnswer; sources: { title: string; url: string; published: string | null }[]; readLine: string | null };
@@ -91,6 +95,92 @@ function readLine(at: unknown): string | null {
 
 const VERDICT_TEXT = { tradeable: "Tradeable", watch: "Trade with care", avoid: "Avoid" } as const;
 
+const obj = (v: unknown): Record<string, unknown> | null => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
+const cents = (price: number) => `${Math.round(price * 1_000) / 10} cents`;
+const centCount = (n: number) => (n === 1 ? "1 cent" : `${n} cents`);
+const points = (n: number) => (n === 1 ? "1 point" : `${n} points`);
+const MISSING: Readonly<Record<string, string>> = { flow: "recent trades", holders: "holders", openInterest: "open interest", volatility: "price history" };
+
+/// Scout's numbers beyond the headline: what the size would really get, who traded, who holds, how far the price swings.
+function scoutSections(r: Record<string, unknown>): ScoutAnswerView["sections"] {
+  const out: ScoutAnswerView["sections"] = [];
+  const trade = obj(r.trade);
+  const buy = obj(trade?.buy);
+  const size = num(trade?.sizeUsd);
+  if (trade && buy && size !== null && str(trade.side)) {
+    const rows: { label: string; value: string }[] = [];
+    const average = num(buy.averagePrice);
+    rows.push({ label: "Average price", value: average === null ? "Nothing on offer" : cents(average) });
+    const slip = num(buy.slippageCents);
+    if (slip !== null) rows.push({ label: "Above the best price", value: centCount(slip) });
+    const shares = num(buy.shares);
+    if (shares) rows.push({ label: "Shares", value: Math.round(shares).toLocaleString("en-US") });
+    const unfilled = num(buy.unfilledUsd);
+    if (unfilled) rows.push({ label: "Not filled", value: usd(unfilled) });
+    const sellAverage = num(obj(trade.sell)?.averagePrice);
+    if (sellAverage !== null) rows.push({ label: "Selling the same size", value: cents(sellAverage) });
+    const depth = obj(trade.depth);
+    const within = num(depth?.withinCents) ?? 2;
+    const bid = num(depth?.bidUsd);
+    const ask = num(depth?.askUsd);
+    if (bid !== null) rows.push({ label: `Bids within ${within} cents`, value: usd(bid) });
+    if (ask !== null) rows.push({ label: `Asks within ${within} cents`, value: usd(ask) });
+    out.push({ title: `Buying ${usd(size)} of ${str(trade.side).slice(0, 40)}${trade.sizeGiven === false ? " (no size given)" : ""}`, rows });
+  }
+  const flow = obj(r.flow);
+  if (flow) {
+    const rows: { label: string; value: string }[] = [];
+    for (const side of Array.isArray(flow.toward) ? flow.toward : []) {
+      const s = obj(side);
+      const money = num(s?.usd);
+      if (s && str(s.label) && money !== null) rows.push({ label: `Toward ${str(s.label).slice(0, 40)}`, value: usd(money) });
+    }
+    const count = num(flow.trades);
+    const wallets = num(flow.wallets);
+    if (count !== null && wallets !== null) rows.push({ label: "Trades", value: `${count.toLocaleString("en-US")} by ${wallets.toLocaleString("en-US")} ${wallets === 1 ? "wallet" : "wallets"}` });
+    const top = obj(Array.isArray(flow.largest) ? flow.largest[0] : null);
+    const topUsd = num(top?.usd);
+    const topPrice = num(top?.price);
+    if (top && topUsd !== null && topPrice !== null) rows.push({ label: "Largest trade", value: `${usd(topUsd)} ${top.side === "sell" ? "sell" : "buy"} of ${str(top.outcome).slice(0, 40)} at ${cents(topPrice)}` });
+    const hours = num(flow.hours);
+    if (rows.length > 0) out.push({ title: flow.complete === false && hours !== null ? `Last ${hours} hours (the newest trades only)` : "Last 24 hours", rows });
+  }
+  const holders = obj(r.holders);
+  if (holders) {
+    const rows: { label: string; value: string }[] = [];
+    for (const side of Array.isArray(holders.sides) ? holders.sides : []) {
+      const s = obj(side);
+      const held = num(s?.valueUsd);
+      const top = s?.top;
+      const n = Array.isArray(top) ? top.length : 0;
+      if (s && str(s.label) && held !== null && n > 0) rows.push({ label: `Top ${n} on ${str(s.label).slice(0, 40)}`, value: usd(held) });
+    }
+    const open = num(holders.openInterestUsd);
+    if (open !== null) rows.push({ label: "Open interest", value: usd(open) });
+    const share = num(holders.topFiveSharePct);
+    if (share !== null) rows.push({ label: "Their share of it", value: `${share}%` });
+    if (rows.length > 0) out.push({ title: "Largest holders", rows });
+  }
+  const swings = obj(r.volatility);
+  if (swings) {
+    const rows: { label: string; value: string }[] = [];
+    const day = num(swings.dayRangePts);
+    const week = num(swings.weekRangePts);
+    const hourly = num(swings.typicalHourlyMovePts);
+    if (day !== null) rows.push({ label: "Range in 24 hours", value: points(day) });
+    if (week !== null) rows.push({ label: "Range this week", value: points(week) });
+    if (hourly !== null) rows.push({ label: "Typical hourly move", value: points(hourly) });
+    if (rows.length > 0) out.push({ title: "Price swings", rows });
+  }
+  return out;
+}
+
+function missingLine(r: Record<string, unknown>): string | null {
+  const names = (Array.isArray(r.unavailable) ? r.unavailable : []).flatMap((x) => (typeof x === "string" && MISSING[x] ? [MISSING[x]!] : []));
+  if (names.length === 0) return null;
+  return `Polymarket did not answer for ${names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`}.`;
+}
+
 function scoutView(r: Record<string, unknown>): ScoutAnswerView | null {
   if ((r.verdict !== "tradeable" && r.verdict !== "watch" && r.verdict !== "avoid") || !Array.isArray(r.flags) || !r.metrics || typeof r.metrics !== "object") return null;
   const market = (r.market ?? {}) as { question?: unknown; url?: unknown; outcomes?: unknown };
@@ -113,6 +203,7 @@ function scoutView(r: Record<string, unknown>): ScoutAnswerView | null {
   return {
     kind: "scout", verdict: r.verdict, verdictText: VERDICT_TEXT[r.verdict], marketQuestion: str(market.question), marketUrl: httpsUrl(market.url),
     metrics, flags: (r.flags as Record<string, unknown>[]).map((f) => str(f?.detail)).filter(Boolean), rulesNote: str(r.rulesNote) || null, readLine: readLine(r.readAt),
+    sections: scoutSections(r), missingLine: missingLine(r),
   };
 }
 

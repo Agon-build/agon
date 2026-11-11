@@ -113,6 +113,52 @@ test("a Scout answer reads as a verdict, live numbers, flags and when Polymarket
   assert.deepEqual([days.verdictText, days.metrics[4]!.value, days.metrics[5]!.value, days.readLine, days.marketUrl, days.rulesNote], ["Tradeable", "+3.5 points", "225 days", null, null, null]);
 });
 
+// Scout v3 (2026-11-11): the answer prices the buyer's size against the order book and shows flow, holders and swings.
+test("a Scout answer shows what the size would really get, recent flow, the largest holders and price swings", () => {
+  const base = { agent: "Scout", market: { question: "Heat vs. Jazz", url: "https://polymarket.com/event/g/g", outcomes: [{ label: "Heat", pct: 50 }, { label: "Jazz", pct: 50 }] }, verdict: "tradeable", flags: [], metrics: { spreadCents: 1 }, rulesNote: "" };
+  const view = answerView({
+    ...base,
+    trade: { side: "Heat", sizeUsd: 500, sizeGiven: true, buy: { averagePrice: 0.50323, slippageCents: 0.32, shares: 993.6, unfilledUsd: 0 }, sell: { averagePrice: 0.48 }, depth: { withinCents: 2, bidUsd: 96, askUsd: 102 } },
+    flow: { hours: 24, complete: true, toward: [{ label: "Heat", usd: 12340 }, { label: "Jazz", usd: 8100 }], net: { label: "Heat", usd: 4240 }, trades: 214, wallets: 87, largest: [{ usd: 2500, side: "buy", outcome: "Heat", price: 0.51, at: "2026-11-11T10:00:00.000Z", wallet: "0xa1a1...a1a1" }] },
+    holders: { sides: [{ label: "Heat", valueUsd: 45000, top: [{}, {}, {}, {}, {}] }, { label: "Jazz", valueUsd: 30000, top: [{}, {}] }], openInterestUsd: 120000, topFiveSharePct: 62.5 },
+    volatility: { dayRangePts: 3.5, weekRangePts: 9, typicalHourlyMovePts: 1 },
+    unavailable: [],
+  });
+  assert.ok(view && view.kind === "scout");
+  assert.deepEqual(view.sections, [
+    { title: "Buying $500 of Heat", rows: [
+      { label: "Average price", value: "50.3 cents" }, { label: "Above the best price", value: "0.32 cents" }, { label: "Shares", value: "994" },
+      { label: "Selling the same size", value: "48 cents" }, { label: "Bids within 2 cents", value: "$96" }, { label: "Asks within 2 cents", value: "$102" },
+    ] },
+    { title: "Last 24 hours", rows: [
+      { label: "Toward Heat", value: "$12,340" }, { label: "Toward Jazz", value: "$8,100" }, { label: "Trades", value: "214 by 87 wallets" }, { label: "Largest trade", value: "$2,500 buy of Heat at 51 cents" },
+    ] },
+    { title: "Largest holders", rows: [
+      { label: "Top 5 on Heat", value: "$45,000" }, { label: "Top 2 on Jazz", value: "$30,000" }, { label: "Open interest", value: "$120,000" }, { label: "Their share of it", value: "62.5%" },
+    ] },
+    { title: "Price swings", rows: [{ label: "Range in 24 hours", value: "3.5 points" }, { label: "Range this week", value: "9 points" }, { label: "Typical hourly move", value: "1 point" }] },
+  ]);
+  assert.equal(view.missingLine, null);
+  // A size nobody gave, a book that cannot fill it, a short trade window and sections Polymarket did not answer for.
+  const thin = answerView({
+    ...base, verdict: "avoid",
+    trade: { side: "Jazz", sizeUsd: 100, sizeGiven: false, buy: { averagePrice: null, slippageCents: null, shares: 0, unfilledUsd: 100 }, sell: { averagePrice: null }, depth: { withinCents: 2, bidUsd: 0, askUsd: 0 } },
+    flow: { hours: 0.2, complete: false, toward: [{ label: "Heat", usd: 10 }, { label: "Jazz", usd: 5 }], trades: 500, wallets: 1, largest: [] },
+    holders: null, volatility: null, unavailable: ["holders", "volatility", "something-new"],
+  });
+  assert.ok(thin && thin.kind === "scout");
+  assert.equal(thin.sections[0]!.title, "Buying $100 of Jazz (no size given)");
+  assert.deepEqual(thin.sections[0]!.rows.slice(0, 2), [{ label: "Average price", value: "Nothing on offer" }, { label: "Not filled", value: "$100" }]);
+  assert.equal(thin.sections[1]!.title, "Last 0.2 hours (the newest trades only)");
+  assert.equal(thin.sections[1]!.rows[2]!.value, "500 by 1 wallet");
+  assert.equal(thin.sections.length, 2);
+  assert.equal(thin.missingLine, "Polymarket did not answer for holders and price history.");
+  // An older Scout answer has none of this and still reads.
+  const old = answerView(base);
+  assert.ok(old && old.kind === "scout");
+  assert.deepEqual([old.sections, old.missingLine], [[], null]);
+});
+
 test("a Pitch answer reads as a forecast against the crowd price, with its reasons and sources", () => {
   const view = answerView({
     agent: "Pitch", market: { question: "Will Arsenal win on Saturday?", url: "https://polymarket.com/event/ars/will-arsenal-win", slug: "will-arsenal-win", closesAt: "2026-11-14T15:00:00Z", crowdBps: 6350 },
