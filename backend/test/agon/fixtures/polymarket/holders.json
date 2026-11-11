@@ -1,0 +1,98 @@
+{
+ "data": [
+  {
+   "token_id": "17640596861394454242836532536014033416733783473450136742726948856144855149507",
+   "holders": [
+    {
+     "proxy_wallet": "0x947208f83ad6b0a80a22557d3a0d4ae56c0ff660",
+     "bio": "",
+     "token_id": "17640596861394454242836532536014033416733783473450136742726948856144855149507",
+     "pseudonym": "Small-Fellow-Mandolin",
+     "amount": 399404.170582,
+     "display_username_public": true,
+     "outcome_index": 0,
+     "name": "K80PRO",
+     "profile_image": "",
+     "profile_image_optimized": "",
+     "verified": false
+    },
+    {
+     "proxy_wallet": "0x92ae45626388343e6fe1f2d03c109d04bc3c0376",
+     "bio": "",
+     "token_id": "17640596861394454242836532536014033416733783473450136742726948856144855149507",
+     "pseudonym": "Unkempt-Elver-Politician",
+     "amount": 291629.424206,
+     "display_username_public": true,
+     "outcome_index": 0,
+     "name": "kod.cip",
+     "profile_image": "",
+     "profile_image_optimized": "",
+     "verified": false
+    },
+    {
+     "proxy_wallet": "0x0bb8a71b7ed93265c8045640fb3aa1eb93ad253e",
+     "bio": "",
+     "token_id": "17640596861394454242836532536014033416733783473450136742726948856144855149507",
+     "pseudonym": "Velvety-Squid-Subroutine",
+     "amount": 199999.9878,
+     "display_username_public": true,
+     "outcome_index": 0,
+     "name": "anykey",
+     "profile_image": "",
+     "profile_image_optimized": "",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "token_id": "104236736263775307891497202874191911203963566711959725788584750440530976742193",
+   "holders": [
+    {
+     "proxy_wallet": "0xa5ef39c3d3e10d0b270233af41cac69796b12966",
+     "bio": "",
+     "token_id": "104236736263775307891497202874191911203963566711959725788584750440530976742193",
+     "pseudonym": "Rapid-Alphabet-Winner",
+     "amount": 1685323.609008,
+     "display_username_public": false,
+     "outcome_index": 1,
+     "name": "rw0ajdugzw",
+     "profile_image": "",
+     "profile_image_optimized": "",
+     "verified": false
+    },
+    {
+     "proxy_wallet": "0x7ad3d7e5cda50dbe1fc5c29a1ffc2f61a9232e30",
+     "bio": "",
+     "token_id": "104236736263775307891497202874191911203963566711959725788584750440530976742193",
+     "pseudonym": "Mature-Bonding-Diffuse",
+     "amount": 10524.496668,
+     "display_username_public": true,
+     "outcome_index": 1,
+     "name": "ATCapital",
+     "profile_image": "",
+     "profile_image_optimized": "",
+     "verified": false
+    },
+    {
+     "proxy_wallet": "0xc301c1e034e71e1a6ce9684f029c4674a00466aa",
+     "bio": "betmoar-3f72cc\n",
+     "token_id": "104236736263775307891497202874191911203963566711959725788584750440530976742193",
+     "pseudonym": "Lean-Pantyhose",
+     "amount": 10194.423334,
+     "display_username_public": true,
+     "outcome_index": 1,
+     "name": "Contestable-Parfait",
+     "profile_image": "",
+     "profile_image_optimized": "",
+     "verified": false
+    }
+   ]
+  }
+ ],
+ "pagination": {
+  "limit": 3,
+  "offset": 0,
+  "has_more": true,
+  "next_cursor": "eyJkYXRhIjp7InR5cGUiOiJob2xkZXJzIiwicGFyYW1zIjp7ImwiOjMsIm8iOjN9fSwic2lnIjoiZWQ4YmI1Nzc0Njc2OWU3MWFmMTY0YWI1ZWNmYWQyYTcifQ"
+ }
+}

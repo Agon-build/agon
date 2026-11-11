@@ -1,0 +1,37 @@
+[
+ {
+  "id": "3215005",
+  "conditionId": "0xb9aee520bf51ac5f00b5c43e54ef9245bc9fcdef866ce8a33025f9a441cc651d",
+  "slug": "will-the-fed-decrease-interest-rates-by-50-bps-after-the-december-2026-meeting-20260729232808633",
+  "question": "Will the Fed decrease interest rates by 50+ bps after the December 2026 meeting?",
+  "outcomes": "[\"Yes\", \"No\"]",
+  "outcomePrices": "[\"0.0025\", \"0.9975\"]",
+  "clobTokenIds": "[\"17640596861394454242836532536014033416733783473450136742726948856144855149507\", \"104236736263775307891497202874191911203963566711959725788584750440530976742193\"]",
+  "bestBid": 0.002,
+  "bestAsk": 0.003,
+  "spread": 0.001,
+  "lastTradePrice": 0.003,
+  "liquidityNum": 379859.0051,
+  "volume24hr": 573063.7711680001,
+  "volumeNum": 3668957.723928,
+  "oneWeekPriceChange": -0.001,
+  "oneDayPriceChange": -0.002,
+  "endDate": "2026-12-09T23:59:00Z",
+  "closed": false,
+  "active": true,
+  "acceptingOrders": true,
+  "negRisk": true,
+  "orderMinSize": 5,
+  "orderPriceMinTickSize": 0.001,
+  "groupItemTitle": "50+ bps decrease",
+  "umaResolutionStatuses": "[]",
+  "description": "The FED interest rates are defined in this market by the upper bound of the target federal funds range. The decisions on the target federal funds range are made by the Federal Open Market Committee (FOMC) meetings.\n\nThis market will resolve to the amount of basis points the upper bound of the target federal funds rate is changed by versus the level it was prior to the Federal Reserve's December 20",
+  "events": [
+   {
+    "id": "770450",
+    "slug": "fed-decision-in-december-20260729232808632",
+    "title": "Fed Decision in December?"
+   }
+  ]
+ }
+]

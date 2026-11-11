@@ -1,0 +1,36 @@
+[
+ {
+  "id": "6428654",
+  "conditionId": "0xec8bca230a30557ec12761af6cf5d1bf20a71bb3be7ae91f98179d3f280433c3",
+  "slug": "nba-mia-uta-2026-11-10",
+  "question": "Heat vs. Jazz",
+  "outcomes": "[\"Heat\", \"Jazz\"]",
+  "outcomePrices": "[\"0.765\", \"0.235\"]",
+  "clobTokenIds": "[\"33747808436994377857996385879503164661284291893891735553785799957751504558039\", \"77899553089036485098229902497489586860326011092919640307552339159375047677946\"]",
+  "bestBid": 0.76,
+  "bestAsk": 0.77,
+  "spread": 0.01,
+  "lastTradePrice": 0.77,
+  "liquidityNum": 636040.7427,
+  "volume24hr": 1547970.623221,
+  "volumeNum": 1532969.792065,
+  "oneWeekPriceChange": 0.12,
+  "oneDayPriceChange": -0.03,
+  "endDate": "2026-11-11T02:00:00Z",
+  "closed": false,
+  "active": true,
+  "acceptingOrders": true,
+  "negRisk": false,
+  "orderMinSize": 5,
+  "orderPriceMinTickSize": 0.01,
+  "umaResolutionStatuses": "[]",
+  "description": "In the upcoming NBA game between Heat and Jazz, originally scheduled for Tuesday, November 10, 2026 at 9:00 PM ET (as of creation of the first market related to the event):\nIf the Heat win, the market will resolve to \"Heat\".\nIf the Jazz win, the market will resolve to \"Jazz\".\nIf this market's outcome was definitively determined under its rules by the listed resolution sources before abandonment, t",
+  "events": [
+   {
+    "id": "1284267",
+    "slug": "nba-mia-uta-2026-11-10",
+    "title": "Heat vs. Jazz"
+   }
+  ]
+ }
+]
