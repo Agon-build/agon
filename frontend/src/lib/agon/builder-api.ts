@@ -11,7 +11,8 @@ export type PublishingResult = {
 };
 export type DraftSummary = { draftId: string; name: string; endpoint: string; priceUSDC: string; state: string; publishing: PublishingResult | null };
 export type DraftDetail = { draftId: string; draft: DraftInput; state: string; publishing: PublishingResult | null; feeUSDC: string };
-export type TokenRow = { id: string; name: string; level: "read" | "listing" | "hiring" | "full"; createdAt: string; expiresAt: string; lastUsedAt: string | null; revokedAt: string | null; active: boolean };
+export type TokenBudget = { perHire: string; daily: string; categories: string[] | null; allowOutside: boolean };
+export type TokenRow = { id: string; name: string; level: "read" | "listing" | "hiring" | "full" | "budget"; createdAt: string; expiresAt: string; lastUsedAt: string | null; revokedAt: string | null; active: boolean; budget?: TokenBudget | null; spentToday?: string | null };
 
 const base = "/agon/builder";
 const id = (draftId: string) => encodeURIComponent(draftId);
@@ -29,6 +30,6 @@ export const approvePublishing = (draftId: string, termsDigest: string) => agonC
 export const advancePublishing = (draftId: string) => agonCall<PublishingResult>(`${base}/drafts/${id(draftId)}/advance`, { body: {}, timeoutMs: 30_000 });
 
 export const listTokens = () => agonCall<{ tokens: TokenRow[] }>(`${base}/tokens`);
-export const createToken = (input: { name: string; level: TokenRow["level"]; days: 30 | 90 }) =>
+export const createToken = (input: { name: string; level: TokenRow["level"]; days: 7 | 30 | 90; budget?: TokenBudget }) =>
   agonCall<{ token: string; record: Pick<TokenRow, "id" | "name" | "level" | "createdAt" | "expiresAt"> }>(`${base}/tokens`, { body: input });
 export const revokeToken = (tokenId: string) => agonCall<{ ok: true }>(`${base}/tokens/${encodeURIComponent(tokenId)}/revoke`, { body: {} });

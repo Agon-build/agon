@@ -14,7 +14,7 @@ import { shortlist } from "./fit.ts";
 import { eventLinkIn, marketInText, outcomeIn, outcomeQuestion, type EventMarkets } from "./live-market.ts";
 import { ALL_AGON, ALL_CIRCLE, type Intent } from "./intent.ts";
 import { groupCandidates, rankCandidates, type Groups, type Ranked } from "./rank.ts";
-import { categoryForKind, circleFits, HIRE_CATEGORIES, hireCategory, type HireCategoryId } from "./categories.ts";
+import { categoriesOf, categoryForKind, circleFits, HIRE_CATEGORIES, hireCategory, type HireCategoryId } from "./categories.ts";
 
 type NetworkId = "arc-testnet" | "arc";
 
@@ -37,6 +37,8 @@ export type RouteQuote =
       ok: true; step: "confirm_code" | "approval_link"; jobId: string; amount: bigint; fee: bigint; total: bigint; providerLabel: string;
       network: string; testnet: boolean; expiresAt: Date; code?: string; approvalUrl?: string; input: Record<string, unknown>;
       source: "agon" | "circle"; reason: string;
+      /** The Hire categories the service belongs to; a budget token is held to them. */
+      categories: HireCategoryId[];
     }
   | { ok: true; lead: AskResult }
   | { ok: false; code: "missing_input"; question: string; missing: string[] }
@@ -368,7 +370,7 @@ export function createRouter(deps: {
         ok: true, step: q.step, jobId: q.jobId, amount: q.amount, fee: q.fee, total: q.total, providerLabel: q.providerLabel,
         network: runtime.network.label, testnet: entry.network === "arc-testnet", expiresAt: q.expiresAt,
         ...(q.step === "confirm_code" ? { code: q.code } : { approvalUrl: deps.approvalUrl(q.token) }),
-        input, source: entry.source, reason: entry.reason,
+        input, source: entry.source, reason: entry.reason, categories: categoriesOf(entry),
       };
     },
 

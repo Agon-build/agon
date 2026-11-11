@@ -1033,6 +1033,7 @@ if (agonPayments) {
 
 app.route("/agon/builder", createBuilderRoutes({
   tokens: agonAccessTokens,
+  budgets: agonAccessTokens,
   requireAuth,
   // The web listing flow uses the same draft store, checker and publisher as the MCP tools.
   listing: {
@@ -1163,6 +1164,8 @@ app.route("/agon", createAgonRoutes({
         seasonId: agonSeason ? agonSeason.season.seasonId.toString() : "1",
         off: () => stage.settings.channelsOff.mcp,
         terms: custodyTerms,
+        // Budget tokens pay inside hire_service, inside their own caps.
+        budgets: agonAccessTokens,
         ...(agonRouter ? { router: agonRouter } : {}),
       }
     : undefined,

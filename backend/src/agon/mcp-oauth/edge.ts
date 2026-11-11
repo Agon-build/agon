@@ -42,6 +42,6 @@ export async function authorizeMcpRequest(
   }
   return {
     ok: true,
-    authInfo: { token, clientId: verified.client ?? verified.address, scopes: verified.scopes, extra: { address: verified.address, client: verified.client } },
+    authInfo: { token, clientId: verified.client ?? verified.address, scopes: verified.scopes, extra: { address: verified.address, client: verified.client, ...(verified.budget ? { budget: verified.budget } : {}) } },
   };
 }

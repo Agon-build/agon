@@ -1,13 +1,36 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { ACCESS_LEVELS, EXPIRY_DAYS, listingStatusLabel, setupSnippets, tokenSnippets } from "./access-setup.ts";
+import { ACCESS_LEVELS, BUDGET_CATEGORY_OPTIONS, EXPIRY_DAYS, budgetLine, budgetRequest, listingStatusLabel, setupSnippets, tokenSnippets, type BudgetCategory } from "./access-setup.ts";
 
-test("four access levels, full access last, and two expiry choices", () => {
-  assert.deepEqual(ACCESS_LEVELS.map((l) => [l.level, l.label]), [["read", "Read"], ["listing", "Listing"], ["hiring", "Hiring"], ["full", "Full access"]]);
+test("five access levels, the spending budget last, and three expiry choices", () => {
+  assert.deepEqual(ACCESS_LEVELS.map((l) => [l.level, l.label]), [["read", "Read"], ["listing", "Listing"], ["hiring", "Hiring"], ["full", "Full access"], ["budget", "Spending budget"]]);
   assert.match(ACCESS_LEVELS[3]!.detail, /per-hire limit/);
   assert.match(ACCESS_LEVELS[2]!.detail, /per-hire limit/);
-  assert.deepEqual([...EXPIRY_DAYS], [30, 90]);
+  assert.match(ACCESS_LEVELS[4]!.detail, /no code for each hire/);
+  assert.deepEqual([...EXPIRY_DAYS], [7, 30, 90]);
+});
+
+// Standing budgets (2026-11-11): the form says why it cannot be sent before the server is asked.
+test("a budget form is checked before it is sent, and every category ticked means any", () => {
+  const all = BUDGET_CATEGORY_OPTIONS.map((c) => c.id) as BudgetCategory[];
+  assert.deepEqual(budgetRequest({ perHire: "0.50", daily: "5", categories: all, allowOutside: false }), { ok: true, budget: { perHire: "0.50", daily: "5", categories: null, allowOutside: false } });
+  assert.deepEqual(budgetRequest({ perHire: " 1 ", daily: "10", categories: ["prediction"], allowOutside: true }), { ok: true, budget: { perHire: "1", daily: "10", categories: ["prediction"], allowOutside: true } });
+  const refused = (form: Parameters<typeof budgetRequest>[0]) => { const out = budgetRequest(form); return out.ok ? "sent" : out.message; };
+  assert.match(refused({ perHire: "lots", daily: "5", categories: all, allowOutside: false }), /USDC amounts/);
+  assert.match(refused({ perHire: "0", daily: "5", categories: all, allowOutside: false }), /USDC amounts/);
+  assert.match(refused({ perHire: "2", daily: "1", categories: all, allowOutside: false }), /cannot be lower/);
+  assert.match(refused({ perHire: "6", daily: "10", categories: all, allowOutside: false }), /at most 5 USDC a hire and 50 USDC a day/);
+  assert.match(refused({ perHire: "1", daily: "51", categories: all, allowOutside: false }), /at most/);
+  assert.match(refused({ perHire: "1", daily: "5", categories: [], allowOutside: false }), /at least one category/);
+});
+
+test("a budget token's row says what it may spend and what it has spent today", () => {
+  const budget = { perHire: "0.50", daily: "5.00", categories: null, allowOutside: false };
+  assert.equal(budgetLine({ budget, spentToday: "0.30" }), "0.50 a hire, 0.30 of 5.00 USDC today");
+  assert.equal(budgetLine({ budget: { ...budget, allowOutside: true }, spentToday: null }), "0.50 a hire, 5.00 USDC a day, outside services allowed");
+  assert.equal(budgetLine({ budget: null }), null);
+  assert.equal(budgetLine({}), null);
 });
 
 test("setup snippets are one line per client and hold no token", () => {

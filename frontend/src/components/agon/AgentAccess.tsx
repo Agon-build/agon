@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { TagButton } from "@/components/redesign/TagButton";
-import { ACCESS_LEVELS, EXPIRY_DAYS, setupSnippets, tokenSnippets } from "@/lib/agon/access-setup";
+import { ACCESS_LEVELS, BUDGET_CATEGORY_OPTIONS, BUDGET_DEFAULTS, EXPIRY_DAYS, budgetLine, budgetRequest, setupSnippets, tokenSnippets, type BudgetCategory } from "@/lib/agon/access-setup";
 import { disconnectConnection, listConnections, type Connection } from "@/lib/agon/connect-api";
 import { LEVELS } from "@/lib/agon/connect-view";
 import { createToken, listTokens, revokeToken, type TokenRow } from "@/lib/agon/builder-api";
@@ -97,7 +97,11 @@ function TokenAccess() {
   const [tokens, setTokens] = useState<TokenRow[] | null>(null);
   const [name, setName] = useState("");
   const [level, setLevel] = useState<TokenRow["level"]>("listing");
-  const [days, setDays] = useState<30 | 90>(30);
+  const [days, setDays] = useState<7 | 30 | 90>(30);
+  const [perHire, setPerHire] = useState<string>(BUDGET_DEFAULTS.perHire);
+  const [daily, setDaily] = useState<string>(BUDGET_DEFAULTS.daily);
+  const [categories, setCategories] = useState<BudgetCategory[]>(BUDGET_CATEGORY_OPTIONS.map((c) => c.id));
+  const [allowOutside, setAllowOutside] = useState(false);
   const [fresh, setFresh] = useState<string | null>(null);
   const [tab, setTab] = useState(0);
   const [copied, setCopied] = useState<string | null>(null);
@@ -118,11 +122,13 @@ function TokenAccess() {
         onSubmit={(e) => {
           e.preventDefault();
           if (!name.trim()) { setError("Give the token a name, for example Claude Code on laptop."); return; }
+          const budget = level === "budget" ? budgetRequest({ perHire, daily, categories, allowOutside }) : null;
+          if (budget && !budget.ok) { setError(budget.message); return; }
           setBusy(true);
           setError(null);
-          void createToken({ name: name.trim(), level, days })
+          void createToken({ name: name.trim(), level, days, ...(budget ? { budget: budget.budget } : {}) })
             .then((out) => { setFresh(out.token); setName(""); setTab(0); load(); })
-            .catch((err) => setError(err instanceof StageApiError && err.code === "too_many_tokens" ? "You have 10 active tokens. Revoke one first." : "The token could not be created. Try again."))
+            .catch((err) => setError(err instanceof StageApiError && err.code === "too_many_tokens" ? "You have 10 active tokens. Revoke one first." : err instanceof StageApiError && err.code === "caps_too_high" ? "Those limits are above what a token may spend." : "The token could not be created. Try again."))
             .finally(() => setBusy(false));
         }}
       >
@@ -139,6 +145,34 @@ function TokenAccess() {
             </label>
           ))}
         </fieldset>
+        {level === "budget" ? (
+          <fieldset className="grid gap-4 border border-[color:var(--hairline-strong)] bg-canvas-2 p-4">
+            <legend className="px-1 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">Spending limits</legend>
+            <div className="grid gap-4 sm:grid-cols-2 sm:max-w-md">
+              <label className="grid gap-1">
+                <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">One hire, USDC</span>
+                <input className={INPUT} inputMode="decimal" value={perHire} onChange={(e) => setPerHire(e.target.value)} maxLength={10} />
+              </label>
+              <label className="grid gap-1">
+                <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">One day, USDC</span>
+                <input className={INPUT} inputMode="decimal" value={daily} onChange={(e) => setDaily(e.target.value)} maxLength={10} />
+              </label>
+            </div>
+            <div className="grid gap-1 sm:grid-cols-2">
+              {BUDGET_CATEGORY_OPTIONS.map((c) => (
+                <label key={c.id} className="flex min-h-11 items-center gap-3 text-sm text-ink">
+                  <input type="checkbox" checked={categories.includes(c.id)} onChange={(e) => setCategories(e.target.checked ? [...categories, c.id] : categories.filter((x) => x !== c.id))} />
+                  {c.label}
+                </label>
+              ))}
+            </div>
+            <label className="flex min-h-11 items-start gap-3 text-sm text-ink">
+              <input type="checkbox" className="mt-1" checked={allowOutside} onChange={(e) => setAllowOutside(e.target.checked)} />
+              <span><span className="font-semibold">Allow outside services</span> <span className="text-ink-2">Paid in real USDC on Arc mainnet. Agon cannot refund them.</span></span>
+            </label>
+            <p className="text-[13px] leading-5 text-ink-2">Your wallet limits still apply. Revoke the token here to stop it at once.</p>
+          </fieldset>
+        ) : null}
         <fieldset className="flex flex-wrap items-center gap-4">
           <legend className="mb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">Expires after</legend>
           {EXPIRY_DAYS.map((d) => (
@@ -175,7 +209,7 @@ function TokenAccess() {
               {tokens.map((t) => (
                 <tr key={t.id}>
                   <td className="py-3 text-ink">{t.name}</td>
-                  <td className="text-ink-2">{ACCESS_LEVELS.find((l) => l.level === t.level)?.label}</td>
+                  <td className="text-ink-2">{ACCESS_LEVELS.find((l) => l.level === t.level)?.label}{budgetLine(t) ? <span className="block text-[12px] text-ink-3">{budgetLine(t)}</span> : null}</td>
                   <td className="text-ink-2">{day(t.createdAt)}</td>
                   <td className="text-ink-2">{day(t.lastUsedAt)}</td>
                   <td className="text-ink-2">{day(t.expiresAt)}</td>

@@ -1,6 +1,7 @@
 import type { AuthInfo } from "@modelcontextprotocol/server";
 
 import { canUseAgonScope } from "../../auth/scope-policy.ts";
+import type { BudgetClaim } from "../access-tokens.ts";
 
 export function result(value: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }] };
@@ -17,6 +18,14 @@ export function adapterResult(value: { ok: true; value: unknown } | { ok: false;
 export function actor(authInfo: AuthInfo | undefined): string | null {
   const address = authInfo?.extra?.address;
   return typeof address === "string" && address ? address : null;
+}
+
+/// The standing budget of the connection's token, when it is a budget token.
+export function budgetOf(authInfo: AuthInfo | undefined): BudgetClaim | null {
+  const b = authInfo?.extra?.budget as Partial<BudgetClaim> | undefined;
+  return b && typeof b.tokenId === "string" && typeof b.perHireCap === "bigint" && typeof b.dailyCap === "bigint"
+    ? { tokenId: b.tokenId, perHireCap: b.perHireCap, dailyCap: b.dailyCap, categories: Array.isArray(b.categories) ? b.categories : null, allowOutside: b.allowOutside === true }
+    : null;
 }
 
 export function requireActor(authInfo: AuthInfo | undefined, scope: string): string | ReturnType<typeof failure> {

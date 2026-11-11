@@ -1,15 +1,25 @@
 import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { z } from "zod";
 
-import type { AccessTokenStore } from "./access-tokens.ts";
+import { BUDGET_CATEGORIES, type AccessTokenStore, type BudgetLedger, type TokenBudget } from "./access-tokens.ts";
+import { formatUsdc } from "./payments/bargain.ts";
+import { parseUsdc } from "./stage/money.ts";
 import type { ProviderDraftInput } from "./mcp/contract.ts";
 import type { ManagedPublisher } from "./mcp/managed-publisher.ts";
 
 const createToken = z.object({
   name: z.string().trim().min(1).max(80),
-  level: z.enum(["read", "listing", "hiring", "full"]),
-  days: z.union([z.literal(30), z.literal(90)]),
+  level: z.enum(["read", "listing", "hiring", "full", "budget"]),
+  days: z.union([z.literal(7), z.literal(30), z.literal(90)]),
+  /// For a budget token: the most it may pay for one hire and in one day, in USDC ("0.50").
+  budget: z.object({
+    perHire: z.string().max(20),
+    daily: z.string().max(20),
+    categories: z.array(z.enum(BUDGET_CATEGORIES)).min(1).max(BUDGET_CATEGORIES.length).nullable().optional(),
+    allowOutside: z.boolean().optional(),
+  }).strict().optional(),
 }).strict();
+const budgetJson = (b: TokenBudget | null) => (b ? { perHire: formatUsdc(b.perHireCap), daily: formatUsdc(b.dailyCap), categories: b.categories, allowOutside: b.allowOutside } : null);
 const approveBody = z.object({ termsDigest: z.string().regex(/^0x[0-9a-fA-F]{64}$/) }).strict();
 
 /// The network fee a builder sends to the publishing wallet (covers identity registration and publication).
@@ -36,6 +46,8 @@ const setupBody = z.object({ updates: z.string().regex(/^\d+:0x[0-9a-fA-F]{40}:[
 /// the web listing flow over the same draft store, checker and publisher as MCP.
 export function createBuilderRoutes(deps: {
   tokens: AccessTokenStore;
+  /** What budget tokens have spent today, shown next to each in Account. */
+  budgets?: Pick<BudgetLedger, "spentToday">;
   requireAuth: MiddlewareHandler<{ Variables: { address: string } }>;
   now?: () => Date;
   listing?: BuilderListingDeps;
@@ -48,9 +60,13 @@ export function createBuilderRoutes(deps: {
 
   app.get("/tokens", async (c) => {
     const at = now();
-    const tokens = (await deps.tokens.list(c.get("address"))).map((r) => ({
-      id: r.id, name: r.name, level: r.level, createdAt: r.createdAt.toISOString(), expiresAt: r.expiresAt.toISOString(),
-      lastUsedAt: r.lastUsedAt?.toISOString() ?? null, revokedAt: r.revokedAt?.toISOString() ?? null, active: !r.revokedAt && r.expiresAt > at,
+    const tokens = await Promise.all((await deps.tokens.list(c.get("address"))).map(async (r) => {
+      const spent = r.budget && deps.budgets ? await deps.budgets.spentToday(r.id, at).catch(() => null) : null;
+      return {
+        id: r.id, name: r.name, level: r.level, createdAt: r.createdAt.toISOString(), expiresAt: r.expiresAt.toISOString(),
+        lastUsedAt: r.lastUsedAt?.toISOString() ?? null, revokedAt: r.revokedAt?.toISOString() ?? null, active: !r.revokedAt && r.expiresAt > at,
+        budget: budgetJson(r.budget), ...(r.budget ? { spentToday: spent === null ? null : formatUsdc(spent) } : {}),
+      };
     }));
     return c.json({ tokens });
   });
@@ -58,10 +74,18 @@ export function createBuilderRoutes(deps: {
   app.post("/tokens", async (c) => {
     const parsed = createToken.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: "invalid_request" }, 400);
-    const out = await deps.tokens.create({ owner: c.get("address"), ...parsed.data, now: now() });
-    if (!out.ok) return c.json({ error: out.code }, 409);
+    const { budget: asked, ...fields } = parsed.data;
+    let budget: TokenBudget | undefined;
+    if (asked) {
+      const perHireCap = parseUsdc(asked.perHire);
+      const dailyCap = parseUsdc(asked.daily);
+      if (perHireCap === null || dailyCap === null) return c.json({ error: "invalid_caps" }, 400);
+      budget = { perHireCap, dailyCap, categories: asked.categories ?? null, allowOutside: asked.allowOutside ?? false };
+    }
+    const out = await deps.tokens.create({ owner: c.get("address"), ...fields, ...(budget ? { budget } : {}), now: now() });
+    if (!out.ok) return c.json({ error: out.code }, out.code === "too_many_tokens" ? 409 : 400);
     const r = out.record;
-    return c.json({ token: out.token, record: { id: r.id, name: r.name, level: r.level, createdAt: r.createdAt.toISOString(), expiresAt: r.expiresAt.toISOString() } }, 201);
+    return c.json({ token: out.token, record: { id: r.id, name: r.name, level: r.level, createdAt: r.createdAt.toISOString(), expiresAt: r.expiresAt.toISOString(), budget: budgetJson(r.budget) } }, 201);
   });
 
   app.post("/tokens/:id/revoke", async (c) =>

@@ -42,6 +42,11 @@ export function categoryForKind(kind: IntentKind): HireCategoryId {
   return HIRE_CATEGORIES.find((c) => c.kinds.includes(kind))?.id ?? "research";
 }
 
+/// Every Hire category a service belongs to. An Agon listing category can sit in several.
+export function categoriesOf(e: CatalogEntry): HireCategoryId[] {
+  return HIRE_CATEGORIES.filter((c) => (e.source === "agon" ? c.agonCategories.includes(e.category) : circleFits(c.id, e))).map((c) => c.id);
+}
+
 /// Whether an outside service belongs in a category: its Circle category is listed,
 /// and, where the category is shared, its name or description matches the words.
 export function circleFits(id: HireCategoryId, e: CatalogEntry): boolean {

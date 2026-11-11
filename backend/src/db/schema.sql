@@ -2436,6 +2436,31 @@ create table if not exists agon_access_tokens (
 );
 create index if not exists agon_access_tokens_owner_idx on agon_access_tokens(owner_address, created_at desc);
 
+-- Standing budgets (2026-11-11): a 'budget' token lets an agent hire inside its own caps with
+-- no per-hire code. The caps are in USDC base units. A null categories list allows every
+-- category; allow_outside false keeps the token to Agon's own agents.
+alter table agon_access_tokens add column if not exists per_hire_cap numeric(78, 0);
+alter table agon_access_tokens add column if not exists daily_cap numeric(78, 0);
+alter table agon_access_tokens add column if not exists categories text[];
+alter table agon_access_tokens add column if not exists allow_outside boolean not null default false;
+-- The level list itself (with 'budget') is set once, further down, where 'full' was added.
+alter table agon_access_tokens drop constraint if exists agon_access_tokens_budget_check;
+alter table agon_access_tokens add constraint agon_access_tokens_budget_check
+  check ((level = 'budget') = (per_hire_cap is not null and daily_cap is not null)
+     and (per_hire_cap is null or (per_hire_cap > 0 and daily_cap >= per_hire_cap)));
+
+-- What each budget token has spent. A row is written before the payment is made and removed
+-- only when it is known that no money moved, so the daily cap can never be passed.
+create table if not exists agon_token_spends (
+  token_id    uuid not null references agon_access_tokens(id) on delete cascade,
+  job_id      uuid not null,
+  day         date not null,
+  amount      numeric(78, 0) not null check (amount > 0),
+  created_at  timestamptz not null,
+  primary key (token_id, job_id)
+);
+create index if not exists agon_token_spends_day_idx on agon_token_spends(token_id, day);
+
 -- MCP sign-in (OAuth). Codes and tokens are stored as sha256 hashes only.
 create table if not exists agon_oauth_clients (
   client_id     text primary key check (char_length(client_id) between 8 and 512),
@@ -2486,9 +2511,10 @@ create table if not exists agon_oauth_tokens (
 );
 create index if not exists agon_oauth_tokens_connection_idx on agon_oauth_tokens(connection_id);
 create index if not exists agon_oauth_requests_expires_idx on agon_oauth_requests(expires_at);
--- Full access: listing and hiring in one token.
+-- Full access: listing and hiring in one token. Budget: a standing budget (2026-11-11).
+-- This is the one place the level list is set; a second copy further up would be undone here.
 alter table agon_access_tokens drop constraint if exists agon_access_tokens_level_check;
-alter table agon_access_tokens add constraint agon_access_tokens_level_check check (level in ('read', 'listing', 'hiring', 'full'));
+alter table agon_access_tokens add constraint agon_access_tokens_level_check check (level in ('read', 'listing', 'hiring', 'full', 'budget'));
 
 create table if not exists agon_listing_checks (
   id              bigserial primary key,
