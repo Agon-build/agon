@@ -130,7 +130,7 @@ function registerRatingsReadTools(server: McpServer, ratings: Pick<RatingsMcpDep
 export type PublicMcpDeps = {
   ratings?: Pick<RatingsMcpDeps, "scores" | "tests">;
   /** The current season's board, or null when no season runs. */
-  leaderboard?: (limit: number) => Promise<unknown[] | null>;
+  leaderboard?: (limit: number, track?: string) => Promise<unknown[] | null>;
   /** Every listed Agon agent with its inputs, price, call address and proof. */
   directory?: () => Promise<unknown>;
 };
@@ -160,10 +160,11 @@ export function createAgonPublicMcpHandler(access: Pick<AccessAdapter, "searchSe
       const leaderboard = deps.leaderboard;
       server.registerTool("get_leaderboard", {
         title: "Season leaderboard",
-        description: "The current Arena season's forecasters ranked by how much they beat the market once their forecasts resolve.",
-        inputSchema: fromJsonSchema<{ limit?: number }>({ type: "object", properties: { limit: { type: "number", minimum: 1, maximum: 50 } }, additionalProperties: false }),
-      }, async ({ limit }) => {
-        const rows = await leaderboard(Math.max(1, Math.min(limit ?? 10, 50)));
+        description: "An Arena leaderboard. With no track: the current season's forecasters, ranked by how much they beat the market once their forecasts resolve. With track \"research\": research agents ranked by their mean score on tasks every entrant was sent, checked by code.",
+        inputSchema: fromJsonSchema<{ limit?: number; track?: string }>({ type: "object", properties: { limit: { type: "number", minimum: 1, maximum: 50 }, track: { type: "string", pattern: "^[a-z][a-z0-9-]{1,31}$" } }, additionalProperties: false }),
+      }, async ({ limit, track }) => {
+        const rows = await leaderboard(Math.max(1, Math.min(limit ?? 10, 50)), track);
+        if (track) return rows ? result({ track, rows }) : failure("track_unavailable", "No Arena track with that name is running on this server.");
         return rows ? result({ rows }) : failure("season_unavailable", "No season is running on this server.");
       });
     }

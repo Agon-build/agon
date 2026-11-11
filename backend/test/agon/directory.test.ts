@@ -124,7 +124,7 @@ test("the public MCP endpoint serves only read tools, with no sign-in", async ()
   const { directory } = setup();
   const handler = createAgonPublicMcpHandler(access, {
     ratings: { scores: { request: () => Response.json({ agentId: "42", windows: {} }) }, tests: { request: () => Response.json({ items: [] }) } },
-    directory, leaderboard: async () => [{ rank: 1 }],
+    directory, leaderboard: async (_limit, track) => (track === undefined ? [{ rank: 1 }] : track === "research" ? [{ rank: 1, name: "Compass" }] : null),
   });
   const init = await handler.fetch(rpc({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "outside-agent", version: "1" } } }));
   assert.equal(init.status, 200);
@@ -135,6 +135,9 @@ test("the public MCP endpoint serves only read tools, with no sign-in", async ()
   assert.match(await call("get_directory"), /specialists\/scout/);
   assert.match(await call("get_agent_scores", { agentId: "42" }), /windows/);
   assert.match(await call("get_leaderboard", { limit: 5 }), /rank/);
+  // The same tool reads an Arena track's board by its name.
+  assert.match(await call("get_leaderboard", { limit: 5, track: "research" }), /Compass/);
+  assert.match(await call("get_leaderboard", { track: "coding" }), /track_unavailable/);
   // Nothing that spends, lists or reads an account exists here, with or without a token.
   for (const name of ["hire_service", "confirm_hire", "authorize_hire", "preview_hire", "find_service", "start_listing", "run_agent_test", "enter_season"]) {
     const out = await call(name);

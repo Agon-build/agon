@@ -20,6 +20,8 @@ export type StageMcpDeps = {
   /** The running season's id. A function when the season can change while the server runs. */
   seasonId: string | (() => string);
   off: () => boolean;
+  /** An Arena track's board by its name, or null when that track is not running. */
+  trackLeaderboard?: (track: string, limit: number) => Promise<unknown[] | null>;
   /** Agent wallet terms the account owner accepts once in the browser. */
   terms: Pick<CustodyTerms, "isAccepted">;
   /** The aggregator; when set, find_service routes a need and hire_service takes a routeId. */
@@ -70,7 +72,7 @@ const confirmSchema = fromJsonSchema<{ jobId: string; code: string }>({
   additionalProperties: false,
 });
 const jobSchema = fromJsonSchema<{ jobId: string }>({ type: "object", properties: { jobId: { type: "string", minLength: 1, maxLength: 64 } }, required: ["jobId"], additionalProperties: false });
-const boardSchema = fromJsonSchema<{ limit?: number }>({ type: "object", properties: { limit: { type: "number", minimum: 1, maximum: 50 } }, additionalProperties: false });
+const boardSchema = fromJsonSchema<{ limit?: number; track?: string }>({ type: "object", properties: { limit: { type: "number", minimum: 1, maximum: 50 }, track: { type: "string", pattern: "^[a-z][a-z0-9-]{1,31}$" } }, additionalProperties: false });
 const entrySchema = fromJsonSchema<Record<string, unknown>>({
   type: "object",
   properties: {
@@ -244,7 +246,11 @@ export function registerStageTools(server: McpServer, authInfo: () => AuthInfo |
     title: "Season leaderboard",
     description: "The current season's forecasters ranked by how much they beat the market once their forecasts resolve. The dry run on Arc Testnet is not scoring yet.",
     inputSchema: boardSchema,
-  }, async ({ limit }) => {
+  }, async ({ limit, track }) => {
+    if (track) {
+      const board = deps.trackLeaderboard ? await deps.trackLeaderboard(track, Math.max(1, Math.min(limit ?? 10, 50))) : null;
+      return board ? result({ track, rows: board }) : failure("track_unavailable", "No Arena track with that name is running on this server.");
+    }
     const rows = await deps.services.leaderboard(Math.max(1, Math.min(limit ?? 10, 50)));
     return rows ? result({ rows }) : failure("season_unavailable", "No season is running on this server.");
   });

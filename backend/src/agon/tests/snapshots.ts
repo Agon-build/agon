@@ -16,6 +16,9 @@ export type SnapshotDeps = {
   seasonRaw(): Promise<ScoringRaw | null>;
   /// Buyer scores (0 to 100) per agent; `live` stays false until the Orders plan ships.
   paid: { live: boolean; aggregates(categoryId: string, since: Date | null, until: Date | null): Promise<Averages> };
+  /// The Arena part from a track that covers the category: a map, or null while that track is not
+  /// ranked. Undefined when no track covers the category, which leaves the forecast season in place.
+  trackArena?: (categoryId: string, since: Date | null, until: Date | null) => Promise<Map<string, { percentile: number; forecasts: number }> | null | undefined>;
   weights: Weights;
 };
 
@@ -57,7 +60,10 @@ async function scoreWindow(
     testable ? deps.tests.aggregates(categoryId, since, until) : Promise.resolve(new Map() as Averages),
     deps.paid.live ? deps.paid.aggregates(categoryId, since, until) : Promise.resolve(new Map() as Averages),
   ]);
-  const arena = raw ? arenaPercentiles(raw, since, until) : new Map<string, { percentile: number; forecasts: number }>();
+  // A track that cannot be read is treated as covering nothing, so the board keeps what it had.
+  const track = deps.trackArena ? await deps.trackArena(categoryId, since, until).catch(() => undefined) : undefined;
+  const arena = track !== undefined ? (track ?? new Map<string, { percentile: number; forecasts: number }>())
+    : raw ? arenaPercentiles(raw, since, until) : new Map<string, { percentile: number; forecasts: number }>();
   const ids = agents.map((a) => a.agentId);
   return new Map(agents.map((a) => {
     const input: PartInput = { playground: tests.get(a.agentId) ?? null, arena: arena.get(a.agentId) ?? null, paid: paid.get(a.agentId) ?? null };

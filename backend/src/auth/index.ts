@@ -80,6 +80,9 @@ import { runAgentTest } from "../agon/tests/runner.ts";
 import { startAgonChecks } from "../agon/tests/agon-checks.ts";
 import { listLiveListings as pageLiveListings } from "../agon/tests/live-listings.ts";
 import { PostgresScoreSnapshotStore, startScoreSnapshots } from "../agon/tests/snapshots.ts";
+import { ARENA_OWNER, startArena } from "../agon/arena/runtime.ts";
+import { PostgresArenaStore } from "../agon/arena/store.ts";
+import type { AgonListingLite } from "../agon/routing/agon-source.ts";
 import { createScoresRoutes } from "../agon/tests/scores-routes.ts";
 import { parseWeights } from "../agon/tests/scores.ts";
 import { assertPublicHttpsDestination } from "../agon/manifest-inspector.ts";
@@ -1089,6 +1092,55 @@ app.route("/agon/tests", agonTestRoutes);
 const listLiveListings = () => pageLiveListings((cursor) => agonService.listListings({ limit: 100, cursor, category: null, agentId: null }));
 const listListedForTests = async () => (await listLiveListings()).map((l) => ({ listingReference: l.id, category: l.category }));
 
+// The Arena for every category. Its first track is Research: off unless AGON_ARENA_RESEARCH=on.
+// It commits rounds with the season's wallet and pays agents from its own budget wallet.
+const arenaPolymarket = createPolymarket();
+const arenaPayments = agonPayments;
+let arenaFirstParty = new Set<string>();
+const agonArena = agonSeason && arenaPayments
+  ? startArena({
+      env: process.env,
+      store: new PostgresArenaStore(pool),
+      network: agonSeason.network.id,
+      commitsAddress: agonSeason.season.commitsAddress,
+      committer: agonSeason.rounds.committer,
+      payments: arenaPayments.hire,
+      buyerAddress: async () => (await arenaPayments.hire.wallets.ensure(ARENA_OWNER)).address,
+      listings: async () => {
+        const [page, live] = await Promise.all([
+          agonService.listListings({ limit: 100, cursor: null, category: null, agentId: null, includeManifest: true }),
+          listLiveListings(),
+        ]);
+        if (!page.ok) throw new Error("listings could not be read");
+        arenaFirstParty = new Set(live.filter((l) => l.firstParty).map((l) => l.agentId));
+        return (page.value.items as unknown as ListingView[]).map(listingLiteFrom).filter((l): l is AgonListingLite => l !== null);
+      },
+      firstParty: (agentId) => arenaFirstParty.has(agentId),
+      chain: {
+        latest: () => publicClient.getBlockNumber(),
+        block: async (n) => {
+          const block = await publicClient.getBlock({ blockNumber: n });
+          return { gasUsed: block.gasUsed, txCount: block.transactions.length, timestamp: new Date(Number(block.timestamp) * 1000) };
+        },
+      },
+      markets: {
+        candidates: async () => (await arenaPolymarket.topMarkets(40)).value.map((m) => m.slug),
+        record: async (ref) => {
+          const found = await arenaPolymarket.resolve(ref);
+          return found.ok ? { slug: found.market.slug, question: found.market.question, endDate: found.market.endAt, outcomes: found.market.outcomes.map((o) => o.label), yesNo: found.market.yesNo } : null;
+        },
+      },
+      safe: (url) => assertPublicHttpsDestination(url).then(() => true, () => false),
+      alert: (message) => {
+        console.warn(`[arena] ${message}`);
+        const operator = stage.settings.alertOperator ?? config.agon.operationsAlerts.operatorAddress ?? null;
+        if (operator) void agonOperationsAlerts.raise({ operator, fingerprint: "arena-round-not-opened", source: "arena", severity: "warning", title: "Arena round not opened", body: message }).catch(() => undefined);
+      },
+      log: (message) => console.log(`[arena] ${message}`),
+    })
+  : null;
+if (agonArena) app.route("/agon/arena", agonArena.routes);
+
 // Plan 3f: Agon scores, read from snapshots recomputed every 5 minutes.
 const agonScoreSnapshots = new PostgresScoreSnapshotStore(pool);
 const agonScoresRoutes = createScoresRoutes({
@@ -1104,6 +1156,8 @@ if (config.agon.ratings.scoresWorkerEnabled) {
       tests: agonTestResults,
       // The running season, or the one before it until the new season has its first result.
       seasonRaw: async () => (agonSeason ? agonSeason.scoringRaw() : null),
+      // A category with its own Arena track takes its Arena part from that track.
+      trackArena: async (categoryId, since, until) => (agonArena ? agonArena.trackArena(categoryId, since, until) : undefined),
       // User ratings from paid work, per agent, across the refs its jobs carry.
       paid: {
         live: true,
@@ -1165,7 +1219,7 @@ app.route("/agon/directory", createDirectoryRoutes({ directory: agonDirectory })
 
 app.route("/agon", createAgonRoutes({
   service: agonService,
-  publicMcp: { directory: agonDirectory, ...(stageServices ? { leaderboard: ((services) => (limit: number) => services.leaderboard(limit))(stageServices) } : {}) },
+  publicMcp: { directory: agonDirectory, ...(stageServices ? { leaderboard: ((services) => (limit: number, track?: string) => (track ? (agonArena ? agonArena.board(track, limit) : Promise.resolve(null)) : services.leaderboard(limit)))(stageServices) } : {}) },
   verifyMcpToken: createMcpTokenVerifier(agonAccessTokens, verifyTokenClaims, undefined, async (token) => {
     const claims = await oauthStore.verifyAccess(token, AGON_MCP_RESOURCE, new Date());
     return claims ? { address: claims.address, client: "agon-mcp", scopes: claims.scopes } : null;
@@ -1176,6 +1230,7 @@ app.route("/agon", createAgonRoutes({
         services: stageServices,
         season: seasonRoutes ? { request: (path: string, init?: RequestInit) => seasonRoutes!.request(path, init) } : null,
         seasonId: () => (agonSeason ? agonSeason.season.seasonId.toString() : "1"),
+        trackLeaderboard: async (track, limit) => (agonArena ? agonArena.board(track, limit) : null),
         off: () => stage.settings.channelsOff.mcp,
         terms: custodyTerms,
         // Budget tokens pay inside hire_service, inside their own caps.
