@@ -45,7 +45,7 @@ export async function checkStage(deps: {
   if (deps.seasonEndsAt && now > deps.seasonEndsAt.getTime()) {
     alerts.push({
       fingerprint: "stage:season-ended", severity: "warning", title: "The Arena season has ended",
-      body: `It ended at ${deps.seasonEndsAt.toISOString()} and no new season is running. Set the next one with AGON_SEASON_ID, AGON_SEASON_STARTS_AT and AGON_SEASON_ENDS_AT.`,
+      body: `It ended at ${deps.seasonEndsAt.toISOString()} and no new season is running. Set the next one with AGON_SEASON_ID, AGON_SEASON_STARTS_AT and AGON_SEASON_ENDS_AT. To hand over with no gap next time, set AGON_SEASON_NEXT_ID and AGON_SEASON_NEXT_ENDS_AT before a season ends.`,
       href: `${deps.siteUrl}/arena/season-1`,
     });
     return alerts;

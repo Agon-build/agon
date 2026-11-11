@@ -4,6 +4,7 @@ import type { Address } from "viem";
 import { agonNetwork, type AgonNetwork } from "../../network.ts";
 import { houseAgentIdsFrom, parseFirstPartyAgents } from "../../first-party.ts";
 import { DEFAULT_HOUSE_AGENTS, houseAgentsFromEnv } from "./house-agents.ts";
+import { nextSeasonProblems } from "./schedule.ts";
 import type { HouseRunner } from "./worker.ts";
 
 export type SeasonSettings = {
@@ -18,6 +19,11 @@ export type SeasonSettings = {
   /// House key to its listing's ERC-8004 id, from AGON_FIRST_PARTY_AGENTS.
   /// Null when that value is unset or invalid: stored ids are then left alone.
   houseAgentIds: Record<string, bigint> | null;
+  /// The season that follows this one with no restart, from AGON_SEASON_NEXT_ID and
+  /// AGON_SEASON_NEXT_ENDS_AT (it starts when this one ends unless AGON_SEASON_NEXT_STARTS_AT is set).
+  next: { seasonId: bigint; startsAt: Date; endsAt: Date } | null;
+  /// Why a next season that was set is not used. The running season is never stopped by these.
+  nextProblems: string[];
 };
 
 export type SeasonSettingsResult =
@@ -89,6 +95,23 @@ export function resolveSeasonSettings(env: Record<string, string | undefined>): 
   const houseAgentIds = firstParty?.ok ? houseAgentIdsFrom(firstParty.agents, DEFAULT_HOUSE_AGENTS.map((a) => a.key)) : null;
 
   if (problems.length > 0 || seasonId === null || network === null) return { enabled: true, ok: false, problems };
+
+  // The following season. A mistake here leaves the running season as it is and is only reported.
+  let next: SeasonSettings["next"] = null;
+  const nextProblems: string[] = [];
+  const nextIdRaw = env.AGON_SEASON_NEXT_ID?.trim();
+  if (nextIdRaw) {
+    const nextId = /^[1-9]\d{0,17}$/.test(nextIdRaw) ? BigInt(nextIdRaw) : null;
+    if (nextId === null) nextProblems.push("AGON_SEASON_NEXT_ID must be a positive integer");
+    const nextStartsRaw = env.AGON_SEASON_NEXT_STARTS_AT?.trim();
+    if (nextStartsRaw && !instant.safeParse(nextStartsRaw).success) nextProblems.push("AGON_SEASON_NEXT_STARTS_AT must be an ISO date-time");
+    if (!instant.safeParse(env.AGON_SEASON_NEXT_ENDS_AT ?? "").success) nextProblems.push("AGON_SEASON_NEXT_ENDS_AT must be an ISO date-time");
+    if (nextId !== null && nextProblems.length === 0) {
+      const candidate = { seasonId: nextId, startsAt: nextStartsRaw ? new Date(nextStartsRaw) : endsAt, endsAt: new Date(env.AGON_SEASON_NEXT_ENDS_AT!) };
+      nextProblems.push(...nextSeasonProblems({ seasonId, endsAt }, candidate));
+      if (nextProblems.length === 0) next = candidate;
+    }
+  }
   return {
     enabled: true,
     ok: true,
@@ -102,6 +125,8 @@ export function resolveSeasonSettings(env: Record<string, string | undefined>): 
       tickMs,
       house,
       houseAgentIds,
+      next,
+      nextProblems,
     },
   };
 }

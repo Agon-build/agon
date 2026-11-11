@@ -1,3 +1,4 @@
+import { ANSWER_WARNING, scanAnswer } from "../safety/answer-scan.ts";
 /// What a person is told when their hire finishes: a title and one short paragraph in plain words,
 /// written by code from the stored result (no model), and the page to open.
 
@@ -85,6 +86,8 @@ export function deliveryForJob(job: DeliverableJob, siteUrl: string): DeliveryMe
     }
     // A Lead job can end "delivered" with a refund inside its answer.
     if (r.ok === false && r.refunded === true) return refunded(name, r, receipt);
+    // An answer that reads like instructions, or holds hidden text, is not repeated in a message.
+    if (scanAnswer(job.result).flagged) return { title: `Your answer from ${name} needs a careful look`, body: `${ANSWER_WARNING} ${paid}`, href: receipt };
     const text = answerText(name, r);
     return { title: `Your answer from ${name}`, body: `${text ?? "It is ready on Agon."} ${paid}`, href: receipt };
   }

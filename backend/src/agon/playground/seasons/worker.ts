@@ -6,6 +6,7 @@ import { forecastSlate, type HouseAgentSpec, type ModelCaller } from "./house-ag
 import {
   acceptForecast, commitDueRounds, entryRoundAt, openCurrentRound, refreshResults, roundIndexAt, type RoundDeps,
 } from "./rounds.ts";
+import { activeSeason } from "./schedule.ts";
 import type { Season } from "./types.ts";
 
 /// A house agent's answer for one market is tried at most this many times per
@@ -134,6 +135,41 @@ export async function seasonWorkerLoop(
     if (tick.opened || tick.houseForecasts || tick.committed || tick.resolved) {
       deps.log?.(`season ${deps.seasonId} tick: ${JSON.stringify(tick)}`);
     }
+    await wait();
+  }
+}
+
+/// Runs the season that is active now, and moves to the next one the moment it starts, with no
+/// restart. Each season is prepared once (stored, house agents entered) before its first tick.
+/// Rounds of a season that has ended are still committed and resolved: those two steps cover
+/// every season, whichever one is active.
+export async function seasonScheduleLoop(
+  base: Omit<SeasonWorkerDeps, "seasonId">,
+  options: { seasons: Season[]; intervalMs: number; signal?: AbortSignal; onSwitch?: (to: Season, from: Season | null) => void },
+): Promise<void> {
+  const wait = () => new Promise((resolve) => setTimeout(resolve, options.intervalMs));
+  let running: { season: Season; deps: SeasonWorkerDeps; ready: boolean } | null = null;
+  while (!options.signal?.aborted) {
+    const season = activeSeason(options.seasons, base.now());
+    if (!running || running.season.seasonId !== season.seasonId) {
+      const from = running?.season ?? null;
+      // A fresh deps object per season, so per-round attempt counts never carry across seasons.
+      running = { season, deps: { ...base, seasonId: season.seasonId }, ready: false };
+      if (from) base.log?.(`season ${from.seasonId} ended; season ${season.seasonId} takes over`);
+      options.onSwitch?.(season, from);
+    }
+    if (!running.ready) {
+      try {
+        await bootstrapSeason(running.deps, season);
+        running.ready = true;
+      } catch (error) {
+        base.log?.(`season ${season.seasonId} bootstrap failed, retrying: ${(error as Error).message}`);
+        await wait();
+        continue;
+      }
+    }
+    const tick = await runSeasonTick(running.deps);
+    if (tick.opened || tick.houseForecasts || tick.committed || tick.resolved) base.log?.(`season ${season.seasonId} tick: ${JSON.stringify(tick)}`);
     await wait();
   }
 }

@@ -215,7 +215,7 @@ test("the Arena page is the season: strip, scoring steps, standings by category,
   const read = (f: string) => readFileSync(new URL(`../../${f}`, import.meta.url), "utf8");
   assert.match(read("app/arena/page.tsx"), /<ArenaClient \/>/);
   const arena = read("app/arena/ArenaClient.tsx");
-  for (const fn of ["seasonProgress(", "seasonStatus(", "marketNote(", "skillBarWidth(", "agentPageHrefs(", "SEASON_CATEGORY_TABS", "getRounds(AGON_SEASON_ID, 3)"]) assert.ok(arena.includes(fn), `Arena uses ${fn}`);
+  for (const fn of ["seasonProgress(", "seasonStatus(", "marketNote(", "skillBarWidth(", "agentPageHrefs(", "SEASON_CATEGORY_TABS", "getRounds(seasonId, 3)", "getCurrentSeasonId()"]) assert.ok(arena.includes(fn), `Arena uses ${fn}`);
   assert.match(arena, /Coming next/, "entering an outside agent is not Live yet");
   assert.match(arena, /season=\$\{e\.id\}/, "earlier seasons stay linked");
   // Playground leaderboards per category live on Agents (AgentsBoard).

@@ -1,3 +1,4 @@
+import { answerWarning, type AnswerWarning } from "../safety/answer-scan.ts";
 import type { Address } from "viem";
 
 import { agonNetwork, type AgonNetwork, type AgonNetworkId } from "../network.ts";
@@ -31,6 +32,8 @@ export type LiveView = {
   events: LiveEvent[]; haggle: BargainStep[]; answer: StageAnswer | null; failure: string | null; refunded: boolean; receipt: ReceiptNode | null; receiptUrl: string;
   /** What a routed service returned, for hires of anything other than the Lead agent. */
   result: unknown;
+  /** Set when the delivered answer holds text that reads like instructions, or hidden text. */
+  warning: AnswerWarning | null;
 };
 export type HistoryItem = { jobId: string; question: string | null; agent: string | null; state: JobState; price: string; createdAt: string; receiptUrl: string };
 export type ApprovalLink = { approvalUrl: string; expiresAt: Date };
@@ -223,6 +226,8 @@ export function createStageServices(deps: StageServiceDeps): StageServices {
         events, haggle: haggleOf(result), answer, failure, refunded: phase === "refunded",
         receipt: receiptTree(root.rootId, tree, payments), receiptUrl: receiptUrl(root.jobId),
         result: root.providerRef !== LEAD_PROVIDER_REF && root.state === "delivered" ? (root.result ?? null) : null,
+        // Every delivered answer is read as data before anyone sees it (safety/answer-scan.ts).
+        warning: root.state === "delivered" ? answerWarning(root.result ?? null) : null,
       };
     },
 

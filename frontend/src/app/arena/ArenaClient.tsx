@@ -9,12 +9,15 @@ import { useNow } from "@/components/stage/useNow";
 import { agentPageHrefs, arenaName, marketNote, roundClock, seasonProgress, seasonSpan, skillBarWidth } from "@/lib/agon/arena-layout";
 import { AGON_PREVIEW_MODE } from "@/lib/agon/client";
 import { getCardScores } from "@/lib/agon/scores-api";
-import { AGON_SEASON_ID, getEntries, getLeaderboard, getRounds, getSeason } from "@/lib/agon/stage";
+import { AGON_SEASON_ID, getCurrentSeasonId, getEntries, getLeaderboard, getRounds, getSeason } from "@/lib/agon/stage";
 import { SEASON_CATEGORY_TABS, type LeaderboardResponse, type SeasonCategoryKey, type SeasonInfo, type SeasonRoundSummary } from "@/lib/agon/stage-types";
 import { boardNotice, explorerBase, seasonName, seasonStatus, shortHash } from "@/lib/agon/stage-view";
 
 /// Earlier seasons stay readable after the site moves on.
-const EARLIER = [{ id: "9001", line: "The first run, on Arc Testnet. Ended. Its record stays public." }];
+const EARLIER = [
+  { id: "9002", line: "Ran from 22 October to 19 November on Arc Testnet. Ended. Its record stays public." },
+  { id: "9001", line: "The first run, on Arc Testnet. Ended. Its record stays public." },
+];
 const STEPS = [
   { title: "Forecast", body: "Each round, every agent gives a probability for each market." },
   { title: "Score", body: "When the market settles, Agon scores the forecast. Closer to what happened scores better." },
@@ -61,27 +64,36 @@ export function ArenaClient() {
   const [mostScored, setMostScored] = useState<number | null>(null);
   const [rounds, setRounds] = useState<SeasonRoundSummary[] | null>(null);
   const [hrefs, setHrefs] = useState<Record<string, string>>({});
-
+  // The season running now, asked from the server: when one season hands over to the next, the page follows.
+  const [seasonId, setSeasonId] = useState(AGON_SEASON_ID);
   useEffect(() => {
     let stopped = false;
-    const load = () => {
-      getSeason(AGON_SEASON_ID).then((s) => { if (!stopped) { setSeason(s); setSeasonFailed(false); } }).catch(() => { if (!stopped) setSeasonFailed(true); });
-      getRounds(AGON_SEASON_ID, 3).then((r) => { if (!stopped) setRounds(r.rounds); }).catch(() => { if (!stopped) setRounds([]); });
-    };
+    const load = () => void getCurrentSeasonId().then((id) => { if (!stopped) setSeasonId(id); });
     load();
-    const t = window.setInterval(load, 60_000);
-    // Agent page links: entry ERC-8004 id, then its listing reference from the scores.
-    void getEntries(AGON_SEASON_ID).then(async ({ entries }) => {
-      const ids = entries.map((e) => e.erc8004AgentId).filter((id): id is string => Boolean(id));
-      const scores = await getCardScores(ids);
-      if (!stopped) setHrefs(agentPageHrefs(entries, scores));
-    }).catch(() => {});
+    const t = window.setInterval(load, 5 * 60_000);
     return () => { stopped = true; window.clearInterval(t); };
   }, []);
 
   useEffect(() => {
     let stopped = false;
-    const load = () => getLeaderboard(AGON_SEASON_ID, tab).then((b) => {
+    const load = () => {
+      getSeason(seasonId).then((s) => { if (!stopped) { setSeason(s); setSeasonFailed(false); } }).catch(() => { if (!stopped) setSeasonFailed(true); });
+      getRounds(seasonId, 3).then((r) => { if (!stopped) setRounds(r.rounds); }).catch(() => { if (!stopped) setRounds([]); });
+    };
+    load();
+    const t = window.setInterval(load, 60_000);
+    // Agent page links: entry ERC-8004 id, then its listing reference from the scores.
+    void getEntries(seasonId).then(async ({ entries }) => {
+      const ids = entries.map((e) => e.erc8004AgentId).filter((id): id is string => Boolean(id));
+      const scores = await getCardScores(ids);
+      if (!stopped) setHrefs(agentPageHrefs(entries, scores));
+    }).catch(() => {});
+    return () => { stopped = true; window.clearInterval(t); };
+  }, [seasonId]);
+
+  useEffect(() => {
+    let stopped = false;
+    const load = () => getLeaderboard(seasonId, tab).then((b) => {
       if (stopped) return;
       setBoard(b); setBoardFailed(false);
       if (tab === "overall") setMostScored(b.rows.reduce((m, r) => Math.max(m, r.forecastsResolved), 0));
@@ -89,11 +101,11 @@ export function ArenaClient() {
     void load();
     const t = window.setInterval(() => void load(), 60_000);
     return () => { stopped = true; window.clearInterval(t); };
-  }, [tab]);
+  }, [tab, seasonId]);
 
   const status = season ? seasonStatus(season, now) : null;
   const progress = season ? seasonProgress(season) : null;
-  const name = seasonName(AGON_SEASON_ID);
+  const name = seasonName(seasonId);
   const preview = AGON_PREVIEW_MODE || board?.preview;
   const explorer = season ? explorerBase(season.commitsUrl) : null;
   const notice = board ? boardNotice(board) : null;
@@ -266,7 +278,7 @@ export function ArenaClient() {
               <p className="mt-3 text-[13px] leading-5 text-ink-2">Outside agents will enter a season over MCP with a forecast endpoint. Their results will feed their Agon score.</p>
               <div className="mt-5"><TagButton href="/docs#arena" variant="ghost" size="sm">How Arena works</TagButton></div>
             </section>
-            {EARLIER.filter((e) => e.id !== AGON_SEASON_ID).map((e) => (
+            {EARLIER.filter((e) => e.id !== seasonId).map((e) => (
               <section key={e.id} className="border border-[color:var(--hairline-strong)] p-5 sm:p-6">
                 <p className={`${EYEBROW} text-ink-3`}>Seasons</p>
                 <h2 className="mt-3 text-[18px] font-medium text-ink">{seasonName(e.id)}</h2>

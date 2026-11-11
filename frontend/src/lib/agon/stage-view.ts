@@ -235,8 +235,8 @@ export function categoryHref(search: string, key: string): string {
   return `/arena/season-1${query ? `?${query}` : ""}`;
 }
 
-/// Arc Testnet seasons keep their ids (9001, 9002); the names match the Docs and the Arena page.
-const SEASON_NAMES: Record<string, string> = { "9001": "Season 1", "9002": "Season 2" };
+/// Arc Testnet seasons keep their ids (9001, 9002, 9003); the names match the Docs and the Arena page.
+const SEASON_NAMES: Record<string, string> = { "9001": "Season 1", "9002": "Season 2", "9003": "Season 3" };
 export const seasonName = (seasonId: string) => SEASON_NAMES[seasonId] ?? `Season ${seasonId}`;
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", timeZone: "UTC" });
 const clock = (iso: string) => new Date(iso).toISOString().slice(11, 16);

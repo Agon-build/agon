@@ -174,6 +174,17 @@ export async function approve(token: string): Promise<ApprovalResult> {
   }
   return call(`/agon/approvals/${encodeURIComponent(token)}`, { body: {}, timeoutMs: 200_000 });
 }
+/// The season running now, asked from the server so the page follows a handover from one season
+/// to the next without a rebuild. Falls back to the id the site was built with.
+export async function getCurrentSeasonId(): Promise<string> {
+  if (AGON_PREVIEW_MODE) return AGON_SEASON_ID;
+  try {
+    const current = (await call("/agon/seasons/current")) as { seasonId?: unknown };
+    return typeof current.seasonId === "string" && /^[1-9]\d{0,17}$/.test(current.seasonId) ? current.seasonId : AGON_SEASON_ID;
+  } catch {
+    return AGON_SEASON_ID;
+  }
+}
 export async function getSeason(seasonId = AGON_SEASON_ID): Promise<SeasonInfo> {
   return AGON_PREVIEW_MODE ? previewSeason : call(`/agon/seasons/${seasonId}`);
 }

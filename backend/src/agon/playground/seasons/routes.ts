@@ -1,3 +1,4 @@
+import { activeSeason, previousSeason, upcomingSeason } from "./schedule.ts";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
@@ -11,7 +12,7 @@ import { SEASON_CATEGORIES, parseCategory } from "./categories.ts";
 import {
   computeLeaderboard, computeRatings, MIN_RANKED_CATEGORY_FORECASTS, MIN_RANKED_FORECASTS, type AgentRatings, type LeaderboardRow, type RatingCell,
 } from "./scoring.ts";
-import type { SeasonStore } from "./types.ts";
+import type { Season, SeasonStore } from "./types.ts";
 
 export type EntryFields = {
   seasonId: bigint;
@@ -100,6 +101,8 @@ export function createSeasonRoutes(deps: {
   rounds: RoundDeps;
   network: AgonNetwork;
   verifyEntry: EntryVerifier;
+  /** The seasons this deployment knows; with it, GET /current names the running season and the next. */
+  seasons?: () => Season[];
   leaderboardCacheMs?: number;
   postLimitPerMinute?: number;
   maxBodyBytes?: number;
@@ -127,7 +130,8 @@ export function createSeasonRoutes(deps: {
   }
 
   app.use("/:seasonId/*", async (c, next) => {
-    if (!idParam.safeParse(c.req.param("seasonId")).success) return c.json({ error: "invalid_season_id" }, 400);
+    // "current" is the running season's own address, not a season number.
+    if (c.req.param("seasonId") !== "current" && !idParam.safeParse(c.req.param("seasonId")).success) return c.json({ error: "invalid_season_id" }, 400);
     await next();
   });
 
@@ -144,6 +148,23 @@ export function createSeasonRoutes(deps: {
     if (!parsed.success) return null;
     return deps.store.getSeason(parsed.data);
   }
+
+  // The season running now, so a page never needs to be rebuilt when one season hands over to the next.
+  app.get("/current", async (c) => {
+    const seasons = deps.seasons?.() ?? [];
+    if (seasons.length === 0) return c.json({ error: "season_not_found" }, 404);
+    const at = deps.rounds.now();
+    const current = activeSeason(seasons, at);
+    const next = upcomingSeason(seasons, at);
+    return c.json({
+      seasonId: current.seasonId.toString(),
+      startsAt: current.startsAt.toISOString(),
+      endsAt: current.endsAt.toISOString(),
+      currentRound: roundIndexAt(current, at)?.toString() ?? null,
+      previousSeasonId: previousSeason(seasons, at)?.seasonId.toString() ?? null,
+      next: next ? { seasonId: next.seasonId.toString(), startsAt: next.startsAt.toISOString(), endsAt: next.endsAt.toISOString() } : null,
+    });
+  });
 
   app.get("/:seasonId", async (c) => {
     const season = await seasonFor(c.req.param("seasonId"));

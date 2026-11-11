@@ -12,9 +12,19 @@ import type { RoundDeps } from "./rounds.ts";
 import { resolveSeasonSettings } from "./settings.ts";
 import { PostgresSeasonStore } from "./store.ts";
 import type { Season } from "./types.ts";
-import { seasonWorkerLoop, type SeasonWorkerDeps } from "./worker.ts";
+import { activeSeason, scoringRawWithCarry } from "./schedule.ts";
+import type { ScoringRaw } from "./types.ts";
+import { seasonScheduleLoop, type SeasonWorkerDeps } from "./worker.ts";
 
-export type SeasonRuntime = { store: PostgresSeasonStore; rounds: RoundDeps; network: AgonNetwork; season: Season };
+export type SeasonRuntime = {
+  store: PostgresSeasonStore; rounds: RoundDeps; network: AgonNetwork;
+  /** The season running now. It changes by itself when the next season starts. */
+  season: Season;
+  /** Every season this deployment knows, in order: the one it started with and the one that follows. */
+  seasons: Season[];
+  /** What the Arena part of the Agon score is read from: the running season, or the one before it until the first result. */
+  scoringRaw(): Promise<ScoringRaw>;
+};
 
 /// Production wiring for Season 1. Never throws: a disabled, incomplete or
 /// malformed season config logs why and returns null, so the auth service
@@ -57,9 +67,10 @@ export function startSeasonRuntime(env: Record<string, string | undefined> = pro
       now: () => new Date(),
       log,
     };
-    const worker: SeasonWorkerDeps = {
+    const seasons: Season[] = [season, ...(s.next ? [{ ...season, seasonId: s.next.seasonId, startsAt: s.next.startsAt, endsAt: s.next.endsAt }] : [])];
+    if (s.nextProblems.length > 0) console.error(`[season] the next season is not set: ${s.nextProblems.join("; ")}`);
+    const worker: Omit<SeasonWorkerDeps, "seasonId"> = {
       ...rounds,
-      seasonId: s.seasonId,
       domain,
       house: s.house,
       houseAgentIds: s.houseAgentIds,
@@ -69,11 +80,16 @@ export function startSeasonRuntime(env: Record<string, string | undefined> = pro
       newSalt,
       commitsOff: () => env.AGON_SEASON_COMMITS_OFF === "true",
     };
-    void seasonWorkerLoop(worker, { season, intervalMs: s.tickMs }).catch((error) =>
+    void seasonScheduleLoop(worker, { seasons, intervalMs: s.tickMs }).catch((error) =>
       console.error(`[season] loop stopped: ${(error as Error).message}`),
     );
-    log(`running season ${s.seasonId} on ${network.label} with ${s.house.length} house agents`);
-    return { store, rounds, network, season };
+    const now = activeSeason(seasons, new Date());
+    log(`running season ${now.seasonId} on ${network.label} with ${s.house.length} house agents${s.next ? `; season ${s.next.seasonId} follows at ${s.next.startsAt.toISOString()}` : ""}`);
+    return {
+      store, rounds, network, seasons,
+      get season() { return activeSeason(seasons, new Date()); },
+      scoringRaw: () => scoringRawWithCarry(store, seasons, new Date()),
+    };
   } catch (error) {
     console.error(`[season] disabled: ${(error as Error).message}`);
     return null;

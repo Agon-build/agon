@@ -29,7 +29,7 @@ export function stageWorld(opts: { price?: bigint; newWalletAllowed?: () => bool
   const settler = fakeSettler();
   const buyer = privateKeyToAccount(BUYER_KEY);
   const network = agonNetwork("arc-testnet");
-  const state = { price: opts.price ?? 300_000n, fail: false, refund: false, balance: 5_000_000n as bigint | null, leaderboard: [ATLAS_ROW] };
+  const state = { price: opts.price ?? 300_000n, fail: false, refund: false, poison: null as string | null, balance: 5_000_000n as bigint | null, leaderboard: [ATLAS_ROW] };
   const app = new Hono<{ Variables: { x402: X402Paid } }>();
   app.post(
     "/agon/agents/lead/forecast",
@@ -50,7 +50,7 @@ export function stageWorld(opts: { price?: bigint; newWalletAllowed?: () => bool
       }
       const haggle = [{ step: "request", detail: "asked Atlas (house) for a price; listed at 0.22 USDC" }, { step: "accept", detail: "agreed 0.17424 USDC (asked 0.22)" }];
       const body = {
-        ok: true, jobId, probabilityBps: 3400, reasons: ["Spot is 6% below the line", "Three days left", "Funding is flat"], marketPriceBps: 4100,
+        ok: true, jobId, probabilityBps: 3400, reasons: [state.poison ?? "Spot is 6% below the line", "Three days left", "Funding is flat"], marketPriceBps: 4100,
         market: { conditionId: `0x${"ab".repeat(32)}`, question: "Will Bitcoin close above $120,000 on October 30?", slug: "btc-120k", endDate: "2026-10-30T16:00:00Z", yesPriceBps: 4100 },
         forecaster: { name: "Atlas (house)", reason: "Season 1 rank #1", asked: "0.22", agreed: "0.17424" },
         progress: [], haggle,

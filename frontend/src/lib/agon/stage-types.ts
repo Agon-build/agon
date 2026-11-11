@@ -15,6 +15,8 @@ export type LiveView = {
   preview?: boolean;
   /** What a routed service returned, for hires of anything other than the Lead agent. */
   result?: unknown;
+  /** Set when the delivered answer holds text that reads like instructions, or hidden text. */
+  warning?: { message: string; found: { kind: string; label: string; excerpt: string }[] } | null;
 };
 export type StageConfig = { network: string; testnet: boolean; leadPrice: string | null; leadPriceAtomic: string | null; siteUrl: string; preview?: boolean };
 export type StageWallet = {

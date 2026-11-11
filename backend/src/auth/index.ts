@@ -852,6 +852,7 @@ if (agonSeason) {
     store: agonSeason.store,
     rounds: agonSeason.rounds,
     network: agonSeason.network,
+    seasons: () => agonSeason.seasons,
     verifyEntry: createErc8004EntryVerifier(
       {
         readContract: (args) => seasonClient.readContract(args as never),
@@ -1089,7 +1090,8 @@ if (config.agon.ratings.scoresWorkerEnabled) {
     deps: {
       listListed: async () => (await listLiveListings()).map((l) => ({ agentId: l.agentId, listingReference: l.id, categoryId: l.category, firstParty: l.firstParty })),
       tests: agonTestResults,
-      seasonRaw: async () => (agonSeason ? agonSeason.store.scoringRaw(agonSeason.season.seasonId) : null),
+      // The running season, or the one before it until the new season has its first result.
+      seasonRaw: async () => (agonSeason ? agonSeason.scoringRaw() : null),
       // User ratings from paid work, per agent, across the refs its jobs carry.
       paid: {
         live: true,
@@ -1161,7 +1163,7 @@ app.route("/agon", createAgonRoutes({
     ? {
         services: stageServices,
         season: seasonRoutes ? { request: (path: string, init?: RequestInit) => seasonRoutes!.request(path, init) } : null,
-        seasonId: agonSeason ? agonSeason.season.seasonId.toString() : "1",
+        seasonId: () => (agonSeason ? agonSeason.season.seasonId.toString() : "1"),
         off: () => stage.settings.channelsOff.mcp,
         terms: custodyTerms,
         // Budget tokens pay inside hire_service, inside their own caps.

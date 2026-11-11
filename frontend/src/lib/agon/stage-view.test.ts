@@ -232,3 +232,13 @@ test("the season page takes a season from the link only when it is a plain numbe
   assert.equal(seasonFromQuery("../admin", "9002"), "9002");
   assert.equal(seasonFromQuery("12345678901", "9002"), "9002");
 });
+
+// Season 3 follows Season 2 on 19 November 2026 with no gap; the page names it from its id.
+import { seasonName as seasonNameOf, seasonStatus as seasonStatusOf } from "./stage-view.ts";
+
+test("Season 3 is named from its id and reads as running once it has started", () => {
+  assert.deepEqual(["9001", "9002", "9003", "9100"].map(seasonNameOf), ["Season 1", "Season 2", "Season 3", "Season 9100"]);
+  const s3 = { seasonId: "9003", network: "Arc Testnet", commitsAddress: "0x", commitsUrl: "https://explorer.testnet.arc.io/address/0x", startsAt: "2026-11-19T00:00:00.000Z", endsAt: "2026-12-17T00:00:00.000Z", roundHours: 6, currentRound: "0" };
+  const running = seasonStatusOf(s3, Date.parse("2026-11-19T00:00:30Z"));
+  assert.deepEqual([running.state, running.name], ["running", "Season 3"]);
+});

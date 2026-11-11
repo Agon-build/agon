@@ -214,6 +214,21 @@ function RoutedAnswer({ view }: { view: AnswerView }) {
   );
 }
 
+/// Shown above an answer that holds text reading like instructions, or hidden text.
+function AnswerWarning({ warning }: { warning: NonNullable<LiveView["warning"]> }) {
+  return (
+    <section role="alert" className="border border-[color:var(--warn)] bg-canvas-2 p-5 sm:p-6">
+      <p className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-ink"><span aria-hidden className="inline-block size-2 bg-[color:var(--warn)]" />Read with care</p>
+      <p className="mt-3 text-sm leading-6 text-ink">{warning.message}</p>
+      <ul className="mt-3 space-y-2">
+        {warning.found.map((f) => (
+          <li key={f.kind} className="text-sm leading-6 text-ink-2"><span className="text-ink">{f.label}:</span> <span className="break-words font-mono text-[12px]">{f.excerpt}</span></li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 /// One job, shown the same way in the app, the receipt and the approval page.
 export function RunView({ live }: { live: LiveView }) {
   const flow = moneyFlow(live.receipt);
@@ -222,6 +237,7 @@ export function RunView({ live }: { live: LiveView }) {
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:gap-6">
       <div className="grid min-w-0 content-start gap-6">
+        {live.warning ? <AnswerWarning warning={live.warning} /> : null}
         {live.answer ? <ProbabilityDuel answer={live.answer} /> : null}
         {routed ? <RoutedAnswer view={routed} /> : null}
         {live.phase === "refunded" ? <Notice eyebrow="Refunded" title="No forecast this time" body={`${failureText(live.failure)} Your payment was refunded; the refund transaction is in the money flow.`} /> : null}
