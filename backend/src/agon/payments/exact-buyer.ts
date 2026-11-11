@@ -73,10 +73,12 @@ export async function peekExactTerms(input: {
   init?: RequestInit;
   network: AgonNetwork;
   fetchImpl?: typeof fetch;
+  /** How long to wait for the unpaid answer; 20 seconds when unset. */
+  timeoutMs?: number;
 }): Promise<{ ok: true; option: ExactOption } | { ok: true; free: true; status: number; data: unknown } | { ok: false; code: "no_matching_option" | "unexpected_status" | "network_error"; detail: string; reason?: string }> {
   let res: Response;
   try {
-    res = await (input.fetchImpl ?? fetch)(input.url, { ...input.init, redirect: "manual", signal: AbortSignal.timeout(20_000) });
+    res = await (input.fetchImpl ?? fetch)(input.url, { ...input.init, redirect: "manual", signal: AbortSignal.timeout(input.timeoutMs ?? 20_000) });
   } catch (error) {
     return { ok: false, code: "network_error", detail: (error as Error).message };
   }

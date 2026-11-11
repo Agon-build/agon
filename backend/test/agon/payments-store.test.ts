@@ -136,6 +136,35 @@ test("root jobs list by buyer, newest first, and daily spend sums reserved and s
   assert.equal(await store.dailySpent(wallet, "arc-testnet", now), 0n);
 });
 
+// Phase 3 (2026-11-11): the delivery record of outside services is read from their paid hires.
+test("paid hires of outside services are listed newest first: delivered, or paid for and not delivered", async () => {
+  const at = (minutes: number) => new Date(Date.now() - minutes * 60_000);
+  const add = async (provider: string, state: Job["state"], network: Job["network"], payment: JobPayment["status"] | null, minutesAgo: number) => {
+    const id = randomUUID();
+    await store.insertJob({
+      jobId: id, parentId: null, rootId: id, depth: 0, buyerRef: "budget:op:outside", providerRef: provider, providerLabel: provider,
+      network, priceAtomic: 10_000n, budgetAtomic: 0n, state: "quoted", traceId: "t", request: {}, result: null, createdAt: at(minutesAgo), updatedAt: at(minutesAgo),
+    });
+    if (payment) {
+      await store.upsertJobPayment({
+        idempotencyKey: `hire:${id}`, jobId: id, kind: "hire", payer: PAYEE, payee: PAYEE, amount: 10_000n, network, status: payment,
+        txHash: null, detail: null, authNonce: null, authValidBefore: null, createdAt: at(minutesAgo), updatedAt: at(minutesAgo),
+      });
+    }
+    await store.updateJob(id, { state });
+  };
+  await add("circle:rec-a", "delivered", "arc", "settled", 30);
+  await add("circle:rec-a", "failed", "arc", "settled", 20);
+  await add("circle:rec-a", "failed", "arc", "failed", 10); // refused before any money moved: not a failed delivery
+  await add("circle:rec-a", "failed", "arc", null, 10); // never reached payment
+  await add("circle:rec-a", "delivered", "arc-testnet", "settled", 10); // another network
+  await add("agent:rec-own", "delivered", "arc", "settled", 10); // not an outside service
+  const mine = (await store.listOutsideOutcomes("arc", at(60))).filter((o) => o.providerRef === "circle:rec-a");
+  assert.deepEqual(mine.map((o) => o.delivered).sort(), [false, true]);
+  assert.ok(mine.every((o) => o.seconds !== null && o.seconds >= 0 && o.at instanceof Date));
+  assert.equal((await store.listOutsideOutcomes("arc", new Date(Date.now() + 60_000))).length, 0, "nothing since a later date");
+});
+
 test("delivered job totals per provider, on one network, count only delivered work", async () => {
   const mk = (provider: string, state: Job["state"], network: Job["network"], price: bigint): Job => {
     const id = randomUUID();

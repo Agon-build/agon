@@ -9,6 +9,7 @@ import { parseUsdc } from "../stage/money.ts";
 import type { AskResult } from "../stage/services.ts";
 import { createAgonSource, type AgonListingLite } from "./agon-source.ts";
 import { createLiveness } from "./alive.ts";
+import { createDeliveryRecords } from "./delivery-record.ts";
 import type { Proof } from "./catalog.ts";
 import { createCircleSource } from "./circle-source.ts";
 import { fillInput } from "./fill-input.ts";
@@ -67,6 +68,8 @@ export function startRouting(deps: {
   callModel: ModelCaller;
   model: string;
   store: Pick<PaymentsStore, "latestConfirmation" | "getJob" | "getBudgetWallet">;
+  /** Paid hires of outside services, for the delivery record; unset keeps no record. */
+  outsideOutcomes?: PaymentsStore["listOutsideOutcomes"];
   approvalUrl: (token: string) => string;
   newWalletAllowed?: () => boolean;
   leadAsk: (ownerRef: string, question: string) => Promise<AskResult>;
@@ -109,6 +112,8 @@ export function startRouting(deps: {
     leadEntry: () => agon.leadEntry(),
     safeDestination,
     alive: createLiveness({ safe: safeDestination }),
+    // Outside services are paid on Arc mainnet, so that is where their record is read.
+    ...(deps.outsideOutcomes ? { deliveries: createDeliveryRecords({ load: (since) => deps.outsideOutcomes!("arc", since) }) } : {}),
   });
 }
 

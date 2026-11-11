@@ -31,7 +31,7 @@ function world(opts: { price?: bigint } = {}) {
   app.get(
     "/agon/data/text",
     exactPayment({ network, payTo: LEAD, price: async () => 10_000n, settle: settler.settle, claimNonce: (n, p, nonce) => store.claimSellerNonce(n, p, nonce), description: "Text" }),
-    async (c) => (c.req.query("empty") ? c.body(null, 200) : c.text("Apple: Buy, target 250")),
+    async (c) => (c.req.query("empty") ? c.body(null, 200) : c.req.query("blank") ? c.json({ data: [], note: "" }) : c.req.query("err") ? c.json({ error: "upstream timeout", code: 504 }) : c.text("Apple: Buy, target 250")),
   );
   app.post(
     "/agon/agents/lead/forecast",
@@ -439,6 +439,32 @@ test("final I9: a text answer is kept, and an empty answer is not delivered and 
   assert.ok(!out2.ok && out2.code === "delivery_failed", show(out2));
   assert.equal((await store.getJob(q2.quote.jobId))!.state, "failed");
   assert.equal(transfers.length, 1, "no fee for an empty answer");
+});
+
+// Phase 3 (2026-11-11): an outside service that sends 200 with nothing in it, or with only an
+// error, took the money and delivered nothing. It is recorded as failed and Agon takes no fee.
+test("an outside answer with nothing in it, or only an error, is not delivered and carries no fee", async () => {
+  const { deps, store, transfers } = world();
+  const ask = (q: string, providerRef = "circle:text") => quoteHire(deps, { ownerRef: "wa:abc", providerUrl: `http://api.test/agon/data/text${q}`, providerRef, providerLabel: "Text", method: "GET", body: {}, feeBps: 150, feeAddress: FEE_TO });
+  for (const [query, detail] of [["?blank=1", "empty answer"], ["?err=1", "error in place of an answer"]] as const) {
+    const q = await ask(query);
+    assert.ok(q.ok && q.quote.step === "confirm_code", show(q));
+    const out = await confirmHire(deps, { ownerRef: "wa:abc", code: q.quote.code });
+    assert.ok(!out.ok && out.code === "delivery_failed", show(out));
+    const job = (await store.getJob(q.quote.jobId))!;
+    assert.deepEqual([job.state, job.result], ["failed", { error: "delivery_failed", detail }]);
+  }
+  assert.equal(transfers.length, 0, "no fee for either");
+  // The same body from one of Agon's own agents is kept: their answers have known shapes.
+  const own = await ask("?blank=1", "agent:text");
+  assert.ok(own.ok && own.quote.step === "confirm_code", show(own));
+  assert.ok((await confirmHire(deps, { ownerRef: "wa:abc", code: own.quote.code })).ok);
+  // A delivered hire after the two failures, then the record Agon keeps of the outside service.
+  const good = await ask("");
+  assert.ok(good.ok && good.quote.step === "confirm_code", show(good));
+  assert.ok((await confirmHire(deps, { ownerRef: "wa:abc", code: good.quote.code })).ok);
+  const outcomes = await store.listOutsideOutcomes(deps.network.id, new Date(0));
+  assert.deepEqual(outcomes.map((o) => [o.providerRef, o.delivered]).sort(), [["circle:text", false], ["circle:text", false], ["circle:text", true]]);
 });
 
 test("minor: changed terms or a short wallet are refused before any job or code is made", async () => {

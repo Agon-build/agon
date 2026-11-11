@@ -131,6 +131,17 @@ export class MemoryPaymentsStore implements PaymentsStore {
     const failedDelivery = (j: Job) => ["delivery_failed", "delivery_unknown"].includes(String((j.result as { error?: unknown } | null)?.error ?? ""));
     return [...this.jobs.values()].filter((j) => j.state === "failed" && j.parentId === null && failedDelivery(j) && j.updatedAt >= updatedAfter && j.updatedAt < updatedBefore);
   }
+  async listOutsideOutcomes(network: string, since: Date) {
+    const out: { providerRef: string; delivered: boolean; at: Date; seconds: number | null }[] = [];
+    for (const j of this.jobs.values()) {
+      if (j.network !== network || !j.providerRef.startsWith("circle:") || j.updatedAt < since) continue;
+      const paid = [...this.payments.values()].find((p) => p.jobId === j.jobId && p.kind === "hire");
+      if (!paid || !(j.state === "delivered" || (j.state === "failed" && paid.status === "settled"))) continue;
+      out.push({ providerRef: j.providerRef, delivered: j.state === "delivered", at: j.updatedAt, seconds: Math.max(0, (j.updatedAt.getTime() - paid.createdAt.getTime()) / 1_000) });
+    }
+    return out.sort((a, b) => b.at.getTime() - a.at.getTime());
+  }
+
   async deliveredJobStats(network: AgonNetworkId, providerRefs: string[]) {
     const out: Record<string, { jobs: number; earnedAtomic: bigint }> = {};
     for (const j of this.jobs.values()) {

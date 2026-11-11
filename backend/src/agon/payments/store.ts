@@ -3,7 +3,7 @@ import type { Address, Hex } from "viem";
 
 import type { AgonNetworkId } from "../network.ts";
 import type {
-  Approval, BudgetWallet, Confirmation, Job, JobPayment, JobPaymentKind, JobState, PaymentsStore, Quote, ReserveResult, SpendOutcome, SpendReservation,
+  Approval, BudgetWallet, Confirmation, Job, JobPayment, JobPaymentKind, JobState, OutsideOutcome, PaymentsStore, Quote, ReserveResult, SpendOutcome, SpendReservation,
 } from "./types.ts";
 
 const lower = <T extends string>(v: T) => v.toLowerCase() as T;
@@ -258,6 +258,19 @@ export class PostgresPaymentsStore implements PaymentsStore {
       [buyerRef, Math.max(1, Math.min(limit, 100)), Math.max(0, Math.floor(offset))],
     );
     return rows.map(toJob);
+  }
+
+  async listOutsideOutcomes(network: AgonNetworkId, since: Date): Promise<OutsideOutcome[]> {
+    // A failed job counts only when its payment settled: the service took the money and sent no answer.
+    const { rows } = await this.pool.query<{ provider_ref: string; state: string; updated_at: Date; seconds: string | null }>(
+      `select j.provider_ref, j.state, j.updated_at, extract(epoch from (j.updated_at - p.created_at))::text as seconds
+         from agon_jobs j join agon_job_payments p on p.job_id = j.job_id and p.kind = 'hire'
+        where j.network = $1 and j.provider_ref like 'circle:%' and j.updated_at >= $2
+          and (j.state = 'delivered' or (j.state = 'failed' and p.status = 'settled'))
+        order by j.updated_at desc limit 5000`,
+      [network, since],
+    );
+    return rows.map((r) => ({ providerRef: r.provider_ref, delivered: r.state === "delivered", at: r.updated_at, seconds: r.seconds === null ? null : Math.max(0, Number(r.seconds)) }));
   }
 
   async deliveredJobStats(network: AgonNetworkId, providerRefs: string[]): Promise<Record<string, { jobs: number; earnedAtomic: bigint }>> {

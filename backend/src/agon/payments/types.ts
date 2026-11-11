@@ -97,6 +97,9 @@ export type JobPayment = {
   updatedAt: Date;
 };
 
+/// One paid hire of an outside service, as the delivery record counts it.
+export type OutsideOutcome = { providerRef: string; delivered: boolean; at: Date; seconds: number | null };
+
 export interface PaymentsStore {
   getBudgetWallet(ownerRef: string, network: AgonNetworkId): Promise<BudgetWallet | null>;
   /** Inserts, or returns the existing wallet when one is already recorded. */
@@ -125,6 +128,8 @@ export interface PaymentsStore {
   updateJob(jobId: string, patch: { state?: JobState; result?: unknown; budgetAtomic?: bigint }): Promise<void>;
   getJob(jobId: string): Promise<Job | null>;
   listJobTree(rootId: string): Promise<Job[]>;
+  /** Paid hires of outside services since a date, newest first: delivered, or paid for and not delivered. */
+  listOutsideOutcomes(network: AgonNetworkId, since: Date): Promise<OutsideOutcome[]>;
   listStuckJobs(state: JobState, updatedBefore: Date, network?: string): Promise<Job[]>;
   /** Failed top-level jobs of any provider whose delivery failed after payment, last changed inside the window, newest first. */
   listFailedRootJobs(updatedAfter: Date, updatedBefore: Date): Promise<Job[]>;

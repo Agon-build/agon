@@ -1,11 +1,13 @@
 import { hasRatedPart, matchCount, wordsOf, type CatalogEntry } from "./catalog.ts";
 import { circleFits, type HireCategoryId } from "./categories.ts";
 import { formatUsdc } from "../payments/bargain.ts";
+import { byDelivery, type DeliveryRecord } from "./delivery-record.ts";
 import { feeFor } from "./fee.ts";
 import { kindFromWords, type Intent } from "./intent.ts";
 
 /// recentlyFailed: the service took payment and sent no answer in the last day (audit H2).
-export type Ranked = CatalogEntry & { fee: bigint; total: bigint; reason: string; recentlyFailed?: true };
+/// delivery: what Agon has seen an outside service do with paid hires routed through it (never an Agon score).
+export type Ranked = CatalogEntry & { fee: bigint; total: bigint; reason: string; recentlyFailed?: true; delivery?: { paid: number; delivered: number } };
 
 /// Shown on a service that recently took payment and sent no answer.
 export const RECENT_FAILURE_REASON = "Took payment without answering in the last day";
@@ -54,19 +56,23 @@ export function rankCandidates(entries: CatalogEntry[], intent: Intent, opts: { 
 export type Group = "ranked" | "new" | "outside";
 export type Choice = Ranked & { group: Group };
 export type Groups = { ranked: Choice[]; fresh: Choice[]; outside: Choice[] };
-export type GroupOptions = { feeBps: number; feeMin?: bigint; downranked: Set<string>; feeBpsFor?: (e: CatalogEntry) => number; fitted?: string[] | null; category: HireCategoryId; always?: string[] };
+export type GroupOptions = { feeBps: number; feeMin?: bigint; downranked: Set<string>; feeBpsFor?: (e: CatalogEntry) => number; fitted?: string[] | null; category: HireCategoryId; always?: string[]; deliveries?: Map<string, DeliveryRecord> };
 
 /// Shown per group on Hire before the person asks for no more.
 export const GROUP_MAX = 12;
 /// Two Agon scores this close are treated as equal, so the lower total decides.
 export const SCORE_TIE = 2;
 const OUTSIDE_REASON = "Outside market, not ranked by Agon";
+/// What an outside service's card says once Agon has routed paid hires to it.
+export const outsideReason = (r: DeliveryRecord | undefined): string =>
+  r && r.paid > 0 ? `Outside market, delivered ${r.delivered} of ${r.paid} paid ${r.paid === 1 ? "hire" : "hires"} through Agon` : OUTSIDE_REASON;
 
 /// The person's choices for one request, in three groups. Agon agents with proof
 /// are ranked by their Agon score (close scores by total, then speed). Agon agents
 /// without proof yet are new, by total. Outside services are never ranked: they
-/// must belong to the category and are sorted by total. A service that recently
-/// failed after payment goes last in its group.
+/// must belong to the category. One that delivered at least half of three or more paid hires
+/// comes first, one with no record next, one that delivered fewer last; then by total. A
+/// service that recently failed after payment goes last in its group.
 export function groupCandidates(entries: CatalogEntry[], intent: Intent, opts: GroupOptions): Groups {
   const words = wordsOf(intent.query);
   const needed = words.length <= 2 ? 1 : 2;
@@ -87,12 +93,19 @@ export function groupCandidates(entries: CatalogEntry[], intent: Intent, opts: G
     return list
       .sort((a, b) => a.down - b.down || a.unnamed - b.unnamed || sort(a, b))
       .slice(0, GROUP_MAX)
-      .map(({ e, fee, total, down }) => ({ ...e, fee, total, group, ...(down ? { reason: RECENT_FAILURE_REASON, recentlyFailed: true as const } : { reason: group === "outside" ? OUTSIDE_REASON : reasonFor(e, e.price === minPrice && list.length > 1) }) }));
+      .map(({ e, fee, total, down }) => {
+        const record = group === "outside" ? opts.deliveries?.get(e.reference) : undefined;
+        return {
+          ...e, fee, total, group,
+          ...(record && record.paid > 0 ? { delivery: { paid: record.paid, delivered: record.delivered } } : {}),
+          ...(down ? { reason: RECENT_FAILURE_REASON, recentlyFailed: true as const } : { reason: group === "outside" ? outsideReason(record) : reasonFor(e, e.price === minPrice && list.length > 1) }),
+        };
+      });
   };
   const agon = priced.filter((p) => p.e.source === "agon");
   return {
     ranked: done(agon.filter((p) => hasRatedPart(p.e.rating.proof ?? null)), "ranked", byScore),
     fresh: done(agon.filter((p) => !hasRatedPart(p.e.rating.proof ?? null)), "new", byTotal),
-    outside: done(priced.filter((p) => p.e.source !== "agon" && circleFits(opts.category, p.e)), "outside", (a, b) => offKind(a.e, intent) - offKind(b.e, intent) || byTotal(a, b)),
+    outside: done(priced.filter((p) => p.e.source !== "agon" && circleFits(opts.category, p.e)), "outside", (a, b) => offKind(a.e, intent) - offKind(b.e, intent) || byDelivery(opts.deliveries?.get(a.e.reference), opts.deliveries?.get(b.e.reference)) || byTotal(a, b)),
   };
 }

@@ -944,6 +944,8 @@ if (agonPayments) {
     callModel: async (p) => ({ text: (await callModel(p)).text }),
     model: stage.settings.routingModel,
     store: agonPayments.store,
+    // The delivery record of outside services: what each did with paid hires routed through Agon.
+    outsideOutcomes: (network, since) => agonPayments.store.listOutsideOutcomes(network, since),
     approvalUrl: (token) => leadServices.approvalUrl(token),
     newWalletAllowed,
     leadAsk: (ownerRef, question) => leadServices.ask(ownerRef, { question }),

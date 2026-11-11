@@ -1,6 +1,7 @@
 import type { Address, Hex } from "viem";
 
 import type { AgonNetwork } from "../network.ts";
+import { answerProblem, isOutsideRef } from "./answer-check.ts";
 import { budgetWalletRef, ensureBudgetWallet, ownerRefFromWalletRef, type WalletOps } from "./budget-wallets.ts";
 import { buyExact, peekExactTerms } from "./exact-buyer.ts";
 import { createGuardedSigner } from "./guarded-signer.ts";
@@ -245,11 +246,16 @@ async function payJob(deps: HireDeps, wallet: BudgetWallet, job: Job, perPayment
     await deps.store.updateJob(job.jobId, { state: "delivered", result: purchase.data });
     return { ok: true, jobId: job.jobId, amount: 0n, txHash: null, result: purchase.data };
   }
-  if (purchase.ok && (purchase.data === null || purchase.data === undefined)) {
+  // An outside service is held to more than "not null": blank text, an empty object or list, or a
+  // 200 that carries only an error is no answer either. Agon's own agents answer in known shapes.
+  const outside = isOutsideRef(job.providerRef);
+  const noAnswer = (data: unknown) => (outside ? answerProblem(data) : data === null || data === undefined ? "empty answer" : null);
+  const problem = purchase.ok ? noAnswer(purchase.data) : null;
+  if (purchase.ok && problem) {
     // Paid, but nothing came back: not delivered, and no routing fee.
     await deps.store.finishSpend(walletRef, key, { state: "settled", txHash: purchase.txHash });
-    await deps.store.upsertJobPayment({ ...payment, status: "settled", txHash: purchase.txHash, detail: "settled; the provider sent an empty answer", updatedAt: deps.now() });
-    await deps.store.updateJob(job.jobId, { state: "failed", result: { error: "delivery_failed", detail: "empty answer" } });
+    await deps.store.upsertJobPayment({ ...payment, status: "settled", txHash: purchase.txHash, detail: `settled; the provider sent ${problem === "empty answer" ? "an empty answer" : "an error in place of an answer"}`, updatedAt: deps.now() });
+    await deps.store.updateJob(job.jobId, { state: "failed", result: { error: "delivery_failed", detail: problem } });
     return { ok: false, code: "delivery_failed", jobId: job.jobId, txHash: purchase.txHash };
   }
   const pollUrl = purchase.ok ? queuedPollUrl(purchase.data, call.url) : null;
@@ -268,7 +274,7 @@ async function payJob(deps: HireDeps, wallet: BudgetWallet, job: Job, perPayment
       if (poll.txHash) txHash = poll.txHash;
       const again = queuedPollUrl(poll.data, next);
       if (again !== null) { next = again; continue; }
-      if (poll.data === null || poll.data === undefined) break;
+      if (noAnswer(poll.data)) break;
       await deps.store.finishSpend(walletRef, key, { state: "settled", txHash });
       await deps.store.upsertJobPayment({ ...payment, authNonce: signed.nonce, status: "settled", txHash, updatedAt: deps.now() });
       await deps.store.updateJob(job.jobId, { state: "delivered", result: poll.data });

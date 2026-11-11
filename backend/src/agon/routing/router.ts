@@ -7,6 +7,7 @@ import type { HireOutcome, HireQuote, HireRequest } from "../payments/hire.ts";
 import type { BudgetWallet, PaymentsStore } from "../payments/types.ts";
 import type { AskResult } from "../stage/services.ts";
 import { wordsOf, type CatalogEntry, type RouteSource } from "./catalog.ts";
+import type { DeliveryRecord } from "./delivery-record.ts";
 import { cleanGiven, coinsFit, type fillInput } from "./fill-input.ts";
 import { fillPath } from "./path-params.ts";
 import { shortlist } from "./fit.ts";
@@ -86,6 +87,8 @@ export function createRouter(deps: {
   readEvent?: (slug: string) => Promise<EventMarkets | null>;
   /** Whether a service answers an unpaid call now. Unset means no check is made. */
   alive?: (entry: CatalogEntry) => Promise<boolean>;
+  /** What Agon has seen each outside service do with paid hires. Unset means no record is kept. */
+  deliveries?: () => Promise<Map<string, DeliveryRecord>>;
   /** The Lead as a choice in Prediction markets; choosing it runs leadAsk. */
   leadEntry?: () => Promise<CatalogEntry | null>;
   now?: () => Date;
@@ -108,6 +111,11 @@ export function createRouter(deps: {
     for (const [ref, until] of unpayable) if (until <= t) unpayable.delete(ref);
     return unpayable.size === 0 ? list : list.filter((e) => !unpayable.has(e.reference));
   };
+
+  // An outside service that took payment twice in a row without delivering rests for a day:
+  // it is not offered at all. A record that cannot be read rests nothing.
+  const recordsNow = async (): Promise<Map<string, DeliveryRecord>> => (deps.deliveries ? await deps.deliveries().catch(() => new Map<string, DeliveryRecord>()) : new Map<string, DeliveryRecord>());
+  const offered = (list: CatalogEntry[], records: Map<string, DeliveryRecord>) => payable(list).filter((e) => !records.get(e.reference)?.restingUntil);
 
   // Services that did not answer: Agon's unpaid check before offering them, or a quote.
   // They leave the choices for a few minutes, then are checked again.
@@ -182,11 +190,12 @@ export function createRouter(deps: {
         const seen = new Set<string>();
         // A service that takes one coin is left out of a request that names several.
         const candidates = [...found.flat(), ...pool].filter((e) => (seen.has(e.reference) ? false : (seen.add(e.reference), true)) && coinsFit(e, text));
-        const listed = shortlist(payable(candidates), intent, text, new Set(pool.map((e) => e.reference)));
+        const records = await recordsNow();
+        const listed = shortlist(offered(candidates, records), intent, text, new Set(pool.map((e) => e.reference)));
         // The fit check and the unpaid calls run side by side, so checking costs no extra wait.
         const [fitted, list] = await Promise.all([deps.judge ? deps.judge(text, listed).catch(() => null) : null, answering(listed)]);
         const groups = groupCandidates(lead ? [lead, ...list] : list, intent, {
-          feeBps: deps.feeBps, feeMin: deps.feeMin, downranked: downranked(), feeBpsFor: (e) => (deps.feeAddress[e.network] ? deps.feeBps : 0), fitted, category,
+          feeBps: deps.feeBps, feeMin: deps.feeMin, downranked: downranked(), feeBpsFor: (e) => (deps.feeAddress[e.network] ? deps.feeBps : 0), fitted, category, deliveries: records,
           // A forecast always offers the Lead; a market check always offers Agon's own market agents,
           // because the fit model can drop them for a market it was not shown.
           always: intent.kind === "forecast" ? (lead ? [lead.reference] : []) : intent.kind === "analysis" && category === "prediction" ? list.filter((e) => e.source === "agon").map((e) => e.reference) : [],
@@ -198,7 +207,7 @@ export function createRouter(deps: {
       const query = { words: wordsOf(`${intent.query} ${text}`), agonCategories: ALL_AGON, circleCategories: ALL_CIRCLE };
       const found = await Promise.all(deps.sources.map((s) => s.search(query).catch(() => [] as CatalogEntry[])));
       const sources = deps.sources.map((s) => ({ id: s.id, status: s.status() }));
-      const listed = shortlist(payable(found.flat()).filter((e) => coinsFit(e, text)), intent, text);
+      const listed = shortlist(offered(found.flat(), await recordsNow()).filter((e) => coinsFit(e, text)), intent, text);
       const [fitted, list] = await Promise.all([deps.judge ? deps.judge(text, listed).catch(() => null) : null, answering(listed)]);
       const ranked = rankCandidates(list, intent, { feeBps: deps.feeBps, feeMin: deps.feeMin, downranked: downranked(), feeBpsFor: (e) => (deps.feeAddress[e.network] ? deps.feeBps : 0), fitted });
       if (!ranked.pick) return { kind: "none", sources };
@@ -215,12 +224,13 @@ export function createRouter(deps: {
       const sources = deps.sources.map((s) => ({ id: s.id, status: s.status() }));
       const found = await Promise.all(deps.sources.map((s) => (s.all ? s.all().catch(() => [] as CatalogEntry[]) : Promise.resolve([] as CatalogEntry[]))));
       const lead = category === "prediction" && deps.leadEntry ? await deps.leadEntry().catch(() => null) : null;
-      const inCategory = payable(found.flat()).filter((e) => e.source !== "agon" || (cat.agonCategories.includes(e.category) && !/\/agon\/agents\/lead\//.test(e.url)));
+      const records = await recordsNow();
+      const inCategory = offered(found.flat(), records).filter((e) => e.source !== "agon" || (cat.agonCategories.includes(e.category) && !/\/agon\/agents\/lead\//.test(e.url)));
       const withProof = await Promise.all(inCategory.map(async (e) => (e.source === "agon" && deps.directEntry ? (await deps.directEntry(e.reference).catch(() => null)) ?? e : e)));
       const list = lead ? [lead, ...withProof] : withProof;
       const intent: Intent = { kind: "other", query: "", values: {} };
       const groups = groupCandidates(list, intent, {
-        feeBps: deps.feeBps, feeMin: deps.feeMin, downranked: downranked(), feeBpsFor: (e) => (deps.feeAddress[e.network] ? deps.feeBps : 0), category, always: list.map((e) => e.reference),
+        feeBps: deps.feeBps, feeMin: deps.feeMin, downranked: downranked(), feeBpsFor: (e) => (deps.feeAddress[e.network] ? deps.feeBps : 0), category, always: list.map((e) => e.reference), deliveries: records,
       });
       const routeId = (deps.newId ?? randomUUID)();
       keepRoom(ownerRef);
