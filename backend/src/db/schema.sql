@@ -2670,3 +2670,89 @@ create table if not exists agon_job_ratings (
   created_at   timestamptz not null default now()
 );
 create index if not exists agon_job_ratings_ref_idx on agon_job_ratings(provider_ref, created_at desc);
+
+-- The Arena for any category (docs/superpowers/specs/2026-11-11-agon-category-arena-design.md).
+-- A season belongs to one track; a round holds the tasks sent to every entrant and their answers.
+create table if not exists agon_arena_seasons (
+  season_id        bigint primary key check (season_id > 0),
+  track_id         text not null check (track_id ~ '^[a-z][a-z0-9-]{1,31}$'),
+  network          text not null check (network in ('arc-testnet', 'arc')),
+  commits_address  text not null check (commits_address ~ '^0x[0-9a-f]{40}$'),
+  starts_at        timestamptz not null,
+  ends_at          timestamptz not null,
+  check (ends_at > starts_at)
+);
+
+create table if not exists agon_arena_rounds (
+  season_id          bigint not null references agon_arena_seasons(season_id),
+  round              bigint not null check (round >= 0),
+  opens_at           timestamptz not null,
+  state              text not null default 'open' check (state in ('open', 'sent', 'committing', 'committed', 'skipped')),
+  commit_root        text check (commit_root is null or commit_root ~ '^0x[0-9a-f]{64}$'),
+  commit_count       integer check (commit_count is null or commit_count > 0),
+  commit_tx          text check (commit_tx is null or commit_tx ~ '^0x[0-9a-f]{64}$'),
+  commit_block_time  timestamptz,
+  primary key (season_id, round),
+  check ((state = 'committed') = (commit_root is not null and commit_tx is not null and commit_block_time is not null))
+);
+create index if not exists agon_arena_rounds_state_idx on agon_arena_rounds(season_id, state);
+
+-- truth stays on the server until the round is committed.
+create table if not exists agon_arena_tasks (
+  season_id   bigint not null,
+  round       bigint not null,
+  task_id     text not null check (char_length(task_id) between 3 and 300),
+  position    integer not null check (position >= 0),
+  family      text not null,
+  question    text not null,
+  value_type  text not null check (value_type in ('address', 'integer', 'amount', 'date', 'name')),
+  truth       text not null check (char_length(truth) > 0),
+  void        boolean not null default false,
+  primary key (season_id, round, task_id),
+  unique (season_id, task_id),
+  foreign key (season_id, round) references agon_arena_rounds(season_id, round)
+);
+
+create table if not exists agon_arena_entrants (
+  season_id          bigint not null,
+  round              bigint not null,
+  agent_id           text not null check (agent_id ~ '^[0-9]{1,78}$'),
+  listing_reference  text not null,
+  name               text not null,
+  first_party        boolean not null default false,
+  price              numeric(30, 0) not null check (price >= 0),
+  status             text not null check (status in ('entered', 'over_price', 'cannot_take')),
+  primary key (season_id, round, agent_id),
+  foreign key (season_id, round) references agon_arena_rounds(season_id, round)
+);
+
+-- One row per task and agent before the paid call starts, so a restart never pays twice.
+create table if not exists agon_arena_sends (
+  season_id   bigint not null,
+  round       bigint not null,
+  task_id     text not null,
+  agent_id    text not null,
+  claimed_at  timestamptz not null,
+  primary key (season_id, round, task_id, agent_id),
+  foreign key (season_id, round, task_id) references agon_arena_tasks(season_id, round, task_id)
+);
+
+create table if not exists agon_arena_answers (
+  season_id          bigint not null,
+  round              bigint not null,
+  task_id            text not null,
+  agent_id           text not null,
+  listing_reference  text not null,
+  job_id             text,
+  outcome            text not null check (outcome in ('delivered', 'refused', 'failed', 'timeout', 'void')),
+  score              integer check (score is null or score between 0 and 100),
+  duration_ms        integer check (duration_ms is null or duration_ms >= 0),
+  answer_hash        text check (answer_hash is null or answer_hash ~ '^0x[0-9a-f]{64}$'),
+  amount             numeric(30, 0) not null default 0 check (amount >= 0),
+  excerpt            text check (excerpt is null or char_length(excerpt) <= 2000),
+  created_at         timestamptz not null default now(),
+  primary key (season_id, round, task_id, agent_id),
+  foreign key (season_id, round, task_id) references agon_arena_tasks(season_id, round, task_id),
+  check ((outcome = 'void') = (score is null))
+);
+create index if not exists agon_arena_answers_day_idx on agon_arena_answers(created_at);

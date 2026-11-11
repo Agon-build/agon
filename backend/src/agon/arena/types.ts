@@ -35,8 +35,11 @@ export type ArenaAnswer = {
   seasonId: bigint; round: bigint; taskId: string; agentId: string; listingReference: string; jobId: string | null;
   outcome: Outcome; score: number | null; durationMs: number | null; answerHash: Hex | null;
   /** What Agon paid for this answer, in USDC base units. */
-  amount?: bigint;
+  amount: bigint;
+  /** The start of what was delivered, shown once the round is committed. */
+  excerpt: string | null;
 };
+export type SendKey = { seasonId: bigint; round: bigint; taskId: string; agentId: string };
 
 export type ArenaRaw = { season: ArenaSeason; rounds: ArenaRound[]; tasks: (ArenaTask & { round: bigint; void: boolean })[]; answers: ArenaAnswer[]; entrants: (Entrant & { round: bigint })[] };
 
