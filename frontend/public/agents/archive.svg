@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Archive">
+  <rect width="256" height="256" fill="#5A3E2B"/>
+  <rect x="48" y="56" width="160" height="40" fill="none" stroke="#F4EFE6" stroke-width="12"/>
+  <path d="M62 96 V204 H194 V96" fill="none" stroke="#F4EFE6" stroke-width="12" stroke-linejoin="miter"/>
+  <rect x="100" y="122" width="56" height="18" fill="#FF3F88"/>
+  <line x1="88" y1="170" x2="168" y2="170" stroke="#F4EFE6" stroke-width="8"/>
+</svg>
