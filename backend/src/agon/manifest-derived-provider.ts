@@ -30,6 +30,8 @@ export type ManifestDerivedProviderOptions = {
   timeoutMs?: number;
   /** Clock for choosing the hourly test variant; tests pin it. */
   now?: () => Date;
+  /** Reads Arc for the Research test, which is scored against the chain id and a fresh block. Without it Research cannot be certified. */
+  chain?: { chainId(): Promise<number>; blockNumber(): Promise<bigint> };
   /** The network listings are paid on, and the payee first seen for a listing version. With it the endpoint check holds each 402 to the listing's own terms. */
   terms?: { caip2: string; usdc: string; payeeOf?: (provider: ListedPlaygroundProvider) => Promise<string | null>; /** True fails the endpoint check on changed terms; otherwise they are only recorded. */ enforce?: boolean };
 };
@@ -121,44 +123,48 @@ function scope(provider: ListedPlaygroundProvider): string {
   return `${provider.listingReference}@${provider.listingVersion}`.toLowerCase();
 }
 
-/// A Verification agent that declares `market` or `markets` is certified on the same code-scored
-/// test the Playground gives it (market rules or settlement alerts), not on manifest anchor,
-/// which it was never built to answer. The execution names the test that actually ran.
-async function runFamilyTest(
+/// Certifies an agent on the same code-scored test Agon's own checks give it. A Verification agent
+/// that declares `market` or `markets` gets market rules or settlement alerts, not manifest anchor,
+/// which it was never built to answer; a Research agent gets the live chain fact. The execution
+/// names the test that actually ran.
+async function runCodeTest(
   provider: ListedPlaygroundProvider,
   target: string,
-  family: TestFamily,
+  which: { categoryId: "1"; category: "research"; family?: undefined } | { categoryId: "8"; category: "verification"; family: TestFamily },
+  ctx: { arcChainId: number; arcBlock: bigint },
   options: ManifestDerivedProviderOptions,
 ): Promise<PlaygroundProviderExecution> {
+  const { categoryId, category, family } = which;
+  const label = family ?? "live chain fact";
   const outcome = await runAgentTest({
     endpoint: target,
-    categoryId: "8",
+    categoryId,
     family,
     variant: pickVariant(`certification|${scope(provider)}|${(options.now?.() ?? new Date()).toISOString().slice(0, 13)}`),
     scope: { listingReference: provider.listingReference, listingVersion: provider.listingVersion },
-    ctx: { arcChainId: 0, arcBlock: 0n },
+    ctx,
     deps: { fetch: options.fetch ?? fetch, assertPublic: (url) => assertPublicHttpsDestination(url, { resolve: options.resolve }) },
   });
   if (!outcome) throw new PlaygroundProviderError("provider_task_unsupported", "This provider challenge is not available for the selected task.");
   if (outcome.error) {
     const code = outcome.error === "endpoint_unreachable" ? "provider_unavailable" : outcome.error.startsWith("http_") ? "provider_failed" : "provider_response_invalid";
-    throw new PlaygroundProviderError(code, `The listed agent failed the ${family} test (${outcome.error}).`);
+    throw new PlaygroundProviderError(code, `The listed agent failed the ${label} test (${outcome.error}).`);
   }
-  const test = buildTestCase("8", outcome.variant, { family })!;
+  const test = buildTestCase(categoryId, outcome.variant, { family, arcBlock: ctx.arcBlock })!;
   return {
     agent: {
       id: `erc8004:${provider.agentId}:${provider.serviceKey}`,
       name: outcome.agent?.name || "Listed agent",
       version: provider.listingVersion,
-      capabilities: outcome.agent?.capabilities.length ? outcome.agent.capabilities : ["verification"],
+      capabilities: outcome.agent?.capabilities.length ? outcome.agent.capabilities : [category],
     },
     output: outcome.output,
     passed: outcome.passed,
     score: outcome.score,
-    chainId: null,
-    blockNumber: null,
+    chainId: categoryId === "1" ? ctx.arcChainId : null,
+    blockNumber: categoryId === "1" ? ctx.arcBlock.toString() : null,
     providerHost: new URL(target).host,
-    task: { id: test.taskId, category: "verification", title: test.title, adversarialPrompt: test.prompt, capability: test.capability },
+    task: { id: test.taskId, category, title: test.title, adversarialPrompt: test.prompt, capability: test.capability },
     input: outcome.input,
   };
 }
@@ -182,7 +188,12 @@ export function createManifestDerivedPlaygroundProviderRunner(
         const inspection = await loadManifest(input.provider, options);
         const target = await safeEndpoint(declaredEndpoint(inspection.body, "challenge"), options);
         const family = input.task.id === "manifest-anchor" ? testFamilyFor({ categoryId: "8", manifestBody: inspection.body }) : undefined;
-        if (family) return runFamilyTest(input.provider, target, family, options);
+        if (family) return runCodeTest(input.provider, target, { categoryId: "8", category: "verification", family }, { arcChainId: 0, arcBlock: 0n }, options);
+        // Research is scored against Arc as Agon reads it now, so it needs the chain reader.
+        if (input.task.id === "arc-live-fact" && options.chain) {
+          const ctx = { arcChainId: await options.chain.chainId(), arcBlock: await options.chain.blockNumber() };
+          return runCodeTest(input.provider, target, { categoryId: "1", category: "research" }, ctx, options);
+        }
         return createHttpPlaygroundProviderRunner({ [scope(input.provider)]: target }, options).run(input);
       }
       if (overrides.supports(input.provider)) return overrides.run(input);

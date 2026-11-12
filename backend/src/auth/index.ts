@@ -559,6 +559,8 @@ const agonCheckerFetch = processCheckerPass([AGON_API_ORIGIN]).wrap((url, init) 
 const agonCertificationProviderRunner = createManifestDerivedPlaygroundProviderRunner({
   overrides: config.agon.playground.providerEndpoints,
   fetch: agonCheckerFetch,
+  // The Research test is scored against Arc as Agon reads it at that moment.
+  chain: { chainId: () => publicClient.getChainId(), blockNumber: () => publicClient.getBlockNumber() },
 });
 // Safety checks on listings (changed payment terms, an answer that is not clean) only report
 // what they find until AGON_SAFETY_CHECKS=enforce; then a finding pauses the listing at once.

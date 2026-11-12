@@ -231,3 +231,62 @@ test("automatic endpoint QA uses the manifest payment endpoint and records 402",
   assert.equal(result.passed, true);
   assert.equal(result.evidence.endpointStatus, 402);
 });
+
+const researchManifest = {
+  ...manifest,
+  service: { ...manifest.service, category: "research", tags: ["research"], capabilities: ["research"] },
+  invocation: { ...manifest.invocation, requestSchema: { type: "object", properties: { question: { type: "string" } }, required: ["question"] } },
+};
+const liveFactTask = { id: "arc-live-fact", category: "research" as const, title: "Arc live chain fact", adversarialPrompt: "x", capability: "live chain research" };
+
+function researchProvider() {
+  return { ...baseProvider, manifestUri: manifestUrl, manifestHash: canonicalManifestHash(researchManifest) };
+}
+
+/// A research agent that reports the chain it read, at the block it is given.
+function fetchForResearch(block: number, seen: string[] = []) {
+  return async (input: RequestInfo | URL, init?: RequestInit) => {
+    const request = new Request(input, init);
+    if (request.method === "GET") {
+      return new Response(JSON.stringify(researchManifest), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    const body = await request.json() as { category: string; task: { id: string } };
+    seen.push(`${body.category}:${body.task.id}`);
+    return new Response(JSON.stringify({
+      protocol: "agon-playground/1",
+      agent: { name: "Ledger", version: "1", capabilities: ["research"] },
+      output: { chainId: 5042002, blockNumber: block, source: "Arc Testnet RPC, read by this agent" },
+      externalWrites: false,
+    }), { status: 200, headers: { "content-type": "application/json" } });
+  };
+}
+
+const arc = { chainId: async () => 5042002, blockNumber: async () => 1_000_000n };
+
+test("automatic certification tests a Research agent on the live chain fact, scored against Agon's own reading", async () => {
+  const seen: string[] = [];
+  const runner = createManifestDerivedPlaygroundProviderRunner({ fetch: fetchForResearch(1_000_050, seen), resolve: async () => ["93.184.216.34"], chain: arc });
+  const result = await runner.run({ provider: researchProvider(), task: liveFactTask, taskInput: {} });
+  assert.deepEqual(seen, ["research:arc-live-fact"]);
+  assert.equal(result.task?.id, "arc-live-fact");
+  assert.equal(result.task?.category, "research");
+  assert.equal(result.passed, true);
+  assert.equal(result.score, 100);
+  assert.equal(result.agent.name, "Ledger");
+  assert.equal(result.chainId, 5042002);
+  assert.equal(result.blockNumber, "1000000");
+});
+
+test("a Research agent that reports a stale block does not pass certification", async () => {
+  const runner = createManifestDerivedPlaygroundProviderRunner({ fetch: fetchForResearch(900_000), resolve: async () => ["93.184.216.34"], chain: arc });
+  const result = await runner.run({ provider: researchProvider(), task: liveFactTask, taskInput: {} });
+  assert.equal(result.passed, false);
+  assert.equal(result.score, 60);
+});
+
+test("without a chain reader the Research task stays unavailable, and no call is made", async () => {
+  const seen: string[] = [];
+  const runner = createManifestDerivedPlaygroundProviderRunner({ fetch: fetchForResearch(1_000_000, seen), resolve: async () => ["93.184.216.34"] });
+  await assert.rejects(runner.run({ provider: researchProvider(), task: liveFactTask, taskInput: {} }), /not available for the selected task/);
+  assert.deepEqual(seen, []);
+});
