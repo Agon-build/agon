@@ -265,6 +265,8 @@ export async function runAgonCertificationOnce(options: CertificationWorkerOptio
           listingVersion: job.listingVersion,
           manifestHash: job.manifestHash,
           priorTransactionHash: persisted?.verificationTransactionHash ?? undefined,
+          // Only a suspension this cycle wrote itself may be lifted by its own approval.
+          liftOwnSuspension: Boolean(persisted?.suspendedByAgonAt),
           onSubmitted: async (transactionHash: `0x${string}`) => options.repository.recordAgonCertificationVerificationAction({
             jobId: job.jobId,
             action,

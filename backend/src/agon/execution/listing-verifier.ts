@@ -33,6 +33,8 @@ export type AgonListingVerificationRequest = {
   listingVersion: string;
   manifestHash: `0x${string}`;
   priorTransactionHash?: `0x${string}`;
+  /** True when the certification cycle itself suspended this version and it has since passed again. Then, and only then, a Suspended listing is promoted. */
+  liftOwnSuspension?: boolean;
   onSubmitted?: (transactionHash: `0x${string}`) => Promise<void>;
 };
 
@@ -182,7 +184,10 @@ export function createViemAgonListingVerifier(input: {
       const before = listingSnapshot(await input.client.readContract({ address: registryAddress, abi: listingVerifierAbi, functionName: "getListing", args: [expected.listingId] }));
       assertExactScope(before, expected);
       if (before.verification === 2) return { status: "already_verified", transactionHash: null };
-      if (before.verification !== 0 && before.verification !== 1) {
+      // Unverified and Pending are promoted. Suspended (4) is promoted only when the cycle wrote that
+      // suspension itself; one an operator set by hand, Expired and Revoked stay as they are.
+      const ownSuspension = before.verification === 4 && request.liftOwnSuspension === true;
+      if (before.verification !== 0 && before.verification !== 1 && !ownSuspension) {
         throw new AgonListingVerificationError("scope_mismatch", "ServiceRegistry verification state does not allow automatic promotion");
       }
 

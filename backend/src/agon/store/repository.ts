@@ -587,6 +587,7 @@ type AgonCertificationRow = QueryResultRow & {
   verification_action_state: AgonCertificationJob["verificationActionState"];
   verification_transaction_hash: string | null;
   verification_error: string | null;
+  suspended_by_agon_at: Date | null;
   created_at: Date;
   started_at: Date | null;
   completed_at: Date | null;
@@ -1035,6 +1036,7 @@ function mapAgonCertification(row: AgonCertificationRow): AgonCertificationJob {
     verificationActionState: row.verification_action_state,
     verificationTransactionHash: row.verification_transaction_hash as `0x${string}` | null,
     verificationError: row.verification_error,
+    suspendedByAgonAt: row.suspended_by_agon_at,
     createdAt: row.created_at,
     startedAt: row.started_at,
     completedAt: row.completed_at,
@@ -1176,6 +1178,7 @@ const AGON_CERTIFICATION_COLUMNS = `
   provider_host, lifecycle_status, consecutive_failures, check_sequence,
   last_checked_at, last_passed_at, last_failed_at,
   verification_action, verification_action_state, verification_transaction_hash, verification_error,
+  suspended_by_agon_at,
   created_at, started_at, completed_at, updated_at`;
 
 const AGON_SYNDICATE_CONTRIBUTION_COLUMNS = `
@@ -1394,6 +1397,11 @@ export class PostgresAgonRepository {
           set verification_action_state = $3,
               verification_transaction_hash = coalesce($4, verification_transaction_hash),
               verification_error = $5,
+              -- A confirmed suspension is this cycle's own; a confirmed approval ends it.
+              suspended_by_agon_at = case
+                when $3 = 'confirmed' and $2 = 'suspend' then coalesce(suspended_by_agon_at, now())
+                when $3 = 'confirmed' and $2 = 'approve' then null
+                else suspended_by_agon_at end,
               updated_at = now()
         where job_id = $1 and verification_action = $2
           and verification_action_state in ('pending','submitted','unknown','failed','confirmed')

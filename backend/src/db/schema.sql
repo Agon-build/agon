@@ -1620,6 +1620,19 @@ alter table agon_certification_jobs add constraint agon_certification_jobs_verif
 alter table agon_certification_jobs drop constraint if exists agon_certification_jobs_verification_transaction_hash_check;
 alter table agon_certification_jobs add constraint agon_certification_jobs_verification_transaction_hash_check
   check (verification_transaction_hash is null or verification_transaction_hash ~ '^0x[0-9a-f]{64}$');
+-- When this cycle's own suspension was confirmed on chain. Only such a suspension is lifted by
+-- the cycle's later approval; one an operator set by hand is left alone.
+alter table agon_certification_jobs add column if not exists suspended_by_agon_at timestamptz;
+-- Jobs suspended by the cycle before this column existed: still under their confirmed suspension,
+-- or already passing again with an approval the registry state kept refusing.
+update agon_certification_jobs
+   set suspended_by_agon_at = coalesce(last_failed_at, updated_at)
+ where suspended_by_agon_at is null
+   and (
+     (verification_action = 'suspend' and verification_action_state = 'confirmed')
+     or (verification_action = 'approve' and verification_action_state = 'failed'
+         and verification_error like '%does not allow automatic promotion%')
+   );
 
 create table if not exists agon_certification_checks (
   check_id                   uuid primary key,

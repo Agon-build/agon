@@ -106,7 +106,9 @@ class FakeCertificationRepository {
 
   async recordAgonCertificationVerificationAction(input: { action: "approve" | "suspend"; state: "submitted" | "confirmed" | "unknown" | "failed"; transactionHash?: `0x${string}` | null; error?: string | null }): Promise<void> {
     if (!this.current) return;
-    this.current = { ...this.current, verificationAction: input.action, verificationActionState: input.state, verificationTransactionHash: input.transactionHash ?? this.current.verificationTransactionHash, verificationError: input.error ?? null };
+    this.current = { ...this.current, verificationAction: input.action, verificationActionState: input.state, verificationTransactionHash: input.transactionHash ?? this.current.verificationTransactionHash, verificationError: input.error ?? null,
+      // As the store does: a confirmed suspension is this cycle's own, a confirmed approval ends it.
+      suspendedByAgonAt: input.state !== "confirmed" ? this.current.suspendedByAgonAt : input.action === "suspend" ? this.current.suspendedByAgonAt ?? NOW : null };
   }
 
   async recordAgonEndpointQa(input: { listingId: bigint; agentId: bigint; passed: boolean; evidenceHash: `0x${string}`; evidence: unknown }): Promise<void> {
@@ -446,4 +448,41 @@ test("the next check after a pass is spread around the interval", async () => {
     return repository.checks[0]!.nextCheckAt.getTime() - NOW.getTime();
   };
   assert.deepEqual([await at(() => 0), await at(() => 1)], [3 * 3_600_000, 9 * 3_600_000]);
+});
+
+test("the approval after a recovery lifts a suspension the cycle wrote itself, and keeps saying so on a retry", async () => {
+  const repository = new FakeCertificationRepository(job({ lifecycleStatus: "warning", consecutiveFailures: 3, verificationAction: "suspend", verificationActionState: "confirmed", suspendedByAgonAt: NOW }));
+  const asked: boolean[] = [];
+  let refuse = true;
+  const options = {
+    repository, playgroundStore: new InMemoryPlaygroundRunStore(), providerRunner: runner(),
+    listingVerifier: {
+      enabled: true,
+      async verify(input: { liftOwnSuspension?: boolean }) {
+        asked.push(input.liftOwnSuspension === true);
+        if (refuse) throw new Error("rpc down");
+        return { status: "confirmed" as const, transactionHash: null };
+      },
+      async suspend() { throw new Error("not expected"); },
+    },
+    now: () => NOW,
+  };
+  await runAgonCertificationOnce(options);
+  assert.deepEqual([repository.current?.lifecycleStatus, repository.current?.verificationActionState], ["healthy", "failed"]);
+  assert.ok(repository.current?.suspendedByAgonAt, "the mark stays until an approval is confirmed");
+  refuse = false;
+  await runAgonCertificationOnce(options);
+  assert.deepEqual(asked, [true, true], "the retry, which is a plain approval, still lifts the suspension");
+  assert.deepEqual([repository.current?.verificationActionState, repository.current?.suspendedByAgonAt], ["confirmed", null]);
+});
+
+test("a first approval never asks to lift a suspension", async () => {
+  const repository = new FakeCertificationRepository(job({}));
+  const asked: boolean[] = [];
+  await runAgonCertificationOnce({
+    repository, playgroundStore: new InMemoryPlaygroundRunStore(), providerRunner: runner(),
+    listingVerifier: { enabled: true, async verify(input: { liftOwnSuspension?: boolean }) { asked.push(input.liftOwnSuspension === true); return { status: "confirmed" as const, transactionHash: null }; }, async suspend() { throw new Error("not expected"); } },
+    now: () => NOW,
+  });
+  assert.deepEqual(asked, [false]);
 });

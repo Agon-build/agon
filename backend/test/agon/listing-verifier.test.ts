@@ -218,3 +218,52 @@ test("listing verifier readiness requires the scoped VERIFIER_ROLE", async () =>
   });
   assert.equal(deployedV1.reason, "scoped_verification_unsupported");
 });
+
+function verifierOn(current: () => unknown, written: number[]) {
+  return createViemAgonListingVerifier({
+    enabled: true,
+    registryAddress: registry,
+    verifierAddress: verifier,
+    client: {
+      async readContract(input) { return input.functionName === "verificationScopeSupported" ? true : current(); },
+      async waitForTransactionReceipt() { return { status: "success" as const }; },
+    },
+    wallet: {
+      async writeContract(input) { written.push(input.args[3]); return txHash; },
+    },
+  });
+}
+
+test("a suspension the certification cycle wrote itself is lifted by its later approval", async () => {
+  let current = listing({ verification: 4 });
+  const written: number[] = [];
+  const adapter = createViemAgonListingVerifier({
+    enabled: true,
+    registryAddress: registry,
+    verifierAddress: verifier,
+    client: {
+      async readContract(input) { return input.functionName === "verificationScopeSupported" ? true : current; },
+      async waitForTransactionReceipt() { current = listing({ verification: 2 }); return { status: "success" as const }; },
+    },
+    wallet: { async writeContract(input) { written.push(input.args[3]); return txHash; } },
+  });
+  assert.deepEqual(await adapter.verify({ ...request, liftOwnSuspension: true }), { status: "confirmed", transactionHash: txHash });
+  assert.deepEqual(written, [2]);
+});
+
+test("a suspended listing is left alone when the cycle did not suspend it", async () => {
+  const written: number[] = [];
+  const adapter = verifierOn(() => listing({ verification: 4 }), written);
+  await assert.rejects(adapter.verify(request), /does not allow automatic promotion/);
+  await assert.rejects(adapter.verify({ ...request, liftOwnSuspension: false }), /does not allow automatic promotion/);
+  assert.deepEqual(written, []);
+});
+
+test("an expired or revoked listing is never promoted, whatever the cycle asks", async () => {
+  for (const verification of [3, 5]) {
+    const written: number[] = [];
+    const adapter = verifierOn(() => listing({ verification }), written);
+    await assert.rejects(adapter.verify({ ...request, liftOwnSuspension: true }), /does not allow automatic promotion/);
+    assert.deepEqual(written, []);
+  }
+});

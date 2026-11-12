@@ -62,6 +62,11 @@ test("persists every lifecycle check and recovers a suspended version only after
     at = new Date(at.getTime() + 60_000);
   }
 
+  // The suspension lands on Arc: from here the job is marked as suspended by the cycle itself.
+  assert.equal((await repository.getAgonCertification(scheduled.jobId))?.suspendedByAgonAt, null);
+  await repository.recordAgonCertificationVerificationAction({ jobId: scheduled.jobId, action: "suspend", state: "confirmed", transactionHash: HASH });
+  assert.ok((await repository.getAgonCertification(scheduled.jobId))?.suspendedByAgonAt instanceof Date);
+
   await database.pool.query(
     `insert into agon_playground_runs (run_id, actor_address, request_id, idempotency_key, category, task_id, input_hash, input, scope, state, result, completed_at, lease_expires_at)
      values ($1, $2, $3, $4, 'analysis', 'evidence-under-pressure', $5, '{}'::jsonb, $6::jsonb, 'completed', '{}'::jsonb, $7, $7)`,
@@ -104,6 +109,9 @@ test("persists every lifecycle check and recovers a suspended version only after
     [scheduled.jobId],
   );
   assert.deepEqual(history.rows.map((row) => row.outcome), ["failed", "failed", "failed", "passed", "passed"]);
+  // The mark outlives a refused approval, so the retry can still lift the suspension.
+  await repository.recordAgonCertificationVerificationAction({ jobId: scheduled.jobId, action: "approve", state: "failed", error: "rpc down" });
+  assert.ok((await repository.getAgonCertification(scheduled.jobId))?.suspendedByAgonAt instanceof Date);
 
   await repository.recordAgonCertificationVerificationAction({
     jobId: scheduled.jobId,
@@ -122,6 +130,7 @@ test("persists every lifecycle check and recovers a suspended version only after
   );
   const confirmed = await repository.getAgonCertification(scheduled.jobId);
   assert.equal(confirmed?.verificationActionState, "confirmed");
+  assert.equal(confirmed?.suspendedByAgonAt, null, "a confirmed approval ends the cycle's own suspension");
   assert.equal(confirmed?.verificationTransactionHash, HASH);
 });
 

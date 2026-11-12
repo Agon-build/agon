@@ -46,6 +46,8 @@ export type AgonCertificationJob = {
   verificationActionState: "idle" | "pending" | "submitted" | "confirmed" | "unknown" | "failed";
   verificationTransactionHash: `0x${string}` | null;
   verificationError: string | null;
+  /** When this cycle's own suspension was confirmed on chain; null once an approval is confirmed. Only such a suspension may be lifted automatically. */
+  suspendedByAgonAt: Date | null;
   createdAt: Date;
   startedAt: Date | null;
   completedAt: Date | null;
@@ -182,6 +184,7 @@ export function buildAgonCertificationJob(input: AgonCertificationScheduleInput)
     verificationActionState: "idle",
     verificationTransactionHash: null,
     verificationError: null,
+    suspendedByAgonAt: null,
     createdAt: now,
     startedAt: null,
     completedAt: null,
