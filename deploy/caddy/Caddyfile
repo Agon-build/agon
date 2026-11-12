@@ -146,3 +146,13 @@ mysplits.xyz {
 www.mysplits.xyz {
 	redir https://mysplits.xyz{uri} permanent
 }
+
+# Splits on NEAR: the same splits-api container. Its proxy opens this host
+# straight into NEAR mode (NEAR_HOSTS=near.mysplits.xyz in the splits prod.env)
+# and keeps the NEAR pages off mysplits.xyz.
+near.mysplits.xyz {
+	request_body {
+		max_size 13MB
+	}
+	reverse_proxy splits-api:3930
+}
